@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>ydb.importer</groupId>
     <artifactId>ydb-importer</artifactId>
-    <version>1.1-SNAPSHOT</version>
+    <version>1.1</version>
     <!-- <version>1.0-SNAPSHOT</version> -->
     <packaging>jar</packaging>
     <properties>
@@ -13,7 +13,7 @@
         <exec.mainClass>ydb.importer.YdbImporter</exec.mainClass>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
-        <ydb.sdk.version>1.13.7</ydb.sdk.version>
+        <ydb.sdk.version>1.14.2</ydb.sdk.version>
     </properties>
     <dependencies>
         <dependency>
@@ -67,6 +67,12 @@
             <version>19.8.0.0</version>
         </dependency>
         <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.4.0</version>
+        </dependency>
+<!--
+        <dependency>
             <groupId>com.ibm.db2</groupId>
             <artifactId>jcc</artifactId>
             <version>11.5.7.0</version>
@@ -76,11 +82,7 @@
             <artifactId>mssql-jdbc</artifactId>
             <version>10.2.1.jre11</version>
         </dependency>
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>42.4.0</version>
-        </dependency>
+-->
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>

@@ -15,7 +15,7 @@
                 <exec.appArgs>scripts/sample-postgres-real.xml</exec.appArgs>
                 <exec.mainClass>ydb.importer.YdbImporter</exec.mainClass>
                 <exec.executable>java</exec.executable>
-                <Env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS>/Users/mzinal/Keys/yc-fednew-iot1sa1.json</Env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS>
+                <Env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS>/home/zinal/key-ydb-sa1.json</Env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS>
             </properties>
         </action>
         <action>
@@ -34,7 +34,7 @@
                 <exec.mainClass>ydb.importer.YdbImporter</exec.mainClass>
                 <exec.executable>java</exec.executable>
                 <jpda.listen>true</jpda.listen>
-                <Env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS>/Users/mzinal/Keys/yc-fednew-iot1sa1.json</Env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS>
+                <Env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS>/home/zinal/key-ydb-sa1.json</Env.YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS>
             </properties>
         </action>
         <action>
