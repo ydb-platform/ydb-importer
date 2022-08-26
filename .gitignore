@@ -1,0 +1,4 @@
+/target/
+*.log
+*.tmp
+/scripts/sample-*-real.xml

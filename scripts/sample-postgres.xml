@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Пример конфигурации импорта данных PostgreSQL -> YDB -->
+<ydb-importer>
+    <workers>
+        <!-- Количество рабочих потоков.
+             Также соответствует максимальному устанавливаемому количеству соединений с источником,
+             и максимальному количеству сессий с получателем.
+         -->
+        <pool size="4"/>
+    </workers>
+    <!-- Параметры подключения к БД-источнику.
+    При работе с BLOB (EXTENSION lo) могут требоваться специфические права, или
+    ALTER DATABASE dbname SET lo_compat_privileges TO on;
+    -->
+    <source type="postgresql">
+        <jdbc-class>org.postgresql.Driver</jdbc-class>
+        <jdbc-url>jdbc:postgresql://hostname:5432/dbname</jdbc-url>
+        <username>username</username>
+        <password>password</password>
+    </source>
+    <!-- Параметры подключения к БД-получателю.
+         Данные аутентификации необходимо установить в переменных окружения,
+         как описано в документации: https://ydb.tech/ru/docs/reference/ydb-sdk/auth#env
+         Если используется YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS, то файл ключа надо
+         генерировать как написано здесь:
+         https://cloud.yandex.ru/docs/iam/operations/authorized-key/create
+          -->
+    <target type="ydb">
+        <!-- Выгрузить скрипт создания таблиц в указанный файл. 
+             Может использоваться в том числе при отсутствии connection-string  -->
+        <script-file>sample-postgres.yql.tmp</script-file>
+        <!-- Строка соединения: endpoint + база данных -->
+        <connection-string>grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g</connection-string>
+        <!--
+        <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
+        -->
+        <!-- Режим аутентификации: ENV, NONE -->
+        <auth-mode>ENV</auth-mode>
+        <!-- Удалять ли уже существующие таблицы с теми же именами, что предполагается заливать -->
+        <replace-existing>true</replace-existing>
+        <!-- Заливать ли данные в таблицы после их создания или пересоздания -->
+        <load-data>true</load-data>
+        <!-- Максимальная порция заливки данных, в строках -->
+        <max-batch-rows>1000</max-batch-rows>
+        <!-- Максимальная порция заливки BLOB-данных, в строках -->
+        <max-blob-rows>200</max-blob-rows>
+    </target>
+    <table-options name="default">
+        <!--  Возможные значения case-mode: ASIS (по умолчанию), LOWER, UPPER.
+              Влияет на регистр подставляемых в шаблоны имён.  -->
+        <case-mode>ASIS</case-mode>
+        <!-- Шаблон полного имени таблицы, включая каталог размещения.
+             Используются подстановочные имена ${schema} и ${table},
+             соответствующие схеме и имени копируемой исходной таблицы. -->
+        <table-name-format>pgimp1/${schema}/${table}</table-name-format>
+        <!-- Шаблон полного имени таблицы, включая каталог размещения.
+             Используются подстановочные имена ${schema}, ${table} и ${field},
+             соответствующие схеме, имени копируемой исходной таблицы и имени
+             поля типа BLOB. -->
+        <blob-name-format>pgimp1/${schema}/${table}_${field}</blob-name-format>
+        <!-- Возможные значения: DATE (по умолчанию), INT, STR -->
+        <conv-date>INT</conv-date>
+    </table-options>
+    <!-- Фильтр для отбора копируемых таблиц с источника -->
+    <table-map options="default">
+        <!-- Включаемые схемы -->
+        <include-schemas regexp="true">.*</include-schemas>
+        <!-- Также могут присутствовать exclude-schemas,
+             плюс include-tables и exclude-tables для явного указания
+             фильтра по именам таблиц. -->
+    </table-map>
+    <table-ref options="default">
+        <schema-name>information_schema</schema-name>
+        <table-name>columns</table-name>
+        <query-text>SELECT * FROM information_schema."columns"</query-text>
+        <key-column>table_schema</key-column>
+        <key-column>table_name</key-column>
+        <key-column>column_name</key-column>
+    </table-ref>
+    <table-ref options="default">
+        <schema-name>information_schema</schema-name>
+        <table-name>tables</table-name>
+        <query-text>SELECT * FROM information_schema."tables"</query-text>
+        <key-column>table_schema</key-column>
+        <key-column>table_name</key-column>
+    </table-ref>
+</ydb-importer>
