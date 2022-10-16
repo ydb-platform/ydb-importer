@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PostgreSQL to YDB importer job configuration example -->
+<ydb-importer>
+    <workers>
+        <pool size="4"/>
+    </workers>
+    <source type="postgresql">
+        <jdbc-class>org.postgresql.Driver</jdbc-class>
+        <jdbc-url>jdbc:postgresql://hostname:5432/dbname</jdbc-url>
+        <username>username</username>
+        <password>password</password>
+    </source>
+    <target type="ydb">
+        <script-file>sample-postgres.yql.tmp</script-file>
+        <connection-string>grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g</connection-string>
+        <!--
+        <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
+        -->
+        <!-- ENV, NONE -->
+        <auth-mode>ENV</auth-mode>
+        <replace-existing>true</replace-existing>
+        <load-data>true</load-data>
+        <max-batch-rows>1000</max-batch-rows>
+        <max-blob-rows>200</max-blob-rows>
+    </target>
+    <table-options name="default">
+        <!--  ASIS, LOWER, UPPER -->
+        <case-mode>ASIS</case-mode>
+        <!-- Substitution values: ${schema}, ${table} -->
+        <table-name-format>oraimp1/${schema}/${table}</table-name-format>
+        <!-- Substitution values: ${schema}, ${table}, ${field} -->
+        <blob-name-format>oraimp1/${schema}/${table}_${field}</blob-name-format>
+        <!-- DATE, INT, STR -->
+        <conv-date>INT</conv-date>
+    </table-options>
+    <table-map options="default">
+        <include-schemas regexp="true">.*</include-schemas>
+    </table-map>
+    <table-ref options="default">
+        <schema-name>information_schema</schema-name>
+        <table-name>columns</table-name>
+        <query-text>SELECT * FROM information_schema."columns"</query-text>
+        <key-column>table_schema</key-column>
+        <key-column>table_name</key-column>
+        <key-column>column_name</key-column>
+    </table-ref>
+    <table-ref options="default">
+        <schema-name>information_schema</schema-name>
+        <table-name>tables</table-name>
+        <query-text>SELECT * FROM information_schema."tables"</query-text>
+        <key-column>table_schema</key-column>
+        <key-column>table_name</key-column>
+    </table-ref>
+</ydb-importer>
