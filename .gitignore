@@ -1,3 +1,4 @@
+/.vscode/
 /target/
 /scripts/sample-*-real.xml
 nb-configuration.xml
