@@ -1,6 +1,6 @@
-# YDB-Importer - Import data from JDBC data sources to YDB databases
+# Import data from JDBC data sources to YDB databases
 
-This tool implements programmatical import of table structure and data records from a JDBC data source to YDB.
+This tool imports table structures and data records from a JDBC data source to YDB.
 
 Right now the tested data sources include Oracle Database and PostgreSQL.
 
@@ -199,9 +199,9 @@ mvn package
 
 After build is complete, the `target` subdirectory will contain the file `ydb-importer-X.Y-SNAPSHOT-bin.zip`, where `X.Y` is the version number.
 
-## 7. Расширение состава поддерживаемых источников
+## 7. Adding support for a new data source type
 
-To support the new data source type in this tool, the new implementation derived from the `AnyTableLister` abstract class needs to be created. `PostgresTableLister` and `OracleTableLister` classes can be used as a reference implementation for that.
+To support the new data source type in this tool, the new implementation class derived from the `AnyTableLister` abstract class needs to be created. `PostgresTableLister` and `OracleTableLister` classes can be used as a reference implementation for that.
 
 The implementation of abstract methods defined in `AnyTableLister` should solve the following tasks:
 * retrieval of schema names list from the data source;
