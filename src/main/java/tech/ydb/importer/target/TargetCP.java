@@ -1,10 +1,12 @@
 package tech.ydb.importer.target;
 
 import tech.ydb.auth.iam.CloudAuthHelper;
+import tech.ydb.core.auth.StaticCredentials;
 import tech.ydb.core.grpc.GrpcTransport;
 import tech.ydb.core.grpc.GrpcTransportBuilder;
 import tech.ydb.table.SessionRetryContext;
 import tech.ydb.table.TableClient;
+
 import tech.ydb.importer.config.TargetConfig;
 
 /**
@@ -24,6 +26,10 @@ public class TargetCP implements AutoCloseable {
             case ENV:
                 builder = builder.withAuthProvider(
                         CloudAuthHelper.getAuthProviderFromEnviron());
+                break;
+            case STATIC:
+                builder = builder.withAuthProvider(
+                    new StaticCredentials(config.getStaticLogin(), config.getStaticPassword()));
                 break;
             case NONE:
                 break;

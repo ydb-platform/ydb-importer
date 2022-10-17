@@ -13,8 +13,12 @@
     <target type="ydb">
         <script-file>sample-oracle.yql.tmp</script-file>
         <connection-string>grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g</connection-string>
-        <!-- ENV, NONE -->
+        <!-- ENV, NONE, STATIC -->
         <auth-mode>ENV</auth-mode>
+        <!-- auth-mode: STATIC
+        <static-login>username</static-login>
+        <static-password>password</static-password>
+        -->
         <replace-existing>true</replace-existing>
         <load-data>true</load-data>
         <max-batch-rows>1000</max-batch-rows>

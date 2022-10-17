@@ -131,6 +131,9 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
             генерировать как написано здесь:
             https://cloud.yandex.ru/docs/iam/operations/authorized-key/create
         -->
+        <!-- Логин и пароль для auth-mode: STATIC -->
+        <static-login>username</static-login>
+        <static-password>password</static-password>
         <!-- Удалять ли уже существующие таблицы с теми же именами, что предполагается заливать -->
         <replace-existing>true</replace-existing>
         <!-- Заливать ли данные в таблицы после их создания или пересоздания -->

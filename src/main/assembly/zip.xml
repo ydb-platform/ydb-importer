@@ -15,6 +15,16 @@
   </dependencySets>
   <fileSets>
     <fileSet>
+        <directory>${basedir}</directory>
+        <outputDirectory>.</outputDirectory>
+        <includes>
+            <include>LICENSE</include>
+            <include>README.md</include>
+            <include>README-ru.md</include>
+        </includes>
+        <fileMode>640</fileMode>
+    </fileSet>
+    <fileSet>
         <directory>${basedir}/scripts</directory>
         <outputDirectory>.</outputDirectory>
         <includes>

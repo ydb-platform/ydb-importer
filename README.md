@@ -107,14 +107,7 @@ Below is the definition of the configuration file structure:
         <username>username</username>
         <password>password</password>
     </source>
-    <!-- Target YDB database connection parameters.
-         For managed YDB in Yandex Cloud, authentication parameters should be specified
-         in the environment variables, as specified in the documentation:
-            https://ydb.tech/en/docs/reference/ydb-sdk/auth#env
-         In case the YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS mode is used, the key file
-         must be generated as written in the following document:
-            https://cloud.yandex.com/en/docs/iam/operations/authorized-key/create
-          -->
+    <!-- Target YDB database connection parameters. -->
     <target type="ydb">
         <!-- If the following tag is defined, the tool will import
              the YQL script to generate YDB tables into the file specified.
@@ -128,6 +121,23 @@ Below is the definition of the configuration file structure:
             grpc://localhost:2136?database=/Root/testdb
          -->
         <connection-string>grpcs://host:2135?database=/dbpath</connection-string>
+        <!-- Authentication mode:
+          ENV      Configure authentication through the environment
+          NONE     Anonymous access, or static credentials in the connection string
+          STATIC   Static credentials defined as login and password properties (see below).
+        -->
+        <auth-mode>ENV</auth-mode>
+        <!--
+         For managed YDB in Yandex Cloud, authentication parameters should be specified
+         in the environment variables, as specified in the documentation:
+            https://ydb.tech/en/docs/reference/ydb-sdk/auth#env
+         In case the YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS mode is used, the key file
+         must be generated as written in the following document:
+            https://cloud.yandex.com/en/docs/iam/operations/authorized-key/create
+        -->
+        <!-- For auth-mode: STATIC -->
+        <static-login>username</static-login>
+        <static-password>password</static-password>
         <!-- Drop the already existing tables before loading the data -->
         <replace-existing>true</replace-existing>
         <!-- Should the tool actually load the data after creating the tables? -->

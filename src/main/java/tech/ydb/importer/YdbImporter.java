@@ -30,10 +30,9 @@ import static tech.ydb.importer.config.JdomHelper.isBlank;
  */
 public class YdbImporter {
 
-    private final static org.slf4j.Logger LOG = org.slf4j.LoggerFactory
-            .getLogger(YdbImporter.class);
-    
-    public static final String VERSION = "1.0";
+    private final static org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(YdbImporter.class);
+ 
+    public static final String VERSION = "1.2-SNAPSHOT"; // X.Y[-SNAPSHOT]
 
     private final ImporterConfig config;
     private final TableMapList tableMaps;
@@ -67,6 +66,7 @@ public class YdbImporter {
     }
 
     public void run() throws Exception {
+        LOG.info("{} version {}", getClass().getName(), VERSION);
         String jdbcClassName = config.getSource().getClassName();
         if ( ! isBlank(jdbcClassName) ) {
             LOG.info("Loading driver class {}", jdbcClassName);

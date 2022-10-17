@@ -3,14 +3,14 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>ydb.importer</groupId>
     <artifactId>ydb-importer</artifactId>
-    <version>1.1-SNAPSHOT</version>
-    <!-- <version>1.0-SNAPSHOT</version> -->
+    <version>1.2-SNAPSHOT</version>
+    <!-- <version>X.Y[-SNAPSHOT]</version> -->
     <packaging>jar</packaging>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
-        <exec.mainClass>ydb.importer.YdbImporter</exec.mainClass>
+        <exec.mainClass>tech.ydb.importer.YdbImporter</exec.mainClass>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
         <ydb.sdk.version>2.0.0</ydb.sdk.version>
@@ -123,7 +123,7 @@
                         <manifest>
                             <addClasspath>true</addClasspath>
 <!--                            <classpathPrefix>lib/</classpathPrefix> -->
-                            <mainClass>ydb.importer.YdbImporter</mainClass>
+                            <mainClass>tech.ydb.importer.YdbImporter</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

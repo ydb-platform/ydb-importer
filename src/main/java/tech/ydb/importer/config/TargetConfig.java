@@ -11,6 +11,8 @@ public class TargetConfig {
     
     private TargetType type;
     private YdbAuthMode authMode;
+    private String staticLogin;
+    private String staticPassword;
     private TargetScript script;
     private String connectionString;
     private boolean replaceExisting;
@@ -39,6 +41,10 @@ public class TargetConfig {
                     getAttr(c, "type", "ydb").toUpperCase());
             this.authMode = YdbAuthMode.valueOf(
                     getText(c, "auth-mode", "none").toUpperCase());
+            if (YdbAuthMode.STATIC == this.authMode) {
+                this.staticLogin = getText(c, "static-login");
+                this.staticPassword = getText(c, "static-password");
+            }
             Element elx = getOneChild(c, "script-file");
             if (elx != null) {
                 this.script = new TargetScript(elx);
@@ -82,6 +88,22 @@ public class TargetConfig {
 
     public void setAuthMode(YdbAuthMode authMode) {
         this.authMode = authMode;
+    }
+
+    public String getStaticLogin() {
+        return staticLogin;
+    }
+
+    public void setStaticLogin(String staticLogin) {
+        this.staticLogin = staticLogin;
+    }
+
+    public String getStaticPassword() {
+        return staticPassword;
+    }
+
+    public void setStaticPassword(String staticPassword) {
+        this.staticPassword = staticPassword;
     }
 
     public TargetScript getScript() {

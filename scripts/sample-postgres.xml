@@ -16,8 +16,12 @@
         <!--
         <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
         -->
-        <!-- ENV, NONE -->
+        <!-- ENV, NONE, STATIC -->
         <auth-mode>ENV</auth-mode>
+        <!-- auth-mode: STATIC
+        <static-login>username</static-login>
+        <static-password>password</static-password>
+        -->
         <replace-existing>true</replace-existing>
         <load-data>true</load-data>
         <max-batch-rows>1000</max-batch-rows>

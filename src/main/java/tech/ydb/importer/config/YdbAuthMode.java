@@ -7,6 +7,7 @@ package tech.ydb.importer.config;
 public enum YdbAuthMode {
     
     NONE,
-    ENV
+    ENV,
+    STATIC
     
 }
