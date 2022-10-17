@@ -13,7 +13,7 @@
         <exec.mainClass>tech.ydb.importer.YdbImporter</exec.mainClass>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
-        <ydb.sdk.version>2.0.0</ydb.sdk.version>
+        <ydb.sdk.version>2.1.0-SNAPSHOT</ydb.sdk.version>
     </properties>
     <dependencies>
         <dependency>
@@ -44,7 +44,7 @@
         <dependency>
             <groupId>tech.ydb.auth</groupId>
             <artifactId>yc-auth-provider</artifactId>
-            <version>${ydb.sdk.version}</version>
+            <version>2.0.0</version>
         </dependency>
         <dependency>
             <groupId>org.jdom</groupId>

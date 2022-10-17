@@ -66,7 +66,6 @@ public class YdbImporter {
     }
 
     public void run() throws Exception {
-        LOG.info("{} version {}", getClass().getName(), VERSION);
         String jdbcClassName = config.getSource().getClassName();
         if ( ! isBlank(jdbcClassName) ) {
             LOG.info("Loading driver class {}", jdbcClassName);
