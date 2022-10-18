@@ -14,7 +14,10 @@ import tech.ydb.importer.config.TargetConfig;
  * @author zinal
  */
 public class TargetCP implements AutoCloseable {
+    
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(TargetCP.class);
 
+    private final GrpcTransport transport;
     private final TableClient tableClient;
     private final SessionRetryContext retryCtx;
     private final String database;
@@ -35,11 +38,18 @@ public class TargetCP implements AutoCloseable {
                 break;
         }
         GrpcTransport transport = builder.build();
-        this.tableClient = TableClient.newClient(transport)
-                .sessionPoolSize(0, poolSize)
-                .build();
         this.database = transport.getDatabase();
-        this.retryCtx = SessionRetryContext.create(tableClient).build();
+        try {
+            this.tableClient = TableClient.newClient(transport)
+                    .sessionPoolSize(0, poolSize)
+                    .build();
+            this.retryCtx = SessionRetryContext.create(tableClient).build();
+            this.transport = transport;
+            transport = null; // to avoid closing below
+        } finally {
+            if (transport != null)
+                transport.close();
+        }
     }
 
     public TableClient getTableClient() {
@@ -56,7 +66,20 @@ public class TargetCP implements AutoCloseable {
 
     @Override
     public void close() {
-        tableClient.close();
+        if (tableClient != null) {
+            try {
+                tableClient.close();
+            } catch(Exception ex) {
+                LOG.warn("TableClient closing threw an exception", ex);
+            }
+        }
+        if (transport != null) {
+            try {
+                transport.close();
+            } catch(Exception ex) {
+                LOG.warn("GrpcTransport closing threw an exception", ex);
+            }
+        }
     }
 
 }
