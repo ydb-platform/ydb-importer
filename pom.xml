@@ -6,6 +6,14 @@
     <version>1.3</version>
     <!-- <version>X.Y[-SNAPSHOT]</version> -->
     <packaging>jar</packaging>
+    <developers>
+        <developer>
+            <name>Maksim Zinal</name>
+            <email>mzinal@ydb.tech</email>
+            <organization>YDB</organization>
+            <organizationUrl>https://ydb.tech/</organizationUrl>
+        </developer>
+    </developers>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
@@ -61,6 +69,7 @@
             <artifactId>HikariCP</artifactId>
             <version>5.0.1</version>
         </dependency>
+        <!--
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -73,7 +82,6 @@
             <version>8.0.31</version>
             <scope>runtime</scope>
         </dependency>
-        <!--
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ojdbc10</artifactId>
