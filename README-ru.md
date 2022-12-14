@@ -2,7 +2,7 @@
 
 Эта утилита реализует импорт структуры таблиц и содержащихся в таблицах записей из источников JDBC в базы данных YDB.
 
-На сегодня тестировались источники данных Oracle Database и PostgreSQL.
+На сегодня тестировались источники данных Oracle Database, PostgreSQL и MySQL.
 
 ## 1. Общая логика работы утилиты импорта
 
@@ -79,7 +79,8 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
 
 Примеры файлов настроек с комментариями:
 * [для PostgreSQL](scripts/sample-postgres.xml);
-* [для Oracle](scripts/sample-oracle.xml).
+* [для Oracle](scripts/sample-oracle.xml);
+* [для MySQL](scripts/sample-mysql.xml).
 
 Описание формата файла настроек:
 
@@ -96,15 +97,19 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
     <!-- Параметры подключения к БД-источнику.
          type - обязательный атрибут, влияющий на логику взаимодействия с источником
       -->
-    <source type="oracle|postgresql">
+    <source type="oracle|postgresql|mysql">
         <!-- 
-            oracle.jdbc.driver.OracleDriver
-            org.postgresql.Driver
+              oracle.jdbc.driver.OracleDriver
+              org.postgresql.Driver
+              com.mysql.cj.jdbc.Driver
+              org.mariadb.jdbc.Driver
         -->
         <jdbc-class>driver-class-name</jdbc-class>
         <!--
-            jdbc:oracle:thin:@//hostname:1521/serviceName
-            jdbc:postgresql://hostname:5432/dbname
+              jdbc:oracle:thin:@//hostname:1521/serviceName
+              jdbc:postgresql://hostname:5432/dbname
+              jdbc:mysql://hostname:3306/dbname
+              jdbc:mariadb://hostname:3306/dbname
         -->
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>

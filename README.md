@@ -2,7 +2,7 @@
 
 This tool imports table structures and data records from a JDBC data source to YDB.
 
-Right now the tested data sources include Oracle Database and PostgreSQL.
+Right now the tested data sources include Oracle Database, PostgreSQL and MySQL.
 
 ## 1. Program logic
 
@@ -75,7 +75,8 @@ This identifier is also stored in the "main" target table in the field having th
 
 Sample configuration files:
 * [for PostgreSQL](scripts/sample-postgres.xml);
-* [for Oracle](scripts/sample-oracle.xml).
+* [for Oracle](scripts/sample-oracle.xml);
+* [for MySQL](scripts/sample-mysql.xml).
 
 Below is the definition of the configuration file structure:
 
@@ -91,17 +92,21 @@ Below is the definition of the configuration file structure:
     <!-- Source database connection parameters.
          type - the required attribute defining the type of the data source
       -->
-    <source type="oracle|postgresql">
+    <source type="oracle|postgresql|mysql">
         <!-- 
             JDBC driver class name to be used. Typical values:
               oracle.jdbc.driver.OracleDriver
               org.postgresql.Driver
+              com.mysql.cj.jdbc.Driver
+              org.mariadb.jdbc.Driver
         -->
         <jdbc-class>driver-class-name</jdbc-class>
         <!--
             JDBC driver URL. Value templates:
               jdbc:oracle:thin:@//hostname:1521/serviceName
               jdbc:postgresql://hostname:5432/dbname
+              jdbc:mysql://hostname:3306/dbname
+              jdbc:mariadb://hostname:3306/dbname
         -->
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
