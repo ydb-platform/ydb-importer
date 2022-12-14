@@ -109,10 +109,10 @@ public class YdbTableBuilder {
 
     private Type convertType(ColumnInfo ci) {
         switch (ci.getSqlType()) {
-            case java.sql.Types.SMALLINT:
-                return PrimitiveType.Int16;
             case java.sql.Types.BOOLEAN:
                 return PrimitiveType.Bool;
+            case java.sql.Types.SMALLINT:
+                return PrimitiveType.Int32;
             case java.sql.Types.INTEGER:
                 return PrimitiveType.Int32;
             case java.sql.Types.BIGINT:

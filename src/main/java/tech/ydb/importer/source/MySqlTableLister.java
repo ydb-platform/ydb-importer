@@ -84,7 +84,7 @@ public class MySqlTableLister extends AnyTableLister {
         final List<ColumnInfo> cols = new ArrayList<>();
         // Retrieve the list of columns
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT * FROM information_schema.columns "
+                "SELECT column_name FROM information_schema.columns "
                     + "WHERE table_schema=? AND table_name=? "
                     + "ORDER BY ordinal_position")) {
             ps.setString(1, ti.getSchema());
@@ -170,9 +170,9 @@ public class MySqlTableLister extends AnyTableLister {
 
     @Override
     protected String safeId(String id) {
-        if (id.contains("\"")) {
-            throw new IllegalArgumentException("Double quotes within the identifier: " + id);
+        if (id.contains("`")) {
+            throw new IllegalArgumentException("Backticks within the identifier: " + id);
         }
-        return "\"" + id + "\"";
+        return "`" + id + "`";
     }
 }
