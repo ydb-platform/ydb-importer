@@ -171,7 +171,6 @@ public abstract class AnyTableLister {
     /**
      * Build the instance of a customized table lister for a particular source database type
      * @param tableMaps
-     * @param jdbc
      * @return 
      */
     public static AnyTableLister getInstance(TableMapList tableMaps) {
@@ -181,6 +180,8 @@ public abstract class AnyTableLister {
                 return new OracleTableLister(tableMaps);
             case POSTGRESQL:
                 return new PostgresTableLister(tableMaps);
+            case MYSQL:
+                return new MySqlTableLister(tableMaps);
             default:
                 throw new RuntimeException("Unsupported source type: " + st);
         }

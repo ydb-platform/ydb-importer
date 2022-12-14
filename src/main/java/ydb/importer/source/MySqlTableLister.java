@@ -8,34 +8,29 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import ydb.importer.TableDecision;
 import ydb.importer.config.TableIdentity;
 
 /**
- * Source table metadata retrieval - PostgreSQL specifics.
+ * Source table metadata retrieval - MySQL specifics.
  * @author zinal
  */
-public class PostgresTableLister extends AnyTableLister {
+public class MySqlTableLister extends AnyTableLister {
     
     public static final Set<String> SKIP_SCHEMAS;
     static {
-        final Set<String> x = new HashSet<String>();
+        final Set<String> x = new HashSet<>();
         x.add("information_schema");
-        x.add("pg_catalog");
-        x.add("pg_toast");
-        x.add("pg_temp_1");
-        x.add("pg_toast_temp_1");
         SKIP_SCHEMAS = Collections.unmodifiableSet(x);
     }
 
-    public PostgresTableLister(TableMapList tableMaps) {
+    public MySqlTableLister(TableMapList tableMaps) {
         super(tableMaps);
     }
 
     @Override
     protected List<String> listSchemas(Connection con) throws Exception {
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT nspname FROM pg_catalog.pg_namespace")) {
+                "SELECT schema_name FROM information_schema.schemata")) {
             try (ResultSet rs = ps.executeQuery()) {
                 final List<String> retval = new ArrayList<>();
                 while (rs.next()) {
@@ -52,13 +47,8 @@ public class PostgresTableLister extends AnyTableLister {
     @Override
     protected List<String> listTables(Connection con, String schema) throws Exception {
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT c.relname  "
-                    + "FROM pg_catalog.pg_class c "
-                    + "INNER JOIN pg_catalog.pg_namespace n "
-                    + "  ON c.relnamespace = n.\"oid\" "
-                    + "WHERE c.relkind IN ('p', 'r') "
-                    + "  AND NOT c.relispartition "
-                    + "  AND n.nspname = ?")) {
+                "SELECT table_name FROM information_schema.tables "
+                    + "WHERE table_schema=? AND table_type='BASE TABLE'")) {
             ps.setString(1, schema);
             try (ResultSet rs = ps.executeQuery()) {
                 final List<String> retval = new ArrayList<>();
@@ -74,10 +64,8 @@ public class PostgresTableLister extends AnyTableLister {
     protected long grabRowCount(Connection con, TableIdentity ti) throws Exception {
         // Retrieve the approximate number of rows in the table
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT c.reltuples FROM pg_catalog.pg_class c "
-                    + "INNER JOIN pg_catalog.pg_namespace n "
-                    + "  ON n.\"oid\" = c.relnamespace "
-                    + "WHERE n.nspname = ? AND c.relname = ?")) {
+                "SELECT table_rows FROM information_schema.tables "
+                    + "WHERE table_schema=? AND table_name=?")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
@@ -96,15 +84,9 @@ public class PostgresTableLister extends AnyTableLister {
         final List<ColumnInfo> cols = new ArrayList<>();
         // Retrieve the list of columns
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT a.attname "
-                    + "FROM pg_catalog.pg_attribute a "
-                    + "INNER JOIN pg_catalog.pg_class c "
-                    + "  ON c.\"oid\" = a.attrelid "
-                    + "INNER JOIN pg_catalog.pg_namespace n "
-                    + "  ON n.\"oid\" = c.relnamespace "
-                    + "WHERE n.nspname = ? AND c.relname = ?"
-                    + "  AND a.attnum > 0 "
-                    + "ORDER BY a.attnum ")) {
+                "SELECT * FROM information_schema.columns "
+                    + "WHERE table_schema=? AND table_name=? "
+                    + "ORDER BY ordinal_position")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
@@ -121,22 +103,14 @@ public class PostgresTableLister extends AnyTableLister {
             throws Exception {
         // Retrieve the primary key (if one is defined)
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT ia.attname "
-                + "FROM pg_catalog.pg_attribute ia "
-                + "INNER JOIN pg_catalog.pg_class ic "
-                + "  ON ic.\"oid\" = ia.attrelid "
-                + "INNER JOIN pg_catalog.pg_index ix "
-                + "  ON ix.indexrelid =ic.\"oid\" "
-                + "INNER JOIN pg_catalog.pg_constraint x "
-                + "  ON x.conindid = ix.indexrelid "
-                + "INNER JOIN pg_catalog.pg_class c "
-                + "  ON c.\"oid\" = x.conrelid "
-                + "INNER JOIN pg_catalog.pg_namespace n "
-                + "  ON n.\"oid\" = c.relnamespace "
-                + "WHERE n.nspname = ? AND c.relname = ? "
-                + "  AND x.contype IN ('p', 'u') "
-                + "AND ix.indisvalid AND ix.indisunique "
-                + "ORDER BY ia.attnum")) {
+                "SELECT kcu.column_name FROM information_schema.key_column_usage kcu "
+                    + "INNER JOIN information_schema.table_constraints tc "
+                    + "  ON kcu.constraint_name=tc.constraint_name "
+                    + "  AND kcu.table_schema=tc.table_schema "
+                    + "  AND kcu.table_name=tc.table_name "
+                    + "WHERE tc.table_schema=? AND tc.table_name=? "
+                    + "  AND tc.constraint_type='PRIMARY KEY' "
+                    + "ORDER BY kcu.ordinal_position")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
@@ -149,41 +123,43 @@ public class PostgresTableLister extends AnyTableLister {
             // If the key was not defined as a PK constraint, look for unique indexes.
             // MAYBE: logic to prefer all-integer keys over varchar-based.
             try (PreparedStatement ps = con.prepareStatement(
-                    "SELECT ix.indexrelid, COUNT(*) "
-                    + "FROM pg_catalog.pg_index ix "
-                    + "INNER JOIN pg_catalog.pg_class c "
-                    + "  ON c.\"oid\" = ix.indrelid  "
-                    + "INNER JOIN pg_catalog.pg_namespace n "
-                    + "  ON n.\"oid\" = c.relnamespace "
-                    + "WHERE n.nspname = ? AND c.relname = ? "
-                    + "  AND ix.indisvalid AND ix.indisunique "
-                    + "GROUP BY ix.indexrelid "
-                    + "ORDER BY COUNT(*) DESC, ix.indexrelid")) {
+                    "SELECT tc.constraint_name, COUNT(*) "
+                        + "FROM information_schema.table_constraints tc "
+                        + "INNER JOIN information_schema.key_column_usage kcu "
+                        + "  ON kcu.constraint_name=tc.constraint_name "
+                        + "  AND kcu.table_schema=tc.table_schema "
+                        + "  AND kcu.table_name=tc.table_name "
+                        + "WHERE tc.table_schema=? AND tc.table_name=? "
+                        + "  AND tc.constraint_type='UNIQUE' "
+                        + "GROUP BY tc.constraint_name "
+                        + "ORDER BY COUNT(*), tc.constraint_name")) {
                 ps.setString(1, ti.getSchema());
                 ps.setString(2, ti.getTable());
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
-                        long ixid = rs.getLong(1);
-                        if (! rs.wasNull())
-                            grabIndexColumns(con, ixid, tm);
+                        String consname = rs.getString(1);
+                        if (! rs.wasNull() && consname!=null)
+                            grabIndexColumns(con, consname, ti, tm);
                     }
                 }
             }
         }
     }
 
-    private void grabIndexColumns(Connection con, long ixid, TableMetadata tm) 
-            throws Exception {
+    private void grabIndexColumns(Connection con, String consname,
+            TableIdentity ti, TableMetadata tm) throws Exception {
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT ia.attname "
-                + "FROM pg_catalog.pg_attribute ia "
-                + "INNER JOIN pg_catalog.pg_class ic "
-                + "  ON ic.\"oid\" = ia.attrelid "
-                + "INNER JOIN pg_catalog.pg_index ix "
-                + "  ON ix.indexrelid =ic.\"oid\" "
-                + "WHERE ix.indexrelid = 16395 "
-                + "ORDER BY ia.attnum")) {
-            ps.setLong(1, ixid);
+                "SELECT kcu.column_name FROM information_schema.key_column_usage kcu "
+                    + "INNER JOIN information_schema.table_constraints tc "
+                    + "  ON kcu.constraint_name=tc.constraint_name "
+                    + "  AND kcu.table_schema=tc.table_schema "
+                    + "  AND kcu.table_name=tc.table_name "
+                    + "WHERE tc.table_schema=? AND tc.table_name=? "
+                    + "  AND tc.constraint_name=? "
+                    + "ORDER BY kcu.ordinal_position")) {
+            ps.setString(1, ti.getSchema());
+            ps.setString(2, ti.getTable());
+            ps.setString(3, consname);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     tm.addKey(rs.getString(1));
@@ -198,38 +174,6 @@ public class PostgresTableLister extends AnyTableLister {
             throw new IllegalArgumentException("Double quotes within the identifier: " + id);
         }
         return "\"" + id + "\"";
-    }
-
-    @Override
-    protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm) 
-            throws Exception {
-        // Basic implementation comes from the parent.
-        super.grabColumnTypes(con, td, tm);
-        // Grab the BLOB columns, which are a magic in PostgreSQL.
-        final String sqlBlob = ""
-                + "SELECT a.attname "
-                + "FROM pg_class C, pg_attribute a, pg_namespace s, pg_type t "
-                + "WHERE a.attnum > 0 AND NOT a.attisdropped "
-                + "  AND a.attrelid = c.oid "
-                + "  AND a.atttypid = t.oid "
-                + "  AND c.relnamespace = s.oid"
-                + "  AND t.typname in ('oid', 'lo') "
-                + "  AND c.relkind='r' "
-                + "  AND s.nspname=? AND c.relname=?";
-        try (PreparedStatement ps = con.prepareStatement(sqlBlob)) {
-            ps.setString(1, td.getSchema());
-            ps.setString(2, td.getTable());
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    String colname = rs.getString(1);
-                    ColumnInfo ci = tm.findColumn(colname);
-                    if (ci!=null) {
-                        ci.setSqlType(java.sql.Types.BLOB);
-                        ci.setBlobAsObject(true);
-                    }
-                }
-            }
-        }
     }
 
 }

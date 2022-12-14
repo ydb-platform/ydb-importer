@@ -7,7 +7,8 @@ package ydb.importer.config;
 public enum SourceType {
     ORACLE,
     POSTGRESQL,
+    MYSQL,
+    MSSQL,
     DB2,
-    INFORMIX,
-    MSSQL
+    INFORMIX
 }
