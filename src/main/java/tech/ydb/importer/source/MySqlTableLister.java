@@ -4,27 +4,40 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import tech.ydb.importer.config.TableIdentity;
 
 /**
- * Source table metadata retrieval - Oracle specifics.
+ * Source table metadata retrieval - MySQL specifics.
  * @author zinal
  */
-public class OracleTableLister extends AnyTableLister {
+public class MySqlTableLister extends AnyTableLister {
+    
+    public static final Set<String> SKIP_SCHEMAS;
+    static {
+        final Set<String> x = new HashSet<>();
+        x.add("information_schema");
+        SKIP_SCHEMAS = Collections.unmodifiableSet(x);
+    }
 
-    public OracleTableLister(TableMapList tableMaps) {
+    public MySqlTableLister(TableMapList tableMaps) {
         super(tableMaps);
     }
 
     @Override
     protected List<String> listSchemas(Connection con) throws Exception {
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT USERNAME FROM ALL_USERS WHERE ORACLE_MAINTAINED='N'")) {
+                "SELECT schema_name FROM information_schema.schemata")) {
             try (ResultSet rs = ps.executeQuery()) {
                 final List<String> retval = new ArrayList<>();
                 while (rs.next()) {
-                    retval.add(rs.getString(1));
+                    String value = rs.getString(1);
+                    if (SKIP_SCHEMAS.contains(value))
+                        continue;
+                    retval.add(value);
                 }
                 return retval;
             }
@@ -34,7 +47,8 @@ public class OracleTableLister extends AnyTableLister {
     @Override
     protected List<String> listTables(Connection con, String schema) throws Exception {
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT table_name FROM all_tables WHERE owner=? AND status='VALID'")) {
+                "SELECT table_name FROM information_schema.tables "
+                    + "WHERE table_schema=? AND table_type='BASE TABLE'")) {
             ps.setString(1, schema);
             try (ResultSet rs = ps.executeQuery()) {
                 final List<String> retval = new ArrayList<>();
@@ -50,8 +64,8 @@ public class OracleTableLister extends AnyTableLister {
     protected long grabRowCount(Connection con, TableIdentity ti) throws Exception {
         // Retrieve the approximate number of rows in the table
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT num_rows FROM all_tables "
-                + "WHERE owner=? AND table_name=?")) {
+                "SELECT table_rows FROM information_schema.tables "
+                    + "WHERE table_schema=? AND table_name=?")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
@@ -70,8 +84,9 @@ public class OracleTableLister extends AnyTableLister {
         final List<ColumnInfo> cols = new ArrayList<>();
         // Retrieve the list of columns
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT column_name FROM all_tab_columns "
-                + "WHERE owner=? AND table_name=? ORDER BY column_id")) {
+                "SELECT * FROM information_schema.columns "
+                    + "WHERE table_schema=? AND table_name=? "
+                    + "ORDER BY ordinal_position")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
@@ -87,14 +102,15 @@ public class OracleTableLister extends AnyTableLister {
     protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm) 
             throws Exception {
         // Retrieve the primary key (if one is defined)
-        try (PreparedStatement ps = con.prepareStatement("SELECT cols.column_name "
-                + "FROM all_constraints cons, all_cons_columns cols "
-                + "WHERE cols.owner = ? "
-                + "  AND cols.table_name = ? "
-                + "  AND cons.constraint_type = 'P' "
-                + "  AND cons.constraint_name = cols.constraint_name "
-                + "  AND cons.owner = cols.owner "
-                + "ORDER BY cols.position")) {
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT kcu.column_name FROM information_schema.key_column_usage kcu "
+                    + "INNER JOIN information_schema.table_constraints tc "
+                    + "  ON kcu.constraint_name=tc.constraint_name "
+                    + "  AND kcu.table_schema=tc.table_schema "
+                    + "  AND kcu.table_name=tc.table_name "
+                    + "WHERE tc.table_schema=? AND tc.table_name=? "
+                    + "  AND tc.constraint_type='PRIMARY KEY' "
+                    + "ORDER BY kcu.ordinal_position")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
@@ -106,35 +122,44 @@ public class OracleTableLister extends AnyTableLister {
         if (tm.getKey().isEmpty()) {
             // If the key was not defined as a PK constraint, look for unique indexes.
             // MAYBE: logic to prefer all-integer keys over varchar-based.
-            try (PreparedStatement ps = con.prepareStatement(""
-                    + "SELECT ix.owner, ix.index_name, COUNT(*) AS col_count "
-                    + "FROM all_indexes ix "
-                    + "INNER JOIN all_ind_columns ic "
-                    + "  ON ix.owner=ic.index_owner AND ix.index_name=ic.index_name "
-                    + "WHERE ix.uniqueness='UNIQUE' "
-                    + "  AND ix.table_owner=? AND ix.table_name=?"
-                    + "GROUP BY ix.owner, ix.index_name "
-                    + "ORDER BY COUNT(*), ix.index_name")) {
+            try (PreparedStatement ps = con.prepareStatement(
+                    "SELECT tc.constraint_name, COUNT(*) "
+                        + "FROM information_schema.table_constraints tc "
+                        + "INNER JOIN information_schema.key_column_usage kcu "
+                        + "  ON kcu.constraint_name=tc.constraint_name "
+                        + "  AND kcu.table_schema=tc.table_schema "
+                        + "  AND kcu.table_name=tc.table_name "
+                        + "WHERE tc.table_schema=? AND tc.table_name=? "
+                        + "  AND tc.constraint_type='UNIQUE' "
+                        + "GROUP BY tc.constraint_name "
+                        + "ORDER BY COUNT(*), tc.constraint_name")) {
                 ps.setString(1, ti.getSchema());
                 ps.setString(2, ti.getTable());
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
-                        String ixSchema = rs.getString(1);
-                        String ixName = rs.getString(2);
-                        grabIndexColumns(con, ixSchema, ixName, tm);
+                        String consname = rs.getString(1);
+                        if (! rs.wasNull() && consname!=null)
+                            grabIndexColumns(con, consname, ti, tm);
                     }
                 }
             }
         }
     }
 
-    private void grabIndexColumns(Connection con, String ixSchema, String ixName, TableMetadata tm) 
-            throws Exception {
-        try (PreparedStatement ps = con.prepareStatement("SELECT column_name FROM all_ind_columns "
-                + "WHERE index_owner=? AND index_name=? "
-                + "ORDER BY column_position")) {
-            ps.setString(1, ixSchema);
-            ps.setString(2, ixName);
+    private void grabIndexColumns(Connection con, String consname,
+            TableIdentity ti, TableMetadata tm) throws Exception {
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT kcu.column_name FROM information_schema.key_column_usage kcu "
+                    + "INNER JOIN information_schema.table_constraints tc "
+                    + "  ON kcu.constraint_name=tc.constraint_name "
+                    + "  AND kcu.table_schema=tc.table_schema "
+                    + "  AND kcu.table_name=tc.table_name "
+                    + "WHERE tc.table_schema=? AND tc.table_name=? "
+                    + "  AND tc.constraint_name=? "
+                    + "ORDER BY kcu.ordinal_position")) {
+            ps.setString(1, ti.getSchema());
+            ps.setString(2, ti.getTable());
+            ps.setString(3, consname);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     tm.addKey(rs.getString(1));
@@ -150,5 +175,4 @@ public class OracleTableLister extends AnyTableLister {
         }
         return "\"" + id + "\"";
     }
-
 }
