@@ -31,9 +31,9 @@
         <!--  ASIS, LOWER, UPPER -->
         <case-mode>ASIS</case-mode>
         <!-- Substitution values: ${schema}, ${table} -->
-        <table-name-format>oraimp1/${schema}/${table}</table-name-format>
+        <table-name-format>pgimp1/${schema}/${table}</table-name-format>
         <!-- Substitution values: ${schema}, ${table}, ${field} -->
-        <blob-name-format>oraimp1/${schema}/${table}_${field}</blob-name-format>
+        <blob-name-format>pgimp1/${schema}/${table}_${field}</blob-name-format>
         <!-- DATE, INT, STR -->
         <conv-date>INT</conv-date>
     </table-options>

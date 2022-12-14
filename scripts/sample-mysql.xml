@@ -4,14 +4,16 @@
     <workers>
         <pool size="4"/>
     </workers>
-    <source type="postgresql">
-        <jdbc-class>org.postgresql.Driver</jdbc-class>
-        <jdbc-url>jdbc:postgresql://hostname:5432/dbname</jdbc-url>
+    <source type="mysql">
+        <jdbc-class>com.mysql.cj.jdbc.Driver</jdbc-class>
+        <!-- org.mariadb.jdbc.Driver -->
+        <jdbc-url>jdbc:mysql://hostname:3306/dbname</jdbc-url>
+        <!-- jdbc:mariadb://hostname:3306/dbname -->
         <username>username</username>
         <password>password</password>
     </source>
     <target type="ydb">
-        <script-file>sample-postgres.yql.tmp</script-file>
+        <script-file>sample-mysql.yql.tmp</script-file>
         <connection-string>grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g</connection-string>
         <!--
         <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
@@ -31,9 +33,9 @@
         <!--  ASIS, LOWER, UPPER -->
         <case-mode>ASIS</case-mode>
         <!-- Substitution values: ${schema}, ${table} -->
-        <table-name-format>oraimp1/${schema}/${table}</table-name-format>
+        <table-name-format>mysql1/${schema}/${table}</table-name-format>
         <!-- Substitution values: ${schema}, ${table}, ${field} -->
-        <blob-name-format>oraimp1/${schema}/${table}_${field}</blob-name-format>
+        <blob-name-format>mysql1/${schema}/${table}_${field}</blob-name-format>
         <!-- DATE, INT, STR -->
         <conv-date>INT</conv-date>
     </table-options>
@@ -43,7 +45,6 @@
     <table-ref options="default">
         <schema-name>information_schema</schema-name>
         <table-name>columns</table-name>
-        <query-text>SELECT * FROM information_schema."columns"</query-text>
         <key-column>table_schema</key-column>
         <key-column>table_name</key-column>
         <key-column>column_name</key-column>
