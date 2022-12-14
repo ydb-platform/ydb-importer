@@ -181,7 +181,7 @@ public class PostgresTableLister extends AnyTableLister {
                 + "  ON ic.\"oid\" = ia.attrelid "
                 + "INNER JOIN pg_catalog.pg_index ix "
                 + "  ON ix.indexrelid =ic.\"oid\" "
-                + "WHERE ix.indexrelid = 16395 "
+                + "WHERE ix.indexrelid = ? "
                 + "ORDER BY ia.attnum")) {
             ps.setLong(1, ixid);
             try (ResultSet rs = ps.executeQuery()) {
