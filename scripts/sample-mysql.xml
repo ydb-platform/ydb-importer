@@ -42,18 +42,22 @@
     <table-map options="default">
         <include-schemas regexp="true">.*</include-schemas>
     </table-map>
+    <!-- Note the case for the table and column names below.
+    Generally they are case-insensitive, however, for the Importer to work properly,
+    case below should match the case in which the objects are named in the database.
+    -->
     <table-ref options="default">
         <schema-name>information_schema</schema-name>
-        <table-name>columns</table-name>
-        <key-column>table_schema</key-column>
-        <key-column>table_name</key-column>
-        <key-column>column_name</key-column>
+        <table-name>COLUMNS</table-name>
+        <key-column>TABLE_SCHEMA</key-column>
+        <key-column>TABLE_NAME</key-column>
+        <key-column>COLUMN_NAME</key-column>
     </table-ref>
     <table-ref options="default">
         <schema-name>information_schema</schema-name>
         <table-name>tables</table-name>
-        <query-text>SELECT * FROM information_schema."tables"</query-text>
-        <key-column>table_schema</key-column>
-        <key-column>table_name</key-column>
+        <query-text>SELECT * FROM information_schema.`tables`</query-text>
+        <key-column>TABLE_SCHEMA</key-column>
+        <key-column>TABLE_NAME</key-column>
     </table-ref>
 </ydb-importer>
