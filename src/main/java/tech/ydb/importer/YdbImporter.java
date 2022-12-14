@@ -31,8 +31,9 @@ import static tech.ydb.importer.config.JdomHelper.isBlank;
 public class YdbImporter {
 
     private final static org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(YdbImporter.class);
- 
-    public static final String VERSION = "1.3"; // X.Y[-SNAPSHOT]
+
+    // X.Y[-SNAPSHOT]
+    public static final String VERSION = "1.4-SNAPSHOT";
 
     private final ImporterConfig config;
     private final TableMapList tableMaps;
