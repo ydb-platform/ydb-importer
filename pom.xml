@@ -13,7 +13,7 @@
         <exec.mainClass>tech.ydb.importer.YdbImporter</exec.mainClass>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
-        <ydb.sdk.version>2.1.0-SNAPSHOT</ydb.sdk.version>
+        <ydb.sdk.version>2.0.1</ydb.sdk.version>
     </properties>
     <dependencies>
         <dependency>
