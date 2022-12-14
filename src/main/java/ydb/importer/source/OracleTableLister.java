@@ -114,7 +114,7 @@ public class OracleTableLister extends AnyTableLister {
                     + "WHERE ix.uniqueness='UNIQUE' "
                     + "  AND ix.table_owner=? AND ix.table_name=?"
                     + "GROUP BY ix.owner, ix.index_name "
-                    + "ORDER BY COUNT(*) DESC, ix.index_name ASC")) {
+                    + "ORDER BY COUNT(*), ix.index_name")) {
                 ps.setString(1, ti.getSchema());
                 ps.setString(2, ti.getTable());
                 try (ResultSet rs = ps.executeQuery()) {

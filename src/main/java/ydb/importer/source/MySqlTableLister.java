@@ -19,7 +19,7 @@ public class PostgresTableLister extends AnyTableLister {
     
     public static final Set<String> SKIP_SCHEMAS;
     static {
-        final Set<String> x = new HashSet<>();
+        final Set<String> x = new HashSet<String>();
         x.add("information_schema");
         x.add("pg_catalog");
         x.add("pg_toast");
@@ -158,7 +158,7 @@ public class PostgresTableLister extends AnyTableLister {
                     + "WHERE n.nspname = ? AND c.relname = ? "
                     + "  AND ix.indisvalid AND ix.indisunique "
                     + "GROUP BY ix.indexrelid "
-                    + "ORDER BY COUNT(*), ix.indexrelid")) {
+                    + "ORDER BY COUNT(*) DESC, ix.indexrelid")) {
                 ps.setString(1, ti.getSchema());
                 ps.setString(2, ti.getTable());
                 try (ResultSet rs = ps.executeQuery()) {
