@@ -18,6 +18,9 @@
         <!--
         <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
         -->
+        <!-- Custom TLS certificate file, if needed
+        <tls-certificate-file>ca.crt</tls-certificate-file>
+        -->
         <!-- ENV, NONE, STATIC, METADATA, SAKEY -->
         <auth-mode>ENV</auth-mode>
         <!-- auth-mode: STATIC
