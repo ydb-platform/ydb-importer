@@ -116,6 +116,7 @@ public class YdbTableBuilder {
     private Type convertType(ColumnInfo ci) {
         switch (ci.getSqlType()) {
             case java.sql.Types.BOOLEAN:
+            case java.sql.Types.BIT:
                 return PrimitiveType.Bool;
             case java.sql.Types.SMALLINT:
                 return PrimitiveType.Int32;
@@ -153,6 +154,10 @@ public class YdbTableBuilder {
                     // TEMP: only DECIMAL(22,9) is supported for table columns.
                     return DecimalType.of(22, 9);
                 }
+            case java.sql.Types.DOUBLE:
+                return PrimitiveType.Double;
+            case java.sql.Types.FLOAT:
+                return PrimitiveType.Float;
             case java.sql.Types.VARCHAR:
             case java.sql.Types.CHAR:
             case java.sql.Types.NVARCHAR:
