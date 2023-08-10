@@ -129,20 +129,27 @@ Below is the definition of the configuration file structure:
         <!-- Authentication mode:
           ENV      Configure authentication through the environment
           NONE     Anonymous access, or static credentials in the connection string
-          STATIC   Static credentials defined as login and password properties (see below).
+          STATIC   Static credentials defined as login and password properties (see below)
+          SAKEY    Service account key file authentication for YDB Managed Service
+          METADATA Service account metadata authentication for YDB Managed Service
         -->
         <auth-mode>ENV</auth-mode>
         <!--
-         For managed YDB in Yandex Cloud, authentication parameters should be specified
+         For managed YDB in Yandex Cloud, authentication parameters can be specified
          in the environment variables, as specified in the documentation:
             https://ydb.tech/en/docs/reference/ydb-sdk/auth#env
-         In case the YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS mode is used, the key file
+         In case the Service Account authentication is used, either explicitly
+         or through the YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS env, the key file
          must be generated as written in the following document:
             https://cloud.yandex.com/en/docs/iam/operations/authorized-key/create
         -->
+        <!-- Custom TLS certificates, if needed -->
+        <tls-certificate-file>ca.crt</tls-certificate-file>
         <!-- For auth-mode: STATIC -->
         <static-login>username</static-login>
         <static-password>password</static-password>
+        <!-- For auth-mode: SAKEY -->
+        <sa-key-file>ydb-sa-keyfile.json</sa-key-file>
         <!-- Drop the already existing tables before loading the data -->
         <replace-existing>true</replace-existing>
         <!-- Should the tool actually load the data after creating the tables? -->
