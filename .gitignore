@@ -5,3 +5,4 @@ nb-configuration.xml
 nbactions.xml
 *.log
 *.tmp
+.DS_Store
