@@ -13,11 +13,14 @@
     <target type="ydb">
         <script-file>sample-oracle.yql.tmp</script-file>
         <connection-string>grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g</connection-string>
-        <!-- ENV, NONE, STATIC -->
+        <!-- ENV, NONE, STATIC, METADATA, SAKEY -->
         <auth-mode>ENV</auth-mode>
         <!-- auth-mode: STATIC
         <static-login>username</static-login>
         <static-password>password</static-password>
+        -->
+        <!-- auth-mode: SAKEY
+        <sa-key-file>ydb-sa-keyfile.json</sa-key-file>
         -->
         <replace-existing>true</replace-existing>
         <load-data>true</load-data>

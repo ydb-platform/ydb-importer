@@ -40,7 +40,13 @@ public class YdbTableBuilder {
         sb.append("`").append(fullName).append("`");
         sb.append(" (").append(EOL);
         for (ColumnInfo ci : tab.getMetadata().getColumns()) {
-            final Type type = convertType(ci);
+            final Type type;
+            try {
+                type = convertType(ci);
+            } catch(Exception ex) {
+                throw new RuntimeException("Cannot convert type for column [" + ci.getName()
+                        + "] of table [" + fullName + "]", ex);
+            }
             types.put(ci.getName(), type.makeOptional());
             sb.append("  `").append(ci.getName()).append("` ");
             sb.append(type.toString());

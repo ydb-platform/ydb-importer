@@ -1,5 +1,11 @@
 package tech.ydb.importer.target;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+import org.apache.commons.lang3.StringUtils;
+
 import tech.ydb.auth.iam.CloudAuthHelper;
 import tech.ydb.core.auth.StaticCredentials;
 import tech.ydb.core.grpc.GrpcTransport;
@@ -34,21 +40,39 @@ public class TargetCP implements AutoCloseable {
                 builder = builder.withAuthProvider(
                     new StaticCredentials(config.getStaticLogin(), config.getStaticPassword()));
                 break;
+            case METADATA:
+                builder = builder.withAuthProvider(
+                        CloudAuthHelper.getMetadataAuthProvider());
+                break;
+            case SAKEY:
+                builder = builder.withAuthProvider(
+                        CloudAuthHelper.getServiceAccountFileAuthProvider(config.getSaKeyFile()));
+                break;
             case NONE:
                 break;
         }
-        GrpcTransport transport = builder.build();
-        this.database = transport.getDatabase();
+        String tlsCertFile = config.getTlsCertificateFile();
+        if (! StringUtils.isEmpty(tlsCertFile)) {
+            byte[] cert;
+            try {
+                cert = Files.readAllBytes(Paths.get(tlsCertFile));
+            } catch(IOException ix) {
+                throw new RuntimeException("Failed to read file " + tlsCertFile, ix);
+            }
+            builder.withSecureConnection(cert);
+        }
+        GrpcTransport tempTransport = builder.build();
+        this.database = tempTransport.getDatabase();
         try {
-            this.tableClient = TableClient.newClient(transport)
+            this.tableClient = TableClient.newClient(tempTransport)
                     .sessionPoolSize(0, poolSize)
                     .build();
             this.retryCtx = SessionRetryContext.create(tableClient).build();
-            this.transport = transport;
-            transport = null; // to avoid closing below
+            this.transport = tempTransport;
+            tempTransport = null; // to avoid closing below
         } finally {
-            if (transport != null)
-                transport.close();
+            if (tempTransport != null)
+                tempTransport.close();
         }
     }
 

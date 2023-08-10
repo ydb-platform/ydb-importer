@@ -8,6 +8,8 @@ public enum YdbAuthMode {
     
     NONE,
     ENV,
-    STATIC
+    STATIC,
+    METADATA,
+    SAKEY
     
 }

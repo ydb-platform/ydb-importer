@@ -16,11 +16,14 @@
         <!--
         <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
         -->
-        <!-- ENV, NONE, STATIC -->
+        <!-- ENV, NONE, STATIC, METADATA, SAKEY -->
         <auth-mode>ENV</auth-mode>
         <!-- auth-mode: STATIC
         <static-login>username</static-login>
         <static-password>password</static-password>
+        -->
+        <!-- auth-mode: SAKEY
+        <sa-key-file>ydb-sa-keyfile.json</sa-key-file>
         -->
         <replace-existing>true</replace-existing>
         <load-data>true</load-data>

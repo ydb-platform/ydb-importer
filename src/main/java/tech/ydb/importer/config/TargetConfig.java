@@ -15,6 +15,8 @@ public class TargetConfig {
     private String staticPassword;
     private TargetScript script;
     private String connectionString;
+    private String tlsCertificateFile;
+    private String saKeyFile;
     private boolean replaceExisting;
     private boolean loadData;
     private int maxBatchRows;
@@ -58,6 +60,14 @@ public class TargetConfig {
                 Element elData = getOneChild(c, "load-data");
                 if (elData!=null)
                     this.loadData = parseBoolean(elData, null, getText(elData));
+            }
+            elx = getOneChild(c, "tls-certificate-file");
+            if (elx != null) {
+                this.tlsCertificateFile = getText(elx);
+            }
+            elx = getOneChild(c, "sa-key-file");
+            if (elx != null) {
+                this.saKeyFile = getText(elx);
             }
             elx = getOneChild(c, "max-batch-rows");
             if (elx != null) {
@@ -120,6 +130,22 @@ public class TargetConfig {
 
     public void setConnectionString(String connectionString) {
         this.connectionString = connectionString;
+    }
+
+    public String getTlsCertificateFile() {
+        return tlsCertificateFile;
+    }
+
+    public void setTlsCertificateFile(String tlsCertificateFile) {
+        this.tlsCertificateFile = tlsCertificateFile;
+    }
+
+    public String getSaKeyFile() {
+        return saKeyFile;
+    }
+
+    public void setSaKeyFile(String saKeyFile) {
+        this.saKeyFile = saKeyFile;
     }
 
     public boolean isReplaceExisting() {
