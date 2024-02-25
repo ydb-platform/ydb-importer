@@ -13,6 +13,9 @@ import tech.ydb.importer.TableDecision;
  * @author zinal
  */
 public class YdbTableBuilder {
+
+    private static final org.slf4j.Logger LOG =
+            org.slf4j.LoggerFactory.getLogger(YdbTableBuilder.class);
     
     public static final String EOL = System.getProperty("line.separator");
     private final TableDecision tab;
@@ -46,6 +49,12 @@ public class YdbTableBuilder {
             } catch(Exception ex) {
                 throw new RuntimeException("Cannot convert type for column [" + ci.getName()
                         + "] of table [" + fullName + "]", ex);
+            }
+            if (type==null) {
+                // unknown type, and skip mode is enabled
+                LOG.warn("Skipped column {} in table {}.{} due to unknown type {}",
+                        ci.getName(), tab.getSchema(), tab.getTable(), ci.getSqlType());
+                continue;
             }
             types.put(ci.getName(), type.makeOptional());
             sb.append("  `").append(ci.getName()).append("` ");
@@ -191,6 +200,9 @@ public class YdbTableBuilder {
                 if (ci.getSqlScale()==0)
                     return PrimitiveType.Datetime;
                 return PrimitiveType.Timestamp;
+        }
+        if (tab.getOptions().isSkipUnknownTypes()) {
+            return null;
         }
         throw new IllegalArgumentException("Unsupported type code: " + ci.getSqlType());
     }

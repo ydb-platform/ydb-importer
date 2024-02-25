@@ -14,12 +14,14 @@ public class TableOptions {
     private String blobTemplate;
     private CaseMode caseMode;
     private DateConv dateConv;
+    private boolean skipUnknownTypes;
 
     public TableOptions(String name, String template) {
         this.name = name;
         this.mainTemplate = template;
         this.caseMode = CaseMode.ASIS;
         this.dateConv = DateConv.DATE;
+        this.skipUnknownTypes = false;
     }
 
     public TableOptions(Element c) {
@@ -38,6 +40,12 @@ public class TableOptions {
             this.dateConv = DateConv.valueOf(v.toUpperCase());
         } catch(Exception ex) {
             throw raiseIllegal(c, "conv-date", v);
+        }
+        v = getText(c, "skip-unknown-types", "false");
+        try {
+            this.skipUnknownTypes = Boolean.parseBoolean(v);
+        } catch(Exception ex) {
+            throw raiseIllegal(c, "skip-unknown-types", v);
         }
     }
 
@@ -75,6 +83,14 @@ public class TableOptions {
 
     public void setDateConv(DateConv dateConv) {
         this.dateConv = dateConv;
+    }
+
+    public boolean isSkipUnknownTypes() {
+        return skipUnknownTypes;
+    }
+
+    public void setSkipUnknownTypes(boolean skipUnknownTypes) {
+        this.skipUnknownTypes = skipUnknownTypes;
     }
 
     public static enum CaseMode {

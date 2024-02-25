@@ -42,6 +42,7 @@
         <blob-name-format>mssql1/${schema}/${table}_${field}</blob-name-format>
         <!-- DATE, INT, STR -->
         <conv-date>INT</conv-date>
+        <skip-unknown-types>true</skip-unknown-types>
     </table-options>
     <table-map options="default">
         <include-schemas regexp="true">.*</include-schemas>

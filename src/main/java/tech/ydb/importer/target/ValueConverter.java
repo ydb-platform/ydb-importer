@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import tech.ydb.table.values.DecimalType;
 import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.PrimitiveValue;
@@ -70,6 +71,8 @@ public abstract class ValueConverter {
                             return ConvMode.DOUBLE;
                         case Int32:
                             switch (sourceType) {
+                                case java.sql.Types.TIME:
+                                    return ConvMode.TIME_INT32;
                                 case java.sql.Types.DATE:
                                     return ConvMode.DATE_INT32;
                             }
@@ -154,6 +157,11 @@ public abstract class ValueConverter {
                 return PrimitiveValue.newUint64(date2int(rs.getDate(srcpos)));
             case DATE_STR:
                 return PrimitiveValue.newText(date2str(rs.getDate(srcpos)));
+            case TIME_INT32: {
+                LocalTime ltv = rs.getTime(srcpos).toLocalTime();
+                return PrimitiveValue.newInt32(ltv.getSecond() +
+                        60 * (ltv.getMinute() + 60 * ltv.getHour()));
+            }
             case DATETIME:
                 return PrimitiveValue.newDatetime(rs.getTimestamp(srcpos).toInstant());
             case TIMESTAMP:
@@ -242,6 +250,8 @@ public abstract class ValueConverter {
         DATE_UINT32,
         DATE_UINT64,
         DATE_STR,
+
+        TIME_INT32,
 
         TS_DATE,
         TS_INT64,
