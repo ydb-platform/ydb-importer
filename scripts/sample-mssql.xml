@@ -45,6 +45,8 @@
     </table-options>
     <table-map options="default">
         <include-schemas regexp="true">.*</include-schemas>
+        <exclude-schemas>sys</exclude-schemas>
+        <exclude-schemas>INFORMATION_SCHEMA</exclude-schemas>
         <!-- Possible extra tags: include-tables, exclude-tables, exclude-schemas -->
     </table-map>
 </ydb-importer>

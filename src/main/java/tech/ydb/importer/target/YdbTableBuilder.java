@@ -118,6 +118,8 @@ public class YdbTableBuilder {
             case java.sql.Types.BOOLEAN:
             case java.sql.Types.BIT:
                 return PrimitiveType.Bool;
+            case java.sql.Types.TINYINT:
+                return PrimitiveType.Int32;
             case java.sql.Types.SMALLINT:
                 return PrimitiveType.Int32;
             case java.sql.Types.INTEGER:
@@ -183,6 +185,8 @@ public class YdbTableBuilder {
                         return PrimitiveType.Text;
                 }
                 return PrimitiveType.Date;
+            case java.sql.Types.TIME:
+                return PrimitiveType.Int32;
             case java.sql.Types.TIMESTAMP:
                 if (ci.getSqlScale()==0)
                     return PrimitiveType.Datetime;
