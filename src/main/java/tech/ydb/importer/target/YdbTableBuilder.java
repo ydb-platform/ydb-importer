@@ -163,7 +163,7 @@ public class YdbTableBuilder {
                     return "Decimal(" + String.valueOf(prec) + "," + String.valueOf(scale) + ")";
                     */
                     // TEMP: only DECIMAL(22,9) is supported for table columns.
-                    return DecimalType.of(22, 9);
+                    return DecimalType.getDefault();
                 }
             case java.sql.Types.DOUBLE:
                 return PrimitiveType.Double;
@@ -197,6 +197,16 @@ public class YdbTableBuilder {
             case java.sql.Types.TIME:
                 return PrimitiveType.Int32;
             case java.sql.Types.TIMESTAMP:
+                switch (tab.getOptions().getTimestampConv()) {
+                    case DATE:
+                        if (ci.getSqlScale()==0)
+                            return PrimitiveType.Datetime;
+                        return PrimitiveType.Timestamp;
+                    case INT:
+                        return PrimitiveType.Uint64;
+                    case STR:
+                        return PrimitiveType.Text;
+                }
                 if (ci.getSqlScale()==0)
                     return PrimitiveType.Datetime;
                 return PrimitiveType.Timestamp;

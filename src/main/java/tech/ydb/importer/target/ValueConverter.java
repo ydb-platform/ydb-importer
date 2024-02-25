@@ -103,6 +103,8 @@ public abstract class ValueConverter {
                             switch (sourceType) {
                                 case java.sql.Types.DATE:
                                     return ConvMode.DATE_STR;
+                                case java.sql.Types.TIMESTAMP:
+                                    return ConvMode.TS_STR;
                             }
                             return ConvMode.TEXT;
                         case Bytes: // SQL BINARY, VARBINARY
@@ -172,6 +174,8 @@ public abstract class ValueConverter {
                 return PrimitiveValue.newInt64(rs.getTimestamp(srcpos).getTime());
             case TS_UINT64:
                 return PrimitiveValue.newUint64(rs.getTimestamp(srcpos).getTime());
+            case TS_STR:
+                return PrimitiveValue.newText(rs.getTimestamp(srcpos).toString());
             case FLOAT:
                 return PrimitiveValue.newFloat(rs.getFloat(srcpos));
             case DOUBLE:

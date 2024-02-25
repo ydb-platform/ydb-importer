@@ -2,7 +2,7 @@
 <!-- Microsoft SQL Server to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
-        <pool size="1"/>
+        <pool size="8"/>
     </workers>
     <source type="mssql">
         <jdbc-class>com.microsoft.sqlserver.jdbc.SQLServerDriver</jdbc-class>
@@ -42,6 +42,8 @@
         <blob-name-format>mssql1/${schema}/${table}_${field}</blob-name-format>
         <!-- DATE, INT, STR -->
         <conv-date>INT</conv-date>
+        <!-- DATE, INT, STR -->
+        <conv-timestamp>STR</conv-timestamp>
         <skip-unknown-types>true</skip-unknown-types>
     </table-options>
     <table-map options="default">

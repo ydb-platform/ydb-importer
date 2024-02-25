@@ -14,6 +14,7 @@ public class TableOptions {
     private String blobTemplate;
     private CaseMode caseMode;
     private DateConv dateConv;
+    private DateConv timestampConv;
     private boolean skipUnknownTypes;
 
     public TableOptions(String name, String template) {
@@ -21,6 +22,7 @@ public class TableOptions {
         this.mainTemplate = template;
         this.caseMode = CaseMode.ASIS;
         this.dateConv = DateConv.DATE;
+        this.timestampConv = DateConv.DATE;
         this.skipUnknownTypes = false;
     }
 
@@ -40,6 +42,12 @@ public class TableOptions {
             this.dateConv = DateConv.valueOf(v.toUpperCase());
         } catch(Exception ex) {
             throw raiseIllegal(c, "conv-date", v);
+        }
+        v = getText(c, "conv-timestamp", DateConv.DATE.name());
+        try {
+            this.timestampConv = DateConv.valueOf(v.toUpperCase());
+        } catch(Exception ex) {
+            throw raiseIllegal(c, "conv-timestamp", v);
         }
         v = getText(c, "skip-unknown-types", "false");
         try {
@@ -83,6 +91,14 @@ public class TableOptions {
 
     public void setDateConv(DateConv dateConv) {
         this.dateConv = dateConv;
+    }
+
+    public DateConv getTimestampConv() {
+        return timestampConv;
+    }
+
+    public void setTimestampConv(DateConv timestampConv) {
+        this.timestampConv = timestampConv;
     }
 
     public boolean isSkipUnknownTypes() {
