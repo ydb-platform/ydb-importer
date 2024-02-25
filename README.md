@@ -1,3 +1,8 @@
+<img width="64" src="https://github.com/ydb-platform/ydb/raw/main/ydb/docs/_assets/logo.svg"/><br/>
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/ydb-platform/ydb-importer/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/v/release/ydb-platform/ydb-importer.svg?style=flat-square)](https://github.com/ydb-platform/ydb-importer/releases)
+
 # Import data from JDBC data sources to YDB databases
 
 This tool imports table structures and data records from a JDBC data source to YDB.
