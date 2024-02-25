@@ -3,6 +3,7 @@ package tech.ydb.importer.source;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -33,7 +34,7 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     @Override
-    protected List<String> listSchemas(Connection con) throws Exception {
+    protected List<String> listSchemas(Connection con) throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT nspname FROM pg_catalog.pg_namespace")) {
             try (ResultSet rs = ps.executeQuery()) {
@@ -50,7 +51,7 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     @Override
-    protected List<String> listTables(Connection con, String schema) throws Exception {
+    protected List<String> listTables(Connection con, String schema) throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT c.relname  "
                     + "FROM pg_catalog.pg_class c "
@@ -71,7 +72,7 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     @Override
-    protected long grabRowCount(Connection con, TableIdentity ti) throws Exception {
+    protected long grabRowCount(Connection con, TableIdentity ti) throws SQLException {
         // Retrieve the approximate number of rows in the table
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT c.reltuples FROM pg_catalog.pg_class c "
@@ -92,7 +93,7 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     @Override
-    protected List<ColumnInfo> grabColumnNames(Connection con, TableIdentity ti) throws Exception {
+    protected List<ColumnInfo> grabColumnNames(Connection con, TableIdentity ti) throws SQLException {
         final List<ColumnInfo> cols = new ArrayList<>();
         // Retrieve the list of columns
         try (PreparedStatement ps = con.prepareStatement(
@@ -118,7 +119,7 @@ public class PostgresTableLister extends AnyTableLister {
 
     @Override
     protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm) 
-            throws Exception {
+            throws SQLException {
         // Retrieve the primary key (if one is defined)
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT ia.attname "
@@ -173,7 +174,7 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     private void grabIndexColumns(Connection con, long ixid, TableMetadata tm) 
-            throws Exception {
+            throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT ia.attname "
                 + "FROM pg_catalog.pg_attribute ia "
@@ -202,7 +203,7 @@ public class PostgresTableLister extends AnyTableLister {
 
     @Override
     protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm) 
-            throws Exception {
+            throws SQLException {
         // Basic implementation comes from the parent.
         super.grabColumnTypes(con, td, tm);
         // Grab the BLOB columns, which are a magic in PostgreSQL.

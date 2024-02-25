@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -26,20 +27,20 @@ public abstract class AnyTableLister {
         this.tableMaps = tableMaps;
     }
 
-    protected abstract List<String> listSchemas(Connection con) throws Exception;
-    protected abstract List<String> listTables(Connection con, String schema) throws Exception;
+    protected abstract List<String> listSchemas(Connection con) throws SQLException;
+    protected abstract List<String> listTables(Connection con, String schema) throws SQLException;
     // Safely quote the identifier
     protected abstract String safeId(String id);
     // Find the approximate row count. Returns -1 if one is not known.
-    protected abstract long grabRowCount(Connection con, TableIdentity td) throws Exception;
+    protected abstract long grabRowCount(Connection con, TableIdentity td) throws SQLException;
     // Retrieve the list of columns for the table
     protected abstract List<ColumnInfo> grabColumnNames(Connection con, TableIdentity td)
-            throws Exception;
+            throws SQLException;
     // Retrieve the primary key (if one is defined), or the "minimal" unique key
     protected abstract void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm)
-            throws Exception;
+            throws SQLException;
 
-    public List<TableDecision> selectTables(Connection con) throws Exception {
+    public List<TableDecision> selectTables(Connection con) throws SQLException {
         final HashSet<SourceTableName> keys = new HashSet<>();
         final List<TableDecision> retval = new ArrayList<>();
         // Add the pre-configured table names
@@ -51,11 +52,11 @@ public abstract class AnyTableLister {
             final TableDecision td = new TableDecision(tr);
             retval.add(td);
         }
-        final List<TableMapRunner> workers = new ArrayList<>();
+        final List<TableMapFilter> workers = new ArrayList<>();
         for (String schema : listSchemas(con)) {
             // Decide if schema matches the filters.
             workers.clear();
-            for ( TableMapRunner tmr : tableMaps.getMaps() ) {
+            for ( TableMapFilter tmr : tableMaps.getMaps() ) {
                 if (tmr.schemaMatches(schema))
                     workers.add(tmr);
             }
@@ -63,7 +64,7 @@ public abstract class AnyTableLister {
                 continue;
             // Grab the tables and filter them.
             for ( String table : listTables(con, schema) ) {
-                for ( TableMapRunner tmr : workers ) {
+                for ( TableMapFilter tmr : workers ) {
                     if (tmr.tableMatches(table)) {
                         if ( ! keys.add(new SourceTableName(schema, table)) ) {
                             LOG.debug("Skipping duplicate table name {}.{}", schema, table);
@@ -80,7 +81,7 @@ public abstract class AnyTableLister {
         return retval;
     }
 
-    public TableMetadata readMetadata(Connection con, TableDecision td) throws Exception {
+    public TableMetadata readMetadata(Connection con, TableDecision td) throws SQLException {
         final TableMetadata tm = new TableMetadata();
         if (td.getTableRef() == null) {
             tm.addColumns(grabColumnNames(con, td));
@@ -106,7 +107,7 @@ public abstract class AnyTableLister {
     }
 
     protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm) 
-            throws Exception {
+            throws SQLException {
         String sql = tm.getBasicSql();
         if (isBlank(sql)) {
             sql = makeSql(td, tm.getColumns());
@@ -176,12 +177,18 @@ public abstract class AnyTableLister {
     public static AnyTableLister getInstance(TableMapList tableMaps) {
         final SourceType st = tableMaps.getConfig().getSource().getType();
         switch (st) {
+            case GENERIC:
+                return new GenericJdbcTableLister(tableMaps);
             case ORACLE:
                 return new OracleTableLister(tableMaps);
             case POSTGRESQL:
                 return new PostgresTableLister(tableMaps);
             case MYSQL:
                 return new MySqlTableLister(tableMaps);
+            case INFORMIX:
+            case DB2:
+            case MSSQL:
+                return new GenericJdbcTableLister(tableMaps);
             default:
                 throw new RuntimeException("Unsupported source type: " + st);
         }

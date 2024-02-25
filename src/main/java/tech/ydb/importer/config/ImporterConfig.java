@@ -8,7 +8,8 @@ import org.jdom2.Element;
 import static tech.ydb.importer.config.JdomHelper.*;
 
 /**
- *
+ * Importer configuration includes the worker settings,
+ * source and target settings, and table mapping settings.
  * @author zinal
  */
 public class ImporterConfig {

@@ -5,19 +5,20 @@ import java.util.List;
 import tech.ydb.importer.config.*;
 
 /**
+ * A collection of table mappings for table list retrieval and processing.
  *
  * @author zinal
  */
 public class TableMapList {
     
     private final ImporterConfig config;
-    private final List<TableMapRunner> maps;
+    private final List<TableMapFilter> maps;
 
     public TableMapList(ImporterConfig config) {
         this.config = config;
         this.maps = new ArrayList<>();
         for (TableMap tm : config.getTableMaps()) {
-            this.maps.add(new TableMapRunner(tm));
+            this.maps.add(new TableMapFilter(tm));
         }
     }
 
@@ -25,7 +26,7 @@ public class TableMapList {
         return config;
     }
 
-    public List<TableMapRunner> getMaps() {
+    public List<TableMapFilter> getMaps() {
         return maps;
     }
     

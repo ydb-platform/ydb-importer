@@ -1,7 +1,8 @@
 package tech.ydb.importer;
 
 import java.io.BufferedWriter;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.util.ArrayList;
@@ -157,8 +158,9 @@ public class YdbImporter {
         if (config.getTarget()==null || config.getTarget().getScript() == null)
             return;
         String fileName = config.getTarget().getScript().getFileName();
-        try ( FileWriter fw = new FileWriter(fileName, StandardCharsets.UTF_8);
-              BufferedWriter writer = new BufferedWriter(fw) ) {
+        try ( OutputStreamWriter osw = new OutputStreamWriter(
+                new FileOutputStream(fileName), StandardCharsets.UTF_8);
+              BufferedWriter writer = new BufferedWriter(osw) ) {
             for (TableDecision td : tables) {
                 if (td.isFailure())
                     continue;

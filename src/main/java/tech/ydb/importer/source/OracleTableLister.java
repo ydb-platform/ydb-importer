@@ -3,6 +3,7 @@ package tech.ydb.importer.source;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import tech.ydb.importer.config.TableIdentity;
@@ -18,7 +19,7 @@ public class OracleTableLister extends AnyTableLister {
     }
 
     @Override
-    protected List<String> listSchemas(Connection con) throws Exception {
+    protected List<String> listSchemas(Connection con) throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT USERNAME FROM ALL_USERS WHERE ORACLE_MAINTAINED='N'")) {
             try (ResultSet rs = ps.executeQuery()) {
@@ -32,7 +33,7 @@ public class OracleTableLister extends AnyTableLister {
     }
 
     @Override
-    protected List<String> listTables(Connection con, String schema) throws Exception {
+    protected List<String> listTables(Connection con, String schema) throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT table_name FROM all_tables WHERE owner=? AND status='VALID'")) {
             ps.setString(1, schema);
@@ -47,7 +48,7 @@ public class OracleTableLister extends AnyTableLister {
     }
 
     @Override
-    protected long grabRowCount(Connection con, TableIdentity ti) throws Exception {
+    protected long grabRowCount(Connection con, TableIdentity ti) throws SQLException {
         // Retrieve the approximate number of rows in the table
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT num_rows FROM all_tables "
@@ -66,7 +67,7 @@ public class OracleTableLister extends AnyTableLister {
     }
 
     @Override
-    protected List<ColumnInfo> grabColumnNames(Connection con, TableIdentity ti) throws Exception {
+    protected List<ColumnInfo> grabColumnNames(Connection con, TableIdentity ti) throws SQLException {
         final List<ColumnInfo> cols = new ArrayList<>();
         // Retrieve the list of columns
         try (PreparedStatement ps = con.prepareStatement(
@@ -85,7 +86,7 @@ public class OracleTableLister extends AnyTableLister {
 
     @Override
     protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm) 
-            throws Exception {
+            throws SQLException {
         // Retrieve the primary key (if one is defined)
         try (PreparedStatement ps = con.prepareStatement("SELECT cols.column_name "
                 + "FROM all_constraints cons, all_cons_columns cols "
@@ -129,7 +130,7 @@ public class OracleTableLister extends AnyTableLister {
     }
 
     private void grabIndexColumns(Connection con, String ixSchema, String ixName, TableMetadata tm) 
-            throws Exception {
+            throws SQLException {
         try (PreparedStatement ps = con.prepareStatement("SELECT column_name FROM all_ind_columns "
                 + "WHERE index_owner=? AND index_name=? "
                 + "ORDER BY column_position")) {

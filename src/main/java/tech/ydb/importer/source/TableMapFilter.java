@@ -3,16 +3,17 @@ package tech.ydb.importer.source;
 import tech.ydb.importer.config.*;
 
 /**
- *
+ * A filtering logic for the tables retrieved from the source.
+ * 
  * @author zinal
  */
-public class TableMapRunner {
+public class TableMapFilter {
     
     private final TableMap tableMap;
     private final NameChecker schemaDecision;
     private final NameChecker tableDecision;
 
-    public TableMapRunner(TableMap tableMap) {
+    public TableMapFilter(TableMap tableMap) {
         this.tableMap = tableMap;
         this.schemaDecision = new NameChecker(
                 tableMap.getIncludeSchemas(), 
