@@ -33,7 +33,7 @@ public class GenericJdbcTableLister extends AnyTableLister {
 
     @Override
     protected List<String> listTables(Connection con, String schema) throws SQLException {
-        try (ResultSet rs = con.getMetaData().getTables(null, schema, null, null)) {
+        try (ResultSet rs = con.getMetaData().getTables(null, schema, null, new String[]{"TABLE"})) {
             int namePos = rs.findColumn("TABLE_NAME");
             final List<String> retval = new ArrayList<>();
             while (rs.next()) {
