@@ -10,17 +10,16 @@ import tech.ydb.auth.iam.CloudAuthHelper;
 import tech.ydb.core.auth.StaticCredentials;
 import tech.ydb.core.grpc.GrpcTransport;
 import tech.ydb.core.grpc.GrpcTransportBuilder;
+import tech.ydb.importer.config.TargetConfig;
 import tech.ydb.table.SessionRetryContext;
 import tech.ydb.table.TableClient;
-
-import tech.ydb.importer.config.TargetConfig;
 
 /**
  *
  * @author zinal
  */
 public class TargetCP implements AutoCloseable {
-    
+
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(TargetCP.class);
 
     private final GrpcTransport transport;
@@ -38,7 +37,7 @@ public class TargetCP implements AutoCloseable {
                 break;
             case STATIC:
                 builder = builder.withAuthProvider(
-                    new StaticCredentials(config.getStaticLogin(), config.getStaticPassword()));
+                        new StaticCredentials(config.getStaticLogin(), config.getStaticPassword()));
                 break;
             case METADATA:
                 builder = builder.withAuthProvider(
@@ -50,13 +49,16 @@ public class TargetCP implements AutoCloseable {
                 break;
             case NONE:
                 break;
+            default: {
+                /* noop */
+            }
         }
         String tlsCertFile = config.getTlsCertificateFile();
-        if (! StringUtils.isEmpty(tlsCertFile)) {
+        if (!StringUtils.isEmpty(tlsCertFile)) {
             byte[] cert;
             try {
                 cert = Files.readAllBytes(Paths.get(tlsCertFile));
-            } catch(IOException ix) {
+            } catch (IOException ix) {
                 throw new RuntimeException("Failed to read file " + tlsCertFile, ix);
             }
             builder.withSecureConnection(cert);
@@ -71,8 +73,9 @@ public class TargetCP implements AutoCloseable {
             this.transport = tempTransport;
             tempTransport = null; // to avoid closing below
         } finally {
-            if (tempTransport != null)
+            if (tempTransport != null) {
                 tempTransport.close();
+            }
         }
     }
 
@@ -93,14 +96,14 @@ public class TargetCP implements AutoCloseable {
         if (tableClient != null) {
             try {
                 tableClient.close();
-            } catch(Exception ex) {
+            } catch (Exception ex) {
                 LOG.warn("TableClient closing threw an exception", ex);
             }
         }
         if (transport != null) {
             try {
                 transport.close();
-            } catch(Exception ex) {
+            } catch (Exception ex) {
                 LOG.warn("GrpcTransport closing threw an exception", ex);
             }
         }

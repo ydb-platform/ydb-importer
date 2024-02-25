@@ -6,10 +6,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+
 import tech.ydb.importer.config.TableIdentity;
 
 /**
  * Source table metadata retrieval - Oracle specifics.
+ *
  * @author zinal
  */
 public class OracleTableLister extends AnyTableLister {
@@ -58,8 +60,9 @@ public class OracleTableLister extends AnyTableLister {
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     long retval = rs.getLong(1);
-                    if (!rs.wasNull())
+                    if (!rs.wasNull()) {
                         return retval;
+                    }
                 }
             }
         }
@@ -77,7 +80,7 @@ public class OracleTableLister extends AnyTableLister {
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    cols.add( new ColumnInfo(rs.getString(1) ) );
+                    cols.add(new ColumnInfo(rs.getString(1)));
                 }
             }
         }
@@ -85,7 +88,7 @@ public class OracleTableLister extends AnyTableLister {
     }
 
     @Override
-    protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm) 
+    protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm)
             throws SQLException {
         // Retrieve the primary key (if one is defined)
         try (PreparedStatement ps = con.prepareStatement("SELECT cols.column_name "
@@ -129,7 +132,7 @@ public class OracleTableLister extends AnyTableLister {
         }
     }
 
-    private void grabIndexColumns(Connection con, String ixSchema, String ixName, TableMetadata tm) 
+    private void grabIndexColumns(Connection con, String ixSchema, String ixName, TableMetadata tm)
             throws SQLException {
         try (PreparedStatement ps = con.prepareStatement("SELECT column_name FROM all_ind_columns "
                 + "WHERE index_owner=? AND index_name=? "

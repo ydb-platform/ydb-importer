@@ -1,16 +1,15 @@
 package tech.ydb.importer.config;
 
 import org.jdom2.Element;
-import static tech.ydb.importer.config.JdomHelper.*;
 
 /**
  *
  * @author zinal
  */
-public class WorkerConfig {
-    
+public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
+
     private int poolSize = 1;
-    
+
     public WorkerConfig() {
     }
 
@@ -31,5 +30,5 @@ public class WorkerConfig {
     public void setPoolSize(int poolSize) {
         this.poolSize = poolSize;
     }
-    
+
 }

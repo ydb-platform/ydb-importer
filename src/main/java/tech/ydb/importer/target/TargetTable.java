@@ -1,14 +1,14 @@
 package tech.ydb.importer.target;
 
-import tech.ydb.table.values.StructType;
 import tech.ydb.importer.TableDecision;
-import static tech.ydb.importer.config.JdomHelper.isBlank;
+import tech.ydb.table.values.StructType;
 
 /**
  * Structure of the target YDB table.
+ *
  * @author zinal
  */
-public class TargetTable {
+public class TargetTable extends tech.ydb.importer.config.JdomHelper {
 
     public static final String SYNTH_KEY_FIELD = "ydb_synth_key";
 
@@ -18,7 +18,7 @@ public class TargetTable {
     private StructType fields;
     private int synthKeyPos;
 
-    public TargetTable(TableDecision original, String fullName, 
+    public TargetTable(TableDecision original, String fullName,
             String yqlScript, StructType fields) {
         this.original = original;
         this.fullName = fullName;
@@ -28,12 +28,15 @@ public class TargetTable {
     }
 
     public boolean isValid() {
-        if (original == null)
+        if (original == null) {
             return false;
-        if (isBlank(fullName) || isBlank(yqlScript))
+        }
+        if (isBlank(fullName) || isBlank(yqlScript)) {
             return false;
-        if (fields==null || fields.getMembersCount() == 0)
+        }
+        if (fields == null || fields.getMembersCount() == 0) {
             return false;
+        }
         return true;
     }
 
@@ -65,16 +68,17 @@ public class TargetTable {
     public void setSynthKeyPos(int synthKeyPos) {
         this.synthKeyPos = synthKeyPos;
     }
-    
+
     public boolean hasSynthKey() {
         return synthKeyPos >= 0;
     }
 
     private void findSynthKey() {
         synthKeyPos = -1;
-        if (fields == null)
+        if (fields == null) {
             return;
-        for (int i=0; i<fields.getMembersCount(); ++i) {
+        }
+        for (int i = 0; i < fields.getMembersCount(); ++i) {
             if (SYNTH_KEY_FIELD.equals(fields.getMemberName(i))) {
                 synthKeyPos = i;
                 break;

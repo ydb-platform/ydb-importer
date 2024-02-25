@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import com.google.protobuf.ByteString;
+
 import tech.ydb.table.values.ListType;
 import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.PrimitiveValue;
@@ -13,23 +15,24 @@ import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.Value;
 
 /**
- * JDBC to YDB BLOB copying logic.
- * Each BLOB value is converted to a sequence of records in an auxilary YDB table.
+ * JDBC to YDB BLOB copying logic. Each BLOB value is converted to a sequence of records in an
+ * auxilary YDB table.
+ *
  * @author zinal
  */
 public class BlobSaver {
 
-    public final static int BLOCK_SIZE = 65536;
+    public static final int BLOCK_SIZE = 65536;
 
-    public final static StructType BLOB_ROW = StructType.of(
-                        "id", PrimitiveType.Int64,
-                        "pos", PrimitiveType.Int32,
-                        "val", PrimitiveType.Bytes );
-    public final static ListType BLOB_LIST = ListType.of(BLOB_ROW);
+    public static final StructType BLOB_ROW = StructType.of(
+            "id", PrimitiveType.Int64,
+            "pos", PrimitiveType.Int32,
+            "val", PrimitiveType.Bytes);
+    public static final ListType BLOB_LIST = ListType.of(BLOB_ROW);
 
     // Id generator for the current worker thread.
-    private final static ThreadLocal<Long> VALUE_ID = ThreadLocal.withInitial(() -> -1L);
-    
+    private static final ThreadLocal<Long> VALUE_ID = ThreadLocal.withInitial(() -> -1L);
+
     private final ProgressCounter progress;
     // BLOB path -> unwritten BLOB records
     private final Map<String, Datum> data = new HashMap<>();
@@ -54,15 +57,15 @@ public class BlobSaver {
     }
 
     public static void initCounter(int counter) {
-        final long base = ( ((long) counter) )
-                * (((long)Integer.MAX_VALUE) + 1L)
+        final long base = (((long) counter))
+                * (((long) Integer.MAX_VALUE) + 1L)
                 * 256L;
         VALUE_ID.set(base);
     }
 
     private Datum makeDatum(String blobPath) {
         Datum v = data.get(blobPath);
-        if (v==null) {
+        if (v == null) {
             v = new Datum(progress, blobPath);
             data.put(blobPath, v);
         }
@@ -71,8 +74,9 @@ public class BlobSaver {
 
     public long nextId() {
         final long x = VALUE_ID.get();
-        if (x < 0L)
+        if (x < 0L) {
             throw new IllegalStateException("Worker thread has not been initialized");
+        }
         final long v = x + 1;
         VALUE_ID.set(v);
         return v;
@@ -87,10 +91,11 @@ public class BlobSaver {
         while (true) {
             // Read next BLOB block
             final int bytesRead = is.read(block);
-            if (bytesRead < 1)
+            if (bytesRead < 1) {
                 break;
+            }
             // Create and append the block to the values list
-            final Value<?> members[] = new Value<?>[3];
+            final Value<?>[] members = new Value<?>[3];
             members[posId] = idValue;
             members[posPos] = PrimitiveValue.newInt32(position);
             members[posVal] = PrimitiveValue.newBytes(ByteString.copyFrom(block, 0, bytesRead));
@@ -107,19 +112,21 @@ public class BlobSaver {
 
     public void flush(YdbUpsertOp ydbOp) {
         for (Datum d : data.values()) {
-            if (! d.values.isEmpty())
+            if (!d.values.isEmpty()) {
                 ydbOp.start(d.tablePath, BLOB_LIST.newValue(d.values), d.counter);
+            }
         }
         data.clear();
         ydbOp.finish();
     }
 
-    public static final class Datum {
-        public final String tablePath;
-        public final AnyCounter counter;
-        public final List<Value<?>> values;
+    static class Datum {
 
-        public Datum(ProgressCounter pc, String tablePath) {
+        final String tablePath;
+        final AnyCounter counter;
+        final List<Value<?>> values;
+
+        Datum(ProgressCounter pc, String tablePath) {
             this.tablePath = tablePath;
             this.counter = new BlobCounter("blob rows upsert issue for " + tablePath, pc);
             this.values = new ArrayList<>();

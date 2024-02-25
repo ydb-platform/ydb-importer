@@ -14,14 +14,21 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 
+import tech.ydb.importer.config.ImporterConfig;
+import tech.ydb.importer.config.JdomHelper;
+import tech.ydb.importer.source.AnyTableLister;
+import tech.ydb.importer.source.SourceCP;
+import tech.ydb.importer.source.TableMapList;
+import tech.ydb.importer.target.BlobSaver;
+import tech.ydb.importer.target.LoadDataTask;
+import tech.ydb.importer.target.ProgressCounter;
+import tech.ydb.importer.target.TargetCP;
+import tech.ydb.importer.target.TargetTable;
+import tech.ydb.importer.target.YdbTableBuilder;
 import tech.ydb.table.description.TableColumn;
 import tech.ydb.table.description.TableDescription;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.Type;
-
-import tech.ydb.importer.config.*;
-import tech.ydb.importer.source.*;
-import tech.ydb.importer.target.*;
 
 import static tech.ydb.importer.config.JdomHelper.isBlank;
 
@@ -31,7 +38,7 @@ import static tech.ydb.importer.config.JdomHelper.isBlank;
  */
 public class YdbImporter {
 
-    private final static org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(YdbImporter.class);
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(YdbImporter.class);
 
     // X.Y[-SNAPSHOT]
     public static final String VERSION = "1.6-SNAPSHOT";
@@ -69,11 +76,11 @@ public class YdbImporter {
 
     public void run() throws Exception {
         String jdbcClassName = config.getSource().getClassName();
-        if ( ! isBlank(jdbcClassName) ) {
+        if (!isBlank(jdbcClassName)) {
             LOG.info("Loading driver class {}", jdbcClassName);
             Class.forName(config.getSource().getClassName());
         }
-        LOG.info("Connecting to the source database {}", 
+        LOG.info("Connecting to the source database {}",
                 config.getSource().getJdbcUrl());
         sourceCP = new SourceCP(config.getSource(), config.getWorkers().getPoolSize());
         try {
@@ -93,7 +100,7 @@ public class YdbImporter {
                 LOG.info("Retrieving table metadata...");
                 retrieveSourceMetadata(tables, workers);
                 LOG.info("\ttotal {} tables with metadata", tables.size());
-                if (! tables.isEmpty()) {
+                if (!tables.isEmpty()) {
                     // Save the table creation scripts to file
                     dumpTableScripts(tables);
                     if (config.hasTarget()) {
@@ -103,16 +110,17 @@ public class YdbImporter {
                         // Drop/Create/Read metadata from target
                         createMissingTables(workers, tables);
                         // Load data if necessary
-                        if (config.getTarget().isLoadData())
+                        if (config.getTarget().isLoadData()) {
                             loadTableData(workers, tables);
+                        }
                     }
                 }
                 LOG.info("Shutting down workers...");
                 workers.shutdown();
             } finally {
-                if ( ! workers.isShutdown() ) {
+                if (!workers.isShutdown()) {
                     List<Runnable> pending = workers.shutdownNow();
-                    if (pending!=null && !pending.isEmpty()) {
+                    if (pending != null && !pending.isEmpty()) {
                         LOG.warn("Workers have been shut down with {} tasks pending", pending.size());
                     }
                 }
@@ -138,35 +146,38 @@ public class YdbImporter {
             throws Exception {
         List<Future<MetadataTask.Out>> metadatas = new ArrayList<>(tables.size());
         for (TableDecision td : tables) {
-            metadatas.add( workers.submit(new MetadataTask(this, td)) );
+            metadatas.add(workers.submit(new MetadataTask(this, td)));
         }
         tables.clear();
         for (Future<MetadataTask.Out> outf : metadatas) {
             MetadataTask.Out out = outf.get();
             if (out.isSuccess()) {
                 // proceed only with tables which had no failures
-                out.td.setMetadata(out.tm);
-                new YdbTableBuilder(out.td).build();
-                tables.add(out.td);
+                out.getTd().setMetadata(out.getTm());
+                new YdbTableBuilder(out.getTd()).build();
+                tables.add(out.getTd());
             } else {
                 // Mark the failed table
-                out.td.setFailure(true);
+                out.getTd().setFailure(true);
             }
         }
     }
-    
+
     private void dumpTableScripts(List<TableDecision> tables) throws Exception {
-        if (config.getTarget()==null || config.getTarget().getScript() == null)
+        if (config.getTarget() == null || config.getTarget().getScript() == null) {
             return;
+        }
         String fileName = config.getTarget().getScript().getFileName();
-        try ( OutputStreamWriter osw = new OutputStreamWriter(
+        try (OutputStreamWriter osw = new OutputStreamWriter(
                 new FileOutputStream(fileName), StandardCharsets.UTF_8);
-              BufferedWriter writer = new BufferedWriter(osw) ) {
+                BufferedWriter writer = new BufferedWriter(osw)) {
             for (TableDecision td : tables) {
-                if (td.isFailure())
+                if (td.isFailure()) {
                     continue;
-                for (TargetTable blobTable : td.getBlobTargets().values())
+                }
+                for (TargetTable blobTable : td.getBlobTargets().values()) {
                     YdbTableBuilder.appendTo(writer, blobTable);
+                }
                 YdbTableBuilder.appendTo(writer, td.getTarget());
             }
         }
@@ -175,28 +186,30 @@ public class YdbImporter {
 
     private void createMissingTables(ExecutorService es, List<TableDecision> tables)
             throws Exception {
-        if (config.getTarget()==null)
+        if (config.getTarget() == null) {
             return;
+        }
         LOG.info("Target tables creation started.");
         final List<Future<CreateTableTask.Out>> results = new ArrayList<>();
         for (TableDecision td : tables) {
-            if (td.isFailure())
+            if (td.isFailure()) {
                 continue;
-            for (TargetTable yt : td.getBlobTargets().values()) {
-                results.add( es.submit(new CreateTableTask(this, yt)) );
             }
-            results.add( es.submit(new CreateTableTask(this, td.getTarget())) );
+            for (TargetTable yt : td.getBlobTargets().values()) {
+                results.add(es.submit(new CreateTableTask(this, yt)));
+            }
+            results.add(es.submit(new CreateTableTask(this, td.getTarget())));
         }
         int successCount = 0;
         for (Future<CreateTableTask.Out> rf : results) {
             CreateTableTask.Out r = rf.get();
-            if (r.success) {
+            if (r.isSuccess()) {
                 ++successCount;
-                if (r.existingTable != null) {
-                    adjustTargetStructure(r.table, r.existingTable);
+                if (r.getExistingTable() != null) {
+                    adjustTargetStructure(r.getTable(), r.getExistingTable());
                 }
             } else {
-                r.table.getOriginal().setFailure(true);
+                r.getTable().getOriginal().setFailure(true);
             }
         }
         LOG.info("Target tables creation completed {} of {}.", successCount, results.size());
@@ -205,23 +218,26 @@ public class YdbImporter {
     private void adjustTargetStructure(TargetTable table, TableDescription desc) {
         final Map<String, Type> fields = new HashMap<>();
         for (TableColumn tc : desc.getColumns()) {
-            if (Type.Kind.OPTIONAL.equals(tc.getType().getKind()))
+            if (Type.Kind.OPTIONAL.equals(tc.getType().getKind())) {
                 fields.put(tc.getName(), tc.getType());
-            else
+            } else {
                 fields.put(tc.getName(), tc.getType().makeOptional());
+            }
         }
         table.setFields(StructType.of(fields));
     }
 
     private void loadTableData(ExecutorService es, List<TableDecision> tables) throws Exception {
-        if (config.getTarget()==null)
+        if (config.getTarget() == null) {
             return;
+        }
         try (ProgressCounter progress = new ProgressCounter()) {
             final List<Future<LoadDataTask.Out>> results = new ArrayList<>();
             for (TableDecision td : tables) {
-                if (td.isFailure())
+                if (td.isFailure()) {
                     continue;
-                results.add( es.submit(new LoadDataTask(this, progress, td)) );
+                }
+                results.add(es.submit(new LoadDataTask(this, progress, td)));
             }
             if (results.isEmpty()) {
                 LOG.info("No valid tables to be loaded, nothing to do.");
@@ -230,10 +246,11 @@ public class YdbImporter {
             int successCount = 0;
             for (Future<LoadDataTask.Out> rf : results) {
                 LoadDataTask.Out r = rf.get();
-                if (r.success)
+                if (r.isSuccess()) {
                     ++successCount;
-                else
-                    r.tab.setFailure(true);
+                } else {
+                    r.getTab().setFailure(true);
+                }
             }
             LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
         }
@@ -248,15 +265,15 @@ public class YdbImporter {
         try {
             LOG.info("Reading configuration {}...", args[0]);
             final ImporterConfig importerConfig = new ImporterConfig(
-                        JdomHelper.readDocument(args[0]) );
-            if (! importerConfig.validate()) {
+                    JdomHelper.readDocument(args[0]));
+            if (!importerConfig.validate()) {
                 LOG.error("Configuration is not valid, TERMINATING");
                 System.exit(1);
             }
             LOG.info("Running imports...");
             new YdbImporter(importerConfig).run();
             LOG.info("Imports completed successfully!");
-        } catch(Exception ex) {
+        } catch (Exception ex) {
             LOG.error("FATAL", ex);
             System.exit(1);
         }

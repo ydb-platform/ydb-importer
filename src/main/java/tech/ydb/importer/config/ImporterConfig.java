@@ -4,32 +4,32 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.jdom2.Element;
-import static tech.ydb.importer.config.JdomHelper.*;
 
 /**
- * Importer configuration includes the worker settings,
- * source and target settings, and table mapping settings.
+ * Importer configuration includes the worker settings, source and target settings, and table
+ * mapping settings.
+ *
  * @author zinal
  */
-public class ImporterConfig {
-    
-    public static final org.slf4j.Logger LOG = 
-            org.slf4j.LoggerFactory.getLogger(ImporterConfig.class);
-    
+public class ImporterConfig extends tech.ydb.importer.config.JdomHelper {
+
+    public static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(ImporterConfig.class);
+
     private WorkerConfig workers;
     private SourceConfig source;
     private TargetConfig target;
     private final List<TableMap> tableMaps = new ArrayList<>();
     private final List<TableRef> tableRefs = new ArrayList<>();
     private final Map<String, TableOptions> optionsMap = new HashMap<>();
-    
+
     public ImporterConfig() {
         this.workers = new WorkerConfig();
         this.source = new SourceConfig();
         this.target = new TargetConfig();
     }
-    
+
     public ImporterConfig(Element c) {
         this.workers = new WorkerConfig(getSingleChild(c, "workers"));
         this.source = new SourceConfig(getSingleChild(c, "source"));
@@ -84,11 +84,11 @@ public class ImporterConfig {
 
     public boolean validate() {
         boolean retval = true;
-        if (source==null) {
+        if (source == null) {
             LOG.warn("Source configuration is not defined");
             retval = false;
         }
-        if (target==null) {
+        if (target == null) {
             LOG.warn("Target configuration is not defined");
             retval = false;
         }
@@ -100,10 +100,12 @@ public class ImporterConfig {
     }
 
     public boolean hasTarget() {
-        if (target==null)
+        if (target == null) {
             return false;
-        if (isBlank(target.getConnectionString()))
+        }
+        if (isBlank(target.getConnectionString())) {
             return false;
+        }
         return true;
     }
 }

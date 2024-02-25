@@ -1,14 +1,13 @@
 package tech.ydb.importer.config;
 
 import org.jdom2.Element;
-import static tech.ydb.importer.config.JdomHelper.*;
 
 /**
  *
  * @author zinal
  */
-public class SourceConfig {
-    
+public class SourceConfig extends JdomHelper {
+
     private SourceType type;
     private String className;
     private String jdbcUrl;
@@ -19,7 +18,7 @@ public class SourceConfig {
     }
 
     public SourceConfig(Element c) {
-        if (c!=null) {
+        if (c != null) {
             this.type = SourceType.valueOf(
                     getAttr(c, "type", "oracle").toUpperCase());
             this.className = getText(c, "jdbc-class");
@@ -68,5 +67,5 @@ public class SourceConfig {
     public void setPassword(String password) {
         this.password = password;
     }
-    
+
 }

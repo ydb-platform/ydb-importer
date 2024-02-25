@@ -1,14 +1,13 @@
 package tech.ydb.importer.config;
 
 import org.jdom2.Element;
-import static tech.ydb.importer.config.JdomHelper.*;
 
 /**
  *
  * @author zinal
  */
-public class NameFilter {
-    
+public class NameFilter extends JdomHelper {
+
     private final String value;
     private final boolean regexp;
     private final boolean upper;
@@ -18,7 +17,7 @@ public class NameFilter {
         this.regexp = regexp;
         this.upper = upper;
     }
-    
+
     public NameFilter(Element c) {
         this.value = getText(c);
         this.regexp = getBoolean(c, "regexp", false);
@@ -36,5 +35,5 @@ public class NameFilter {
     public boolean isUpper() {
         return upper;
     }
-    
+
 }

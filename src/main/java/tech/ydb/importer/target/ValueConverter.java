@@ -5,6 +5,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.time.LocalDate;
 import java.time.LocalTime;
+
 import tech.ydb.table.values.DecimalType;
 import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.PrimitiveValue;
@@ -20,15 +21,16 @@ import tech.ydb.table.values.VoidValue;
 public abstract class ValueConverter {
 
     public static final DecimalType DECIMAL_TYPE = DecimalType.of(22, 9);
-    public static final boolean DECIMAL_ISSUE1 =
-            ( DECIMAL_TYPE.newValue(BigDecimal.ONE).toBigDecimal()
-                    .compareTo(BigDecimal.ONE) != 0 );
+    public static final boolean DECIMAL_ISSUE1
+            = (DECIMAL_TYPE.newValue(BigDecimal.ONE).toBigDecimal()
+                    .compareTo(BigDecimal.ONE) != 0);
 
     public static ConvMode chooseMode(int ixSource, int ixTarget,
             StructType paramListType, ResultSetMetaData rsmd) throws Exception {
         Type paramType = paramListType.getMemberType(ixTarget);
-        while (Type.Kind.OPTIONAL.equals(paramType.getKind()))
+        while (Type.Kind.OPTIONAL.equals(paramType.getKind())) {
             paramType = paramType.unwrapOptional();
+        }
 
         final int sourceType = rsmd.getColumnType(ixSource);
 
@@ -37,7 +39,7 @@ public abstract class ValueConverter {
                 return ConvMode.DECIMAL;
             case PRIMITIVE:
                 try {
-                    switch ((PrimitiveType)paramType) {
+                    switch ((PrimitiveType) paramType) {
                         case Bool:
                             switch (sourceType) {
                                 case java.sql.Types.SMALLINT:
@@ -53,14 +55,16 @@ public abstract class ValueConverter {
                                 case java.sql.Types.VARCHAR:
                                 case java.sql.Types.NVARCHAR:
                                     return ConvMode.STR2BOOL;
+                                default:
+                                    return ConvMode.BOOL;
                             }
-                            return ConvMode.BOOL;
                         case Date:
                             switch (sourceType) {
                                 case java.sql.Types.TIMESTAMP:
                                     return ConvMode.TS_DATE;
+                                default:
+                                    return ConvMode.DATE;
                             }
-                            return ConvMode.DATE;
                         case Datetime:
                             return ConvMode.DATETIME;
                         case Timestamp:
@@ -75,44 +79,49 @@ public abstract class ValueConverter {
                                     return ConvMode.TIME_INT32;
                                 case java.sql.Types.DATE:
                                     return ConvMode.DATE_INT32;
+                                default:
+                                    return ConvMode.INT32;
                             }
-                            return ConvMode.INT32;
                         case Int64:
                             switch (sourceType) {
                                 case java.sql.Types.DATE:
                                     return ConvMode.DATE_INT64;
                                 case java.sql.Types.TIMESTAMP:
                                     return ConvMode.TS_INT64;
+                                default:
+                                    return ConvMode.INT64;
                             }
-                            return ConvMode.INT64;
                         case Uint32:
                             switch (sourceType) {
                                 case java.sql.Types.DATE:
                                     return ConvMode.DATE_UINT32;
+                                default:
+                                    return ConvMode.UINT32;
                             }
-                            return ConvMode.UINT32;
                         case Uint64:
                             switch (sourceType) {
                                 case java.sql.Types.DATE:
                                     return ConvMode.DATE_UINT64;
                                 case java.sql.Types.TIMESTAMP:
                                     return ConvMode.TS_UINT64;
+                                default:
+                                    return ConvMode.UINT64;
                             }
-                            return ConvMode.UINT64;
                         case Text:
                             switch (sourceType) {
                                 case java.sql.Types.DATE:
                                     return ConvMode.DATE_STR;
                                 case java.sql.Types.TIMESTAMP:
                                     return ConvMode.TS_STR;
+                                default:
+                                    return ConvMode.TEXT;
                             }
-                            return ConvMode.TEXT;
                         case Bytes: // SQL BINARY, VARBINARY
                             return ConvMode.BINARY;
                         default:
                             throw new IllegalArgumentException("unsupported type: " + paramType);
                     }
-                } catch(Exception ex) {
+                } catch (Exception ex) {
                     throw new IllegalArgumentException("chooseMode() failed", ex);
                 }
             default:
@@ -124,6 +133,7 @@ public abstract class ValueConverter {
 
     /**
      * Converts a single source ResultSet column value to YDB format.
+     *
      * @param rs Input source result set
      * @param ci Column positions and conversion mode
      * @return YDB-formatted value
@@ -132,8 +142,9 @@ public abstract class ValueConverter {
     public Value<?> convertValue(ResultSet rs, ConvInfo ci) throws Exception {
         final int srcpos = ci.sourceIndex;
         Object value = rs.getObject(srcpos);
-        if (value == null)
+        if (value == null) {
             return VoidValue.of();
+        }
         switch (ci.mode) {
             case BLOB_STREAM:
             case BLOB_OBJECT:
@@ -144,7 +155,7 @@ public abstract class ValueConverter {
             case BOOL:
                 return PrimitiveValue.newBool(rs.getBoolean(srcpos));
             case INT2BOOL:
-                return PrimitiveValue.newBool(rs.getInt(srcpos) == 0 ? false : true);
+                return PrimitiveValue.newBool((rs.getInt(srcpos) != 0));
             case STR2BOOL:
                 return PrimitiveValue.newBool(str2bool(rs.getString(srcpos)));
             case DATE:
@@ -161,8 +172,8 @@ public abstract class ValueConverter {
                 return PrimitiveValue.newText(date2str(rs.getDate(srcpos)));
             case TIME_INT32: {
                 LocalTime ltv = rs.getTime(srcpos).toLocalTime();
-                return PrimitiveValue.newInt32(ltv.getSecond() +
-                        60 * (ltv.getMinute() + 60 * ltv.getHour()));
+                return PrimitiveValue.newInt32(ltv.getSecond()
+                        + 60 * (ltv.getMinute() + 60 * ltv.getHour()));
             }
             case DATETIME:
                 return PrimitiveValue.newDatetime(rs.getTimestamp(srcpos).toInstant());
@@ -203,18 +214,21 @@ public abstract class ValueConverter {
     }
 
     private static boolean str2bool(String value) {
-        if (value==null)
+        if (value == null) {
             return false;
+        }
         value = value.trim();
-        if (value.length()==0)
+        if (value.length() == 0) {
             return false;
+        }
         value = value.substring(0, 1);
-        if ( "N".equalsIgnoreCase(value)
+        if ("N".equalsIgnoreCase(value)
                 || "0".equalsIgnoreCase(value)
                 || "F".equalsIgnoreCase(value)
                 || "Н".equalsIgnoreCase(value)
-                || "Л".equalsIgnoreCase(value) )
+                || "Л".equalsIgnoreCase(value)) {
             return false;
+        }
         return true;
     }
 
@@ -248,20 +262,16 @@ public abstract class ValueConverter {
         DATETIME,
         TIMESTAMP,
         TEXT,
-
         DATE_INT32,
         DATE_INT64,
         DATE_UINT32,
         DATE_UINT64,
         DATE_STR,
-
         TIME_INT32,
-
         TS_DATE,
         TS_INT64,
         TS_UINT64,
         TS_STR,
-
         INT2BOOL,
         STR2BOOL
 
@@ -271,10 +281,11 @@ public abstract class ValueConverter {
      * Conversion settings for the particular source column
      */
     public static final class ConvInfo {
-        public final int sourceIndex; // 1-based position in the input ResultSet
-        public final int targetIndex; // 0-based position in the destination StructValue
-        public final ConvMode mode; // field conversion mode
-        public final String blobPath; // full BLOB table path, when mode==BLOB
+
+        private final int sourceIndex; // 1-based position in the input ResultSet
+        private final int targetIndex; // 0-based position in the destination StructValue
+        private final ConvMode mode; // field conversion mode
+        private final String blobPath; // full BLOB table path, when mode==BLOB
 
         public ConvInfo(int sourceIndex, int targetIndex, ConvMode mode, String blobPath) {
             this.sourceIndex = sourceIndex;
@@ -285,6 +296,22 @@ public abstract class ValueConverter {
 
         public ConvInfo(int sourceIndex, int targetIndex, ConvMode mode) {
             this(sourceIndex, targetIndex, mode, null);
+        }
+
+        public int getSourceIndex() {
+            return sourceIndex;
+        }
+
+        public int getTargetIndex() {
+            return targetIndex;
+        }
+
+        public ConvMode getMode() {
+            return mode;
+        }
+
+        public String getBlobPath() {
+            return blobPath;
         }
     }
 

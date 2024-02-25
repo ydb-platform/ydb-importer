@@ -1,13 +1,13 @@
 package tech.ydb.importer.config;
 
 import org.jdom2.Element;
-import static tech.ydb.importer.config.JdomHelper.*;
 
 /**
  * Options for table name and DDL generator for YDB output.
+ *
  * @author zinal
  */
-public class TableOptions {
+public class TableOptions extends JdomHelper {
 
     private final String name;
     private String mainTemplate;
@@ -34,25 +34,25 @@ public class TableOptions {
         v = getText(c, "case-mode", CaseMode.ASIS.name());
         try {
             this.caseMode = CaseMode.valueOf(v.toUpperCase());
-        } catch(Exception ex) {
+        } catch (Exception ex) {
             throw raiseIllegal(c, "case-mode", v);
         }
         v = getText(c, "conv-date", DateConv.DATE.name());
         try {
             this.dateConv = DateConv.valueOf(v.toUpperCase());
-        } catch(Exception ex) {
+        } catch (Exception ex) {
             throw raiseIllegal(c, "conv-date", v);
         }
         v = getText(c, "conv-timestamp", DateConv.DATE.name());
         try {
             this.timestampConv = DateConv.valueOf(v.toUpperCase());
-        } catch(Exception ex) {
+        } catch (Exception ex) {
             throw raiseIllegal(c, "conv-timestamp", v);
         }
         v = getText(c, "skip-unknown-types", "false");
         try {
             this.skipUnknownTypes = Boolean.parseBoolean(v);
-        } catch(Exception ex) {
+        } catch (Exception ex) {
             throw raiseIllegal(c, "skip-unknown-types", v);
         }
     }
@@ -109,16 +109,16 @@ public class TableOptions {
         this.skipUnknownTypes = skipUnknownTypes;
     }
 
-    public static enum CaseMode {
+    public enum CaseMode {
         ASIS,
         UPPER,
         LOWER
     }
 
-    public static enum DateConv {
+    public enum DateConv {
         DATE,
         STR,
         INT
     }
-    
+
 }

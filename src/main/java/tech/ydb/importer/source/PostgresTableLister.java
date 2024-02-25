@@ -9,16 +9,19 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.TableIdentity;
 
 /**
  * Source table metadata retrieval - PostgreSQL specifics.
+ *
  * @author zinal
  */
 public class PostgresTableLister extends AnyTableLister {
-    
+
     public static final Set<String> SKIP_SCHEMAS;
+
     static {
         final Set<String> x = new HashSet<>();
         x.add("information_schema");
@@ -41,8 +44,9 @@ public class PostgresTableLister extends AnyTableLister {
                 final List<String> retval = new ArrayList<>();
                 while (rs.next()) {
                     String value = rs.getString(1);
-                    if (SKIP_SCHEMAS.contains(value))
+                    if (SKIP_SCHEMAS.contains(value)) {
                         continue;
+                    }
                     retval.add(value);
                 }
                 return retval;
@@ -54,12 +58,12 @@ public class PostgresTableLister extends AnyTableLister {
     protected List<String> listTables(Connection con, String schema) throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT c.relname  "
-                    + "FROM pg_catalog.pg_class c "
-                    + "INNER JOIN pg_catalog.pg_namespace n "
-                    + "  ON c.relnamespace = n.\"oid\" "
-                    + "WHERE c.relkind IN ('p', 'r') "
-                    + "  AND NOT c.relispartition "
-                    + "  AND n.nspname = ?")) {
+                + "FROM pg_catalog.pg_class c "
+                + "INNER JOIN pg_catalog.pg_namespace n "
+                + "  ON c.relnamespace = n.\"oid\" "
+                + "WHERE c.relkind IN ('p', 'r') "
+                + "  AND NOT c.relispartition "
+                + "  AND n.nspname = ?")) {
             ps.setString(1, schema);
             try (ResultSet rs = ps.executeQuery()) {
                 final List<String> retval = new ArrayList<>();
@@ -76,16 +80,17 @@ public class PostgresTableLister extends AnyTableLister {
         // Retrieve the approximate number of rows in the table
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT c.reltuples FROM pg_catalog.pg_class c "
-                    + "INNER JOIN pg_catalog.pg_namespace n "
-                    + "  ON n.\"oid\" = c.relnamespace "
-                    + "WHERE n.nspname = ? AND c.relname = ?")) {
+                + "INNER JOIN pg_catalog.pg_namespace n "
+                + "  ON n.\"oid\" = c.relnamespace "
+                + "WHERE n.nspname = ? AND c.relname = ?")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     long retval = rs.getLong(1);
-                    if (!rs.wasNull())
+                    if (!rs.wasNull()) {
                         return retval;
+                    }
                 }
             }
         }
@@ -98,19 +103,19 @@ public class PostgresTableLister extends AnyTableLister {
         // Retrieve the list of columns
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT a.attname "
-                    + "FROM pg_catalog.pg_attribute a "
-                    + "INNER JOIN pg_catalog.pg_class c "
-                    + "  ON c.\"oid\" = a.attrelid "
-                    + "INNER JOIN pg_catalog.pg_namespace n "
-                    + "  ON n.\"oid\" = c.relnamespace "
-                    + "WHERE n.nspname = ? AND c.relname = ?"
-                    + "  AND a.attnum > 0 "
-                    + "ORDER BY a.attnum ")) {
+                + "FROM pg_catalog.pg_attribute a "
+                + "INNER JOIN pg_catalog.pg_class c "
+                + "  ON c.\"oid\" = a.attrelid "
+                + "INNER JOIN pg_catalog.pg_namespace n "
+                + "  ON n.\"oid\" = c.relnamespace "
+                + "WHERE n.nspname = ? AND c.relname = ?"
+                + "  AND a.attnum > 0 "
+                + "ORDER BY a.attnum ")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    cols.add( new ColumnInfo(rs.getString(1) ) );
+                    cols.add(new ColumnInfo(rs.getString(1)));
                 }
             }
         }
@@ -118,7 +123,7 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     @Override
-    protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm) 
+    protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm)
             throws SQLException {
         // Retrieve the primary key (if one is defined)
         try (PreparedStatement ps = con.prepareStatement(
@@ -165,15 +170,16 @@ public class PostgresTableLister extends AnyTableLister {
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         long ixid = rs.getLong(1);
-                        if (! rs.wasNull())
+                        if (!rs.wasNull()) {
                             grabIndexColumns(con, ixid, tm);
+                        }
                     }
                 }
             }
         }
     }
 
-    private void grabIndexColumns(Connection con, long ixid, TableMetadata tm) 
+    private void grabIndexColumns(Connection con, long ixid, TableMetadata tm)
             throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT ia.attname "
@@ -202,7 +208,7 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     @Override
-    protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm) 
+    protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm)
             throws SQLException {
         // Basic implementation comes from the parent.
         super.grabColumnTypes(con, td, tm);
@@ -224,7 +230,7 @@ public class PostgresTableLister extends AnyTableLister {
                 while (rs.next()) {
                     String colname = rs.getString(1);
                     ColumnInfo ci = tm.findColumn(colname);
-                    if (ci!=null) {
+                    if (ci != null) {
                         ci.setSqlType(java.sql.Types.BLOB);
                         ci.setBlobAsObject(true);
                     }

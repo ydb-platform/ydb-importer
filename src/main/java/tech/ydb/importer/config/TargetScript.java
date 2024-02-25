@@ -1,13 +1,12 @@
 package tech.ydb.importer.config;
 
 import org.jdom2.Element;
-import static tech.ydb.importer.config.JdomHelper.*;
 
 /**
  *
  * @author zinal
  */
-public class TargetScript {
+public class TargetScript extends JdomHelper {
 
     private String fileName;
 

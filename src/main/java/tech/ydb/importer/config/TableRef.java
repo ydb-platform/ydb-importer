@@ -3,25 +3,26 @@ package tech.ydb.importer.config;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
 import org.jdom2.Element;
-import static tech.ydb.importer.config.JdomHelper.*;
 
 /**
- * Direct reference to a single source table, source view,
- * or to an SQL query over the source system.
+ * Direct reference to a single source table, source view, or to an SQL query over the source
+ * system.
+ *
  * @author zinal
  */
-public class TableRef implements TableIdentity {
-    
+public class TableRef extends JdomHelper implements TableIdentity {
+
     private TableOptions options;
     private String schemaName;
     private String tableName;
     private String queryText;
     private final List<String> keyNames = new ArrayList<>();
-    
+
     public TableRef() {
     }
-    
+
     public TableRef(Element c, Map<String, TableOptions> optionsMap) {
         this.options = optionsMap.get(getAttr(c, "options"));
         if (this.options == null) {
@@ -60,9 +61,9 @@ public class TableRef implements TableIdentity {
     public void setTable(String tableName) {
         this.tableName = tableName;
     }
-    
+
     public boolean hasQueryText() {
-        return ! isBlank(queryText);
+        return !isBlank(queryText);
     }
 
     public String getQueryText() {

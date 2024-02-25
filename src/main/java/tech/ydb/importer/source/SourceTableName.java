@@ -1,6 +1,7 @@
 package tech.ydb.importer.source;
 
 import java.util.Objects;
+
 import tech.ydb.importer.config.TableIdentity;
 
 /**
@@ -8,7 +9,7 @@ import tech.ydb.importer.config.TableIdentity;
  * @author zinal
  */
 public class SourceTableName implements TableIdentity {
-    
+
     private final String schema;
     private final String table;
 
@@ -16,12 +17,12 @@ public class SourceTableName implements TableIdentity {
         this.schema = schema;
         this.table = table;
     }
-    
+
     public SourceTableName(TableIdentity ti) {
         this.schema = ti.getSchema();
         this.table = ti.getTable();
     }
-    
+
     @Override
     public String getSchema() {
         return schema;
@@ -57,5 +58,5 @@ public class SourceTableName implements TableIdentity {
         }
         return Objects.equals(this.table, other.table);
     }
-    
+
 }

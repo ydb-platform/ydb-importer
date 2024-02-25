@@ -1,12 +1,14 @@
 package tech.ydb.importer;
 
-import tech.ydb.importer.target.TargetTable;
 import java.util.HashMap;
 import java.util.Map;
+
+import tech.ydb.importer.config.TableIdentity;
 import tech.ydb.importer.config.TableOptions;
 import tech.ydb.importer.config.TableRef;
-import tech.ydb.importer.config.TableIdentity;
 import tech.ydb.importer.source.TableMetadata;
+import tech.ydb.importer.target.TargetTable;
+
 import static tech.ydb.importer.config.JdomHelper.isBlank;
 
 /**
@@ -33,7 +35,7 @@ public class TableDecision implements TableIdentity {
         this.metadata = null;
         this.failure = false;
     }
-    
+
     public TableDecision(TableRef tr) {
         this.schema = tr.getSchema();
         this.table = tr.getTable();
@@ -54,12 +56,15 @@ public class TableDecision implements TableIdentity {
     }
 
     public boolean isValid() {
-        if (isBlank(schema) || isBlank(table))
+        if (isBlank(schema) || isBlank(table)) {
             return false;
-        if (metadata == null || target == null)
+        }
+        if (metadata == null || target == null) {
             return false;
-        if (isBlank(metadata.getBasicSql()))
+        }
+        if (isBlank(metadata.getBasicSql())) {
             return false;
+        }
         return metadata.isValid() && target.isValid();
     }
 

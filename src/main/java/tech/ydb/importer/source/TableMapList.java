@@ -2,7 +2,10 @@ package tech.ydb.importer.source;
 
 import java.util.ArrayList;
 import java.util.List;
-import tech.ydb.importer.config.*;
+
+import tech.ydb.importer.config.ImporterConfig;
+import tech.ydb.importer.config.TableMap;
+import tech.ydb.importer.config.TableRef;
 
 /**
  * A collection of table mappings for table list retrieval and processing.
@@ -10,7 +13,7 @@ import tech.ydb.importer.config.*;
  * @author zinal
  */
 public class TableMapList {
-    
+
     private final ImporterConfig config;
     private final List<TableMapFilter> maps;
 
@@ -29,7 +32,7 @@ public class TableMapList {
     public List<TableMapFilter> getMaps() {
         return maps;
     }
-    
+
     public List<TableRef> getRefs() {
         return config.getTableRefs();
     }

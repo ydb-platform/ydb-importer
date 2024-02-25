@@ -1,19 +1,22 @@
 package tech.ydb.importer.source;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
+
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
 import tech.ydb.importer.config.SourceConfig;
 
 /**
  * Connection pool wrapper object
+ *
  * @author zinal
  */
 public class SourceCP implements AutoCloseable {
-    
+
     private final HikariDataSource ds;
-    
+
     public SourceCP(SourceConfig sc, int poolSize) throws SQLException {
         HikariConfig hc = new HikariConfig();
         hc.setAutoCommit(false);
@@ -23,7 +26,7 @@ public class SourceCP implements AutoCloseable {
         hc.setMaximumPoolSize(poolSize);
         this.ds = new HikariDataSource(hc);
     }
-    
+
     public Connection getConnection() throws SQLException {
         return ds.getConnection();
     }
@@ -32,5 +35,5 @@ public class SourceCP implements AutoCloseable {
     public void close() {
         ds.close();
     }
-    
+
 }

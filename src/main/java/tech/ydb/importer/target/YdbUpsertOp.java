@@ -1,10 +1,11 @@
 package tech.ydb.importer.target;
 
+import java.util.concurrent.CompletableFuture;
+
 import tech.ydb.core.Status;
 import tech.ydb.table.SessionRetryContext;
 import tech.ydb.table.settings.BulkUpsertSettings;
 import tech.ydb.table.values.ListValue;
-import java.util.concurrent.CompletableFuture;
 
 /**
  *
@@ -23,26 +24,30 @@ public class YdbUpsertOp {
     }
 
     public BulkUpsertSettings getUpsertSettings() {
-        if (upsertSettings == null)
+        if (upsertSettings == null) {
             upsertSettings = new BulkUpsertSettings();
+        }
         return upsertSettings;
     }
 
     public int finish() {
-        if (status == null)
+        if (status == null) {
             return 0;
+        }
         final int retval = (currentRows > 0) ? currentRows : 0;
-        final String m = (counter==null) ? "bulk upsert problem" : counter.getIssueMessage();
+        final String m = (counter == null) ? "bulk upsert problem" : counter.getIssueMessage();
         status.join().expectSuccess(m);
-        if (counter != null)
+        if (counter != null) {
             counter.addValue(retval);
+        }
         currentRows = -1;
         return retval;
     }
 
     public int start(String tablePath, ListValue newValue, AnyCounter counter) {
-        if (newValue==null || newValue.isEmpty())
+        if (newValue == null || newValue.isEmpty()) {
             return 0;
+        }
         final int retval = finish();
         this.currentRows = newValue.size();
         this.counter = counter;

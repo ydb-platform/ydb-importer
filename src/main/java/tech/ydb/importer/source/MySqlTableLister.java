@@ -9,15 +9,18 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 import tech.ydb.importer.config.TableIdentity;
 
 /**
  * Source table metadata retrieval - MySQL specifics.
+ *
  * @author zinal
  */
 public class MySqlTableLister extends AnyTableLister {
-    
+
     public static final Set<String> SKIP_SCHEMAS;
+
     static {
         final Set<String> x = new HashSet<>();
         x.add("information_schema");
@@ -36,8 +39,9 @@ public class MySqlTableLister extends AnyTableLister {
                 final List<String> retval = new ArrayList<>();
                 while (rs.next()) {
                     String value = rs.getString(1);
-                    if (SKIP_SCHEMAS.contains(value))
+                    if (SKIP_SCHEMAS.contains(value)) {
                         continue;
+                    }
                     retval.add(value);
                 }
                 return retval;
@@ -49,7 +53,7 @@ public class MySqlTableLister extends AnyTableLister {
     protected List<String> listTables(Connection con, String schema) throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT table_name FROM information_schema.tables "
-                    + "WHERE table_schema=? AND table_type='BASE TABLE'")) {
+                + "WHERE table_schema=? AND table_type='BASE TABLE'")) {
             ps.setString(1, schema);
             try (ResultSet rs = ps.executeQuery()) {
                 final List<String> retval = new ArrayList<>();
@@ -66,14 +70,15 @@ public class MySqlTableLister extends AnyTableLister {
         // Retrieve the approximate number of rows in the table
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT table_rows FROM information_schema.tables "
-                    + "WHERE table_schema=? AND table_name=?")) {
+                + "WHERE table_schema=? AND table_name=?")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     long retval = rs.getLong(1);
-                    if (!rs.wasNull())
+                    if (!rs.wasNull()) {
                         return retval;
+                    }
                 }
             }
         }
@@ -86,13 +91,13 @@ public class MySqlTableLister extends AnyTableLister {
         // Retrieve the list of columns
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT column_name FROM information_schema.columns "
-                    + "WHERE table_schema=? AND table_name=? "
-                    + "ORDER BY ordinal_position")) {
+                + "WHERE table_schema=? AND table_name=? "
+                + "ORDER BY ordinal_position")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    cols.add( new ColumnInfo(rs.getString(1) ) );
+                    cols.add(new ColumnInfo(rs.getString(1)));
                 }
             }
         }
@@ -100,18 +105,18 @@ public class MySqlTableLister extends AnyTableLister {
     }
 
     @Override
-    protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm) 
+    protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm)
             throws SQLException {
         // Retrieve the primary key (if one is defined)
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT kcu.column_name FROM information_schema.key_column_usage kcu "
-                    + "INNER JOIN information_schema.table_constraints tc "
-                    + "  ON kcu.constraint_name=tc.constraint_name "
-                    + "  AND kcu.table_schema=tc.table_schema "
-                    + "  AND kcu.table_name=tc.table_name "
-                    + "WHERE tc.table_schema=? AND tc.table_name=? "
-                    + "  AND tc.constraint_type='PRIMARY KEY' "
-                    + "ORDER BY kcu.ordinal_position")) {
+                + "INNER JOIN information_schema.table_constraints tc "
+                + "  ON kcu.constraint_name=tc.constraint_name "
+                + "  AND kcu.table_schema=tc.table_schema "
+                + "  AND kcu.table_name=tc.table_name "
+                + "WHERE tc.table_schema=? AND tc.table_name=? "
+                + "  AND tc.constraint_type='PRIMARY KEY' "
+                + "ORDER BY kcu.ordinal_position")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
@@ -125,22 +130,23 @@ public class MySqlTableLister extends AnyTableLister {
             // MAYBE: logic to prefer all-integer keys over varchar-based.
             try (PreparedStatement ps = con.prepareStatement(
                     "SELECT tc.constraint_name, COUNT(*) "
-                        + "FROM information_schema.table_constraints tc "
-                        + "INNER JOIN information_schema.key_column_usage kcu "
-                        + "  ON kcu.constraint_name=tc.constraint_name "
-                        + "  AND kcu.table_schema=tc.table_schema "
-                        + "  AND kcu.table_name=tc.table_name "
-                        + "WHERE tc.table_schema=? AND tc.table_name=? "
-                        + "  AND tc.constraint_type='UNIQUE' "
-                        + "GROUP BY tc.constraint_name "
-                        + "ORDER BY COUNT(*), tc.constraint_name")) {
+                    + "FROM information_schema.table_constraints tc "
+                    + "INNER JOIN information_schema.key_column_usage kcu "
+                    + "  ON kcu.constraint_name=tc.constraint_name "
+                    + "  AND kcu.table_schema=tc.table_schema "
+                    + "  AND kcu.table_name=tc.table_name "
+                    + "WHERE tc.table_schema=? AND tc.table_name=? "
+                    + "  AND tc.constraint_type='UNIQUE' "
+                    + "GROUP BY tc.constraint_name "
+                    + "ORDER BY COUNT(*), tc.constraint_name")) {
                 ps.setString(1, ti.getSchema());
                 ps.setString(2, ti.getTable());
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         String consname = rs.getString(1);
-                        if (! rs.wasNull() && consname!=null)
+                        if (!rs.wasNull() && consname != null) {
                             grabIndexColumns(con, consname, ti, tm);
+                        }
                     }
                 }
             }
@@ -151,13 +157,13 @@ public class MySqlTableLister extends AnyTableLister {
             TableIdentity ti, TableMetadata tm) throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT kcu.column_name FROM information_schema.key_column_usage kcu "
-                    + "INNER JOIN information_schema.table_constraints tc "
-                    + "  ON kcu.constraint_name=tc.constraint_name "
-                    + "  AND kcu.table_schema=tc.table_schema "
-                    + "  AND kcu.table_name=tc.table_name "
-                    + "WHERE tc.table_schema=? AND tc.table_name=? "
-                    + "  AND tc.constraint_name=? "
-                    + "ORDER BY kcu.ordinal_position")) {
+                + "INNER JOIN information_schema.table_constraints tc "
+                + "  ON kcu.constraint_name=tc.constraint_name "
+                + "  AND kcu.table_schema=tc.table_schema "
+                + "  AND kcu.table_name=tc.table_name "
+                + "WHERE tc.table_schema=? AND tc.table_name=? "
+                + "  AND tc.constraint_name=? "
+                + "ORDER BY kcu.ordinal_position")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             ps.setString(3, consname);

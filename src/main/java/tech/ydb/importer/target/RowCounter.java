@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Counter implementation for row upsert iperations.
+ *
  * @author zinal
  */
 public class RowCounter implements AnyCounter {
@@ -29,8 +30,9 @@ public class RowCounter implements AnyCounter {
     @Override
     public long addValue(int v) {
         v = (v > 0) ? v : 0;
-        if (owner != null)
+        if (owner != null) {
             owner.addNormal(v);
+        }
         return value.addAndGet(v);
     }
 

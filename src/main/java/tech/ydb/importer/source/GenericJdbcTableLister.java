@@ -7,10 +7,12 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
+
 import tech.ydb.importer.config.TableIdentity;
 
 /**
  * Source table metadata retrieval using generic JDBC APIs.
+ *
  * @author zinal
  */
 public class GenericJdbcTableLister extends AnyTableLister {
@@ -68,17 +70,17 @@ public class GenericJdbcTableLister extends AnyTableLister {
             int namePos = rs.findColumn("COLUMN_NAME");
             final List<ColumnInfo> cols = new ArrayList<>();
             while (rs.next()) {
-                cols.add( new ColumnInfo(rs.getString(namePos) ) );
+                cols.add(new ColumnInfo(rs.getString(namePos)));
             }
             return cols;
         }
     }
 
     @Override
-    protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm) 
+    protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm)
             throws SQLException {
         try (ResultSet rs = con.getMetaData().getPrimaryKeys(null, ti.getSchema(), ti.getTable())) {
-            TreeMap<Integer,String> items = new TreeMap<>();
+            TreeMap<Integer, String> items = new TreeMap<>();
             int namePos = rs.findColumn("COLUMN_NAME");
             int seqPos = rs.findColumn("KEY_SEQ");
             while (rs.next()) {
@@ -103,7 +105,7 @@ public class GenericJdbcTableLister extends AnyTableLister {
                     String indexName = rs.getString(posName);
                     if (prevIndex == null) {
                         prevIndex = indexName;
-                    } else if (! prevIndex.equals(indexName)) {
+                    } else if (!prevIndex.equals(indexName)) {
                         break;
                     }
                     tm.addKey(rs.getString(posColumn));
@@ -114,7 +116,7 @@ public class GenericJdbcTableLister extends AnyTableLister {
 
     @Override
     protected String safeId(String id) {
-        if (quotingSymbol.length()==0 || quotingSymbol.equals(" ")) {
+        if (quotingSymbol.length() == 0 || quotingSymbol.equals(" ")) {
             return id;
         }
         if (id.contains(quotingSymbol)) {

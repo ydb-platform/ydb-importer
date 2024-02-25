@@ -3,10 +3,15 @@ package tech.ydb.importer.target;
 import java.io.BufferedWriter;
 import java.util.HashMap;
 import java.util.Map;
+
 import org.apache.commons.text.StringSubstitutor;
-import tech.ydb.table.values.*;
-import tech.ydb.importer.source.ColumnInfo;
+
 import tech.ydb.importer.TableDecision;
+import tech.ydb.importer.source.ColumnInfo;
+import tech.ydb.table.values.DecimalType;
+import tech.ydb.table.values.PrimitiveType;
+import tech.ydb.table.values.StructType;
+import tech.ydb.table.values.Type;
 
 /**
  *
@@ -14,9 +19,9 @@ import tech.ydb.importer.TableDecision;
  */
 public class YdbTableBuilder {
 
-    private static final org.slf4j.Logger LOG =
-            org.slf4j.LoggerFactory.getLogger(YdbTableBuilder.class);
-    
+    private static final org.slf4j.Logger LOG
+            = org.slf4j.LoggerFactory.getLogger(YdbTableBuilder.class);
+
     public static final String EOL = System.getProperty("line.separator");
     private final TableDecision tab;
 
@@ -29,8 +34,8 @@ public class YdbTableBuilder {
         tab.getBlobTargets().clear();
         for (ColumnInfo ci : tab.getMetadata().getColumns()) {
             if (ci.isBlob()) {
-                tab.getBlobTargets().put( ci.getName(),
-                        buildBlobTable(tab.getTarget(), ci) );
+                tab.getBlobTargets().put(ci.getName(),
+                        buildBlobTable(tab.getTarget(), ci));
             }
         }
     }
@@ -46,11 +51,11 @@ public class YdbTableBuilder {
             final Type type;
             try {
                 type = convertType(ci);
-            } catch(Exception ex) {
+            } catch (Exception ex) {
                 throw new RuntimeException("Cannot convert type for column [" + ci.getName()
                         + "] of table [" + fullName + "]", ex);
             }
-            if (type==null) {
+            if (type == null) {
                 // unknown type, and skip mode is enabled
                 LOG.warn("Skipped column {} in table {}.{} due to unknown type {}",
                         ci.getName(), tab.getSchema(), tab.getTable(), ci.getSqlType());
@@ -96,10 +101,13 @@ public class YdbTableBuilder {
                 m.put("schema", tab.getSchema().toUpperCase());
                 m.put("table", tab.getTable().toUpperCase());
                 break;
+            default: {
+                /* noop */
+            }
         }
         return new StringSubstitutor(m).replace(tab.getOptions().getMainTemplate());
     }
-    
+
     private String makeBlobName(String field) {
         final Map<String, String> m = new HashMap<>();
         switch (tab.getOptions().getCaseMode()) {
@@ -118,6 +126,9 @@ public class YdbTableBuilder {
                 m.put("table", tab.getTable().toUpperCase());
                 m.put("field", field.toUpperCase());
                 break;
+            default: {
+                /* noop */
+            }
         }
         return new StringSubstitutor(m).replace(tab.getOptions().getBlobTemplate());
     }
@@ -137,15 +148,19 @@ public class YdbTableBuilder {
                 return PrimitiveType.Int64;
             case java.sql.Types.DECIMAL:
             case java.sql.Types.NUMERIC:
-                if (ci.getSqlScale() < 0)
+                if (ci.getSqlScale() < 0) {
                     return PrimitiveType.Double;
+                }
                 if (ci.getSqlScale() == 0) {
-                    if (ci.getSqlPrecision() == 0)
+                    if (ci.getSqlPrecision() == 0) {
                         return PrimitiveType.Double;
-                    if (ci.getSqlPrecision() < 10)
+                    }
+                    if (ci.getSqlPrecision() < 10) {
                         return PrimitiveType.Int32;
-                    if (ci.getSqlPrecision() < 20)
+                    }
+                    if (ci.getSqlPrecision() < 20) {
                         return PrimitiveType.Int64;
+                    }
                     // TEMP: only DECIMAL(22,9) is supported for table columns.
                     // For now Int64 is the best substitute for DECIMAL(38,0).
                     return PrimitiveType.Int64;
@@ -153,7 +168,7 @@ public class YdbTableBuilder {
                     int prec = ci.getSqlPrecision();
                     if (prec > 35) prec = 35;
                     return "Decimal(" + String.valueOf(prec) + ",0)";
-                    */
+                     */
                 } else {
                     /*
                     int prec = ci.getSqlPrecision();
@@ -161,7 +176,7 @@ public class YdbTableBuilder {
                     int scale = ci.getSqlScale();
                     if (scale > prec) scale = prec;
                     return "Decimal(" + String.valueOf(prec) + "," + String.valueOf(scale) + ")";
-                    */
+                     */
                     // TEMP: only DECIMAL(22,9) is supported for table columns.
                     return DecimalType.getDefault();
                 }
@@ -192,6 +207,9 @@ public class YdbTableBuilder {
                         return PrimitiveType.Int32;
                     case STR:
                         return PrimitiveType.Text;
+                    default: {
+                        /* noop */
+                    }
                 }
                 return PrimitiveType.Date;
             case java.sql.Types.TIME:
@@ -199,17 +217,25 @@ public class YdbTableBuilder {
             case java.sql.Types.TIMESTAMP:
                 switch (tab.getOptions().getTimestampConv()) {
                     case DATE:
-                        if (ci.getSqlScale()==0)
+                        if (ci.getSqlScale() == 0) {
                             return PrimitiveType.Datetime;
+                        }
                         return PrimitiveType.Timestamp;
                     case INT:
                         return PrimitiveType.Uint64;
                     case STR:
                         return PrimitiveType.Text;
+                    default: {
+                        /* noop */
+                    }
                 }
-                if (ci.getSqlScale()==0)
+                if (ci.getSqlScale() == 0) {
                     return PrimitiveType.Datetime;
+                }
                 return PrimitiveType.Timestamp;
+            default: {
+                /* noop */
+            }
         }
         if (tab.getOptions().isSkipUnknownTypes()) {
             return null;
@@ -227,7 +253,11 @@ public class YdbTableBuilder {
         sb.append("  PRIMARY KEY (");
         boolean comma = false;
         for (ColumnInfo ci : tab.getMetadata().getKey()) {
-            if (comma) sb.append(", "); else comma = true;
+            if (comma) {
+                sb.append(", ");
+            } else {
+                comma = true;
+            }
             sb.append('`').append(ci.getDestinationName()).append('`');
         }
         sb.append(")");

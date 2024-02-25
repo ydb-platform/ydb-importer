@@ -1,14 +1,13 @@
 package tech.ydb.importer.config;
 
 import org.jdom2.Element;
-import static tech.ydb.importer.config.JdomHelper.*;
 
 /**
  *
  * @author zinal
  */
-public class TargetConfig {
-    
+public class TargetConfig extends tech.ydb.importer.config.JdomHelper {
+
     private TargetType type;
     private YdbAuthMode authMode;
     private String staticLogin;
@@ -30,7 +29,7 @@ public class TargetConfig {
         this.maxBatchRows = 100;
         this.maxBlobRows = 100;
     }
-    
+
     public TargetConfig(Element c) {
         this.type = TargetType.YDB;
         this.authMode = YdbAuthMode.NONE;
@@ -38,7 +37,7 @@ public class TargetConfig {
         this.loadData = false;
         this.maxBatchRows = 100;
         this.maxBlobRows = 100;
-        if (c!=null) {
+        if (c != null) {
             this.type = TargetType.valueOf(
                     getAttr(c, "type", "ydb").toUpperCase());
             this.authMode = YdbAuthMode.valueOf(
@@ -55,11 +54,13 @@ public class TargetConfig {
             if (elx != null) {
                 this.connectionString = getText(elx);
                 Element elRepl = getOneChild(c, "replace-existing");
-                if (elRepl!=null)
+                if (elRepl != null) {
                     this.replaceExisting = parseBoolean(elRepl, null, getText(elRepl));
+                }
                 Element elData = getOneChild(c, "load-data");
-                if (elData!=null)
+                if (elData != null) {
                     this.loadData = parseBoolean(elData, null, getText(elData));
+                }
             }
             elx = getOneChild(c, "tls-certificate-file");
             if (elx != null) {
@@ -72,14 +73,16 @@ public class TargetConfig {
             elx = getOneChild(c, "max-batch-rows");
             if (elx != null) {
                 this.maxBatchRows = getInt(elx);
-                if (this.maxBatchRows < 0 || this.maxBatchRows > 1000000)
+                if (this.maxBatchRows < 0 || this.maxBatchRows > 1000000) {
                     throw raiseIllegal(elx, null, String.valueOf(this.maxBatchRows));
+                }
             }
             elx = getOneChild(c, "max-blob-rows");
             if (elx != null) {
                 this.maxBlobRows = getInt(elx);
-                if (this.maxBlobRows < 0 || this.maxBlobRows > 100000)
+                if (this.maxBlobRows < 0 || this.maxBlobRows > 100000) {
                     throw raiseIllegal(elx, null, String.valueOf(this.maxBlobRows));
+                }
             }
         }
     }

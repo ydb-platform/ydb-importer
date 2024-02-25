@@ -1,22 +1,29 @@
-package tech.ydb.importer;
+package tech.ydb.importer.target;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
-import java.util.Base64;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import tech.ydb.table.values.*;
-import java.io.InputStream;
+
+import tech.ydb.importer.TableDecision;
+import tech.ydb.importer.YdbImporter;
 import tech.ydb.importer.source.ColumnInfo;
-import tech.ydb.importer.target.*;
+import tech.ydb.table.values.ListType;
+import tech.ydb.table.values.PrimitiveValue;
+import tech.ydb.table.values.StructType;
+import tech.ydb.table.values.StructValue;
+import tech.ydb.table.values.Value;
+import tech.ydb.table.values.VoidValue;
 
 /**
  *
@@ -24,8 +31,7 @@ import tech.ydb.importer.target.*;
  */
 public class LoadDataTask extends ValueConverter implements Callable<LoadDataTask.Out> {
 
-    private final static org.slf4j.Logger LOG = org.slf4j.LoggerFactory
-            .getLogger(LoadDataTask.class);
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(LoadDataTask.class);
 
     private final YdbImporter owner;
     private final YdbUpsertOp ydbOp;
@@ -57,7 +63,7 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
 
     @Override
     public Out call() throws Exception {
-        if (! tab.isValid()) {
+        if (!tab.isValid()) {
             LOG.warn("Skipping incomplete source table {}.{}", tab.getSchema(), tab.getTable());
             return new Out(tab, false, 0L);
         }
@@ -70,10 +76,10 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
                 PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql());
                 ResultSet rs = ps.executeQuery()) {
             copyData(rs);
-            LOG.info("Copied {} rows from source table {}.{}", 
+            LOG.info("Copied {} rows from source table {}.{}",
                     counter.getValue(), tab.getSchema(), tab.getTable());
             return new Out(tab, true, counter.getValue());
-        } catch(Throwable e) {
+        } catch (Throwable e) {
             LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
             return new Out(tab, false, counter.getValue());
         }
@@ -81,8 +87,9 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
 
     /**
      * Reads the source ResultSet rows and upserts the data to YDB tables.
+     *
      * @param rs Input result set
-     * @throws Exception 
+     * @throws Exception
      */
     private void copyData(ResultSet rs) throws Exception {
         final StructType paramType = tab.getTarget().getFields();
@@ -92,7 +99,7 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
 
         final List<Value<?>> batch = new ArrayList<>(maxBatchRows);
         while (rs.next()) {
-            batch.add( convert(paramType, rs, rsmd) );
+            batch.add(convert(paramType, rs, rsmd));
             if (batch.size() >= maxBatchRows) {
                 ydbOp.start(mainTablePath, paramListType.newValue(batch), counter);
                 batch.clear();
@@ -100,7 +107,7 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
         }
 
         flushBlobSaver();
-        if (! batch.isEmpty()) {
+        if (!batch.isEmpty()) {
             ydbOp.start(mainTablePath, paramListType.newValue(batch), counter);
             batch.clear();
         }
@@ -117,17 +124,18 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
         }
         for (int ixTarget = 0; ixTarget < paramListType.getMembersCount(); ixTarget++) {
             String name = paramListType.getMemberName(ixTarget);
-            if (TargetTable.SYNTH_KEY_FIELD.equals(name))
+            if (TargetTable.SYNTH_KEY_FIELD.equals(name)) {
                 continue;
+            }
             ColumnInfo ci = tab.getMetadata().findColumn(name);
-            if (ci==null) {
-                LOG.warn("Unexpected column {} in the source table {}.{} - SKIPPED", name, 
+            if (ci == null) {
+                LOG.warn("Unexpected column {} in the source table {}.{} - SKIPPED", name,
                         tab.getSchema(), tab.getTable());
                 continue;
             }
             Integer ixSource = sourceColumns.get(name);
             if (ixSource == null) {
-                LOG.warn("Missing column {} in the source table {}.{} - SKIPPED", name, 
+                LOG.warn("Missing column {} in the source table {}.{} - SKIPPED", name,
                         tab.getSchema(), tab.getTable());
                 continue;
             }
@@ -137,7 +145,7 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
             if (ColumnInfo.isBlob(ci.getSqlType())) {
                 // We need the full path of the BLOB storage table.
                 TargetTable tt = tab.getBlobTargets().get(name);
-                if (tt==null) {
+                if (tt == null) {
                     LOG.warn("Missing aux target table for BLOB column {} "
                             + "of source {}.{}", name, tab.getSchema(), tab.getTable());
                 } else {
@@ -156,21 +164,22 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
 
     /**
      * Converts the current row from the source ResultSet to the StructValue representation.
+     *
      * @param mainType StructValue type definition
      * @param rs Input result set
      * @return StructValue with the converted copies of fields
-     * @throws Exception 
+     * @throws Exception
      */
     private StructValue convert(StructType mainType, ResultSet rs, ResultSetMetaData rsmd)
             throws Exception {
-        final Value<?> members[] = new Value<?>[mainType.getMembersCount()];
+        final Value<?>[] members = new Value<?>[mainType.getMembersCount()];
         Arrays.fill(members, VoidValue.of());
         for (ConvInfo ci : mainIndex) {
             try {
-                members[ci.targetIndex] = convertValue(rs, ci);
-            } catch(Exception ex) {
-                throw new Exception("Failed conversion for column " 
-                        + mainType.getMemberName(ci.targetIndex), ex);
+                members[ci.getTargetIndex()] = convertValue(rs, ci);
+            } catch (Exception ex) {
+                throw new Exception("Failed conversion for column "
+                        + mainType.getMemberName(ci.getTargetIndex()), ex);
             }
         }
         if (tab.getTarget().hasSynthKey()) {
@@ -178,47 +187,52 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
         }
         return mainType.newValueUnsafe(members);
     }
-    
+
     public BlobSaver makeBlobSaver() {
-        if (blobSaver==null) {
+        if (blobSaver == null) {
             blobSaver = new BlobSaver(owner.getConfig().getTarget().getMaxBlobRows(), progress);
         }
         return blobSaver;
     }
 
     public void flushBlobSaver() {
-        if (blobSaver!=null)
+        if (blobSaver != null) {
             blobSaver.flush(ydbOp);
+        }
     }
 
     @Override
     public PrimitiveValue convertBlob(ResultSet rs, ConvInfo ci) throws Exception {
         try (InputStream is = openStream(rs, ci)) {
-            long id = makeBlobSaver().saveBlob(ydbOp, is, ci.blobPath);
+            long id = makeBlobSaver().saveBlob(ydbOp, is, ci.getBlobPath());
             return PrimitiveValue.newInt64(id);
         }
     }
 
     private InputStream openStream(ResultSet rs, ConvInfo ci) throws Exception {
-        if (ConvMode.BLOB_STREAM == ci.mode)
-            return rs.getBinaryStream(ci.sourceIndex);
-        return rs.getBlob(ci.sourceIndex).getBinaryStream();
+        if (ConvMode.BLOB_STREAM == ci.getMode()) {
+            return rs.getBinaryStream(ci.getSourceIndex());
+        }
+        return rs.getBlob(ci.getSourceIndex()).getBinaryStream();
     }
 
     private MessageDigest getSynthDigest() throws Exception {
-        if (synthDigest == null)
+        if (synthDigest == null) {
             synthDigest = MessageDigest.getInstance("SHA-256");
+        }
         return synthDigest;
     }
-    
+
     private Base64.Encoder getBase64Encoder() {
-        if (base64Encoder == null)
+        if (base64Encoder == null) {
             base64Encoder = Base64.getUrlEncoder().withoutPadding();
+        }
         return base64Encoder;
     }
 
     /**
      * Calculates the synthetic key as a hash over the non-BLOB column values
+     *
      * @param rs Input result set positioned to the current row
      * @param rsmd Input result set metadata
      * @return Base64-encoded hash value as a 'String' YDB data type
@@ -226,11 +240,12 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
      */
     private PrimitiveValue calcSynthKey(ResultSet rs, ResultSetMetaData rsmd) throws Exception {
         final StringBuilder sb = new StringBuilder();
-        for (int i=1; i<=rsmd.getColumnCount(); ++i) {
-            if (! ColumnInfo.isBlob(rsmd.getColumnType(i))) {
+        for (int i = 1; i <= rsmd.getColumnCount(); ++i) {
+            if (!ColumnInfo.isBlob(rsmd.getColumnType(i))) {
                 String v = rs.getString(i);
-                if (v!=null)
+                if (v != null) {
                     sb.append(v);
+                }
                 sb.append(Character.toChars(2));
             }
         }
@@ -244,15 +259,27 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
      */
     public static final class Out {
 
-        public final TableDecision tab;
-        public final boolean success;
-        public final long rowCount;
+        private final TableDecision tab;
+        private final boolean success;
+        private final long rowCount;
 
         public Out(TableDecision tab, boolean success, long rowCount) {
             this.tab = tab;
             this.success = success;
             this.rowCount = rowCount;
         }
+
+        public TableDecision getTab() {
+            return tab;
+        }
+
+        public boolean isSuccess() {
+            return success;
+        }
+
+        public long getRowCount() {
+            return rowCount;
+        }
     }
-    
+
 }

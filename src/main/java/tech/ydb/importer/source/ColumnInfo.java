@@ -2,10 +2,11 @@ package tech.ydb.importer.source;
 
 /**
  * Column information, as part of source table metadata.
+ *
  * @author mzinal
  */
 public class ColumnInfo {
-    
+
     private final String name;
     private final String destinationName;
     private int position;
@@ -15,7 +16,7 @@ public class ColumnInfo {
     private boolean blobAsObject;
 
     public ColumnInfo(String name) {
-        this.name = (name==null) ? "" : name;
+        this.name = (name == null) ? "" : name;
         this.destinationName = safeYdbColumnName(name);
         this.position = -1;
         this.sqlType = java.sql.Types.VARCHAR;
@@ -71,23 +72,24 @@ public class ColumnInfo {
     public void setBlobAsObject(boolean blobAsObject) {
         this.blobAsObject = blobAsObject;
     }
-    
+
     public static boolean isBlob(int sqlType) {
         switch (sqlType) {
             case java.sql.Types.BLOB:
             case java.sql.Types.LONGVARBINARY:
             case java.sql.Types.SQLXML:
                 return true;
+            default:
+                return false;
         }
-        return false;
     }
-    
+
     public boolean isBlob() {
         return isBlob(sqlType);
     }
 
     public static String safeYdbColumnName(String name) {
-        if (name==null || name.length()==0) {
+        if (name == null || name.length() == 0) {
             return "";
         }
         name = name.replace(' ', '_');
@@ -96,5 +98,5 @@ public class ColumnInfo {
         name = name.replace('`', '_');
         return name;
     }
-    
+
 }

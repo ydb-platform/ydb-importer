@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * BLOB value handling counter implementation.
+ *
  * @author zinal
  */
 public class BlobCounter implements AnyCounter {
@@ -29,8 +30,9 @@ public class BlobCounter implements AnyCounter {
     @Override
     public long addValue(int v) {
         v = (v > 0) ? v : 0;
-        if (owner != null)
+        if (owner != null) {
             owner.addBlob(v);
+        }
         return value.addAndGet(v);
     }
 
