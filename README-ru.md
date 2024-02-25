@@ -2,9 +2,24 @@
 
 Эта утилита реализует импорт структуры таблиц и содержащихся в таблицах записей из источников JDBC в базы данных YDB.
 
-На сегодня тестировались источники данных Oracle Database, PostgreSQL и MySQL.
+На текущий момент протестирована работа утилиты со следующими видами источников данных:
 
-## 1. Общая логика работы утилиты импорта
+* [PostgreSQL](https://www.postgresql.org/),
+* [MySQL](https://www.mysql.com/),
+* [Oracle Database](https://www.oracle.com/database/),
+* [Microsoft SQL Server](https://www.microsoft.com/sql-server/),
+* [IBM Db2](https://www.ibm.com/products/db2),
+* [IBM Informix](https://www.ibm.com/products/informix).
+
+Непротестированные источники данных JDBC с определенной вероятностью также могут оказаться поддержаны утилитой, поскольку в ней используются стандартные API для доступа к данным и метаданным.
+
+Некоторые типы данных и виды табличных структур не поддерживаются, включая:
+
+* вложенные таблицы Oracle Database,
+* пространственные типы данных Microsoft SQL Server,
+* все объектные типы данных Informix.
+
+## 1. Порядок использования утилиты импорта
 
 При запуске утилита считывает настройки из файла в формате XML, указанного в качестве аргумента командной строки.
 В настройках указывается:
@@ -18,9 +33,9 @@
 
 Импорт данных осуществляется в следующем порядке:
 1. Утилита подключается к БД-источнику, и определяет состав таблиц и SQL-запросов для импорта.
-1. Производится формирование структуры целевых таблиц YDB, которые опционально могут быть сохранены в виде YQL-скрипта.
-1. Над БД-получателем производится проверка наличия там целевых таблиц, с созданием недостающих таблиц и с опциональным их пересозданием уже существующих таблиц.
-1. Осуществляется импорт данных путём чтения из БД-источника с помощью SQL-запроса и вставки в БД-получатель с помощью механизма Bulk Upsert.
+2. Производится формирование структуры целевых таблиц YDB, которые опционально могут быть сохранены в виде YQL-скрипта.
+3. Над БД-получателем производится проверка наличия там целевых таблиц, с созданием недостающих таблиц и с опциональным их пересозданием уже существующих таблиц.
+4. Осуществляется импорт данных путём чтения из БД-источника с помощью SQL-запроса и вставки в БД-получатель YDB с помощью механизма Bulk Upsert.
 
 Извлечение метаданных из БД-источника, создание таблиц в БД-получателе и импорт данных производится в параллельном режиме, с использованием нескольких конкурентных потоков и одновременно открытых соединений к БД-источнику и БД-получателю. Максимальная степень параллелизма регулируется настройкой, при этом фактическое количество конкурентных операций не может превышать количества импортируемых таблиц.
 
@@ -71,6 +86,7 @@ CREATE TABLE `blob_table`(
 
 Для PostgreSQL работа с данными BLOB в варианте `EXTENSION lo` может требовать явного предоставления специальных полномочий для учётной записи, используемой для подключения к БД-источнику.
 Альтернативный вариант - установка режима совместимости на уровне базы данных PostgreSQL:
+
 ```sql
 ALTER DATABASE dbname SET lo_compat_privileges TO on;
 ```
@@ -79,8 +95,11 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
 
 Примеры файлов настроек с комментариями:
 * [для PostgreSQL](scripts/sample-postgres.xml);
-* [для Oracle](scripts/sample-oracle.xml);
-* [для MySQL](scripts/sample-mysql.xml).
+* [для MySQL](scripts/sample-mysql.xml);
+* [для Oracle Database](scripts/sample-oracle.xml);
+* [для Microsoft SQL Server](scripts/sample-mssql.xml);
+* [для IBM Db2](scripts/sample-db2.xml);
+* [для IBM Informix](scripts/sample-informix.xml).
 
 Описание формата файла настроек:
 
@@ -97,19 +116,25 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
     <!-- Параметры подключения к БД-источнику.
          type - обязательный атрибут, влияющий на логику взаимодействия с источником
       -->
-    <source type="oracle|postgresql|mysql">
-        <!-- 
-              oracle.jdbc.driver.OracleDriver
+    <source type="generic|postgresql|mysql|oracle|mssql|db2|informix">
+        <!-- Имя основного класса драйвера JDBC. Типичные значения:
               org.postgresql.Driver
               com.mysql.cj.jdbc.Driver
               org.mariadb.jdbc.Driver
+              oracle.jdbc.driver.OracleDriver
+              com.microsoft.sqlserver.jdbc.SQLServerDriver
+              com.ibm.db2.jcc.DB2Driver
+              com.informix.jdbc.IfxDriver
         -->
         <jdbc-class>driver-class-name</jdbc-class>
-        <!--
-              jdbc:oracle:thin:@//hostname:1521/serviceName
+        <!-- URL JDBC для подключения к источнику. Примеры значений:
               jdbc:postgresql://hostname:5432/dbname
               jdbc:mysql://hostname:3306/dbname
               jdbc:mariadb://hostname:3306/dbname
+              jdbc:oracle:thin:@//hostname:1521/serviceName
+              jdbc:sqlserver://localhost;encrypt=true;trustServerCertificate=true;database=AdventureWorks2022;
+              jdbc:db2://localhost:50000/SAMPLE
+              jdbc:informix-sqli://localhost:9088/stores_demo:INFORMIXSERVER=informix
         -->
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
@@ -121,18 +146,26 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
              Может использоваться в том числе при отсутствии указания
              connection-string для генерации схемы без фактического создания
              таблиц.  -->
-        <script-file>sample-oracle.yql.tmp</script-file>
-        <!-- Строка соединения: endpoint + база данных -->
-        <connection-string>grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g</connection-string>
+        <script-file>sample-database.yql.tmp</script-file>
+        <!-- Строка подключения: protocol + endpoint + database. Примеры значений:
+            grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g
+            grpcs://localhost:2135?database=/local
+            grpc://localhost:2136?database=/Root/testdb
+         -->
+        <connection-string>ydb-connection-string</connection-string>
         <!-- Режим аутентификации: 
-            ENV      использование переменных окружения для настройки аутентификации, 
-            NONE     анонимное подключение к БД - не для продуктивных систем, 
-            STATIC   аутентификация по логину и паролю (YDB open source)  -->
+            ENV      использование переменных окружения для настройки аутентификации
+            NONE     анонимное подключение к БД - не для продуктивных систем
+            STATIC   аутентификация по логину и паролю
+            SAKEY    Аутентификация по ключу сервисного аккаунта (управляемый сервис YDB)
+            METADATA Аутентификация по метаданным виртуальной машины облака (управляемый сервис YDB)
+        -->
         <auth-mode>ENV</auth-mode>
         <!-- 
             В режиме ENV данные аутентификации необходимо установить в переменных окружения,
             как описано в документации: https://ydb.tech/ru/docs/reference/ydb-sdk/auth#env
-            Если используется YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS, то файл ключа надо
+            Если аутентификация по ключу сервисного аккаунта (явно либо через указание переменной
+            окружения YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS), то файл ключа надо
             генерировать как написано здесь:
             https://cloud.yandex.ru/docs/iam/operations/authorized-key/create
         -->
@@ -170,6 +203,11 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
              Вариант STR хранит дату как строку в формате ГГГГ-ММ-ДД.
          -->
         <conv-date>INT</conv-date>
+        <conv-timestamp>STR</conv-timestamp>
+        <!-- Если указано значение true, колонки таблиц неподдерживаемых типов пропускаются
+             с выводов в лог соответствующего предупреждения. В противном случае генерируется
+             ошибка импорта, и соответствующая таблица пропускается целиком. -->
+        <skip-unknown-types>true</skip-unknown-types>
     </table-options>
     <!-- Фильтр для отбора копируемых таблиц с источника -->
     <table-map options="default">
@@ -196,26 +234,12 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
 
 ## 6. Сборка из исходных кодов
 
-Требуется Java 11 или выше (техничеки может заработать и на Java 8, но в таком виде не тестировалось).
-
-Требуется Maven (сборка проверялась на версии 3.8.6).
+Требуется Java 8 или выше. Требуется Maven (сборка проверялась на версии 3.8.6).
 
 Для формирования пакета с утилитой необходимо выполнить команду в каталоге с исходным кодом:
+
 ```bash
 mvn package
 ```
 
 В результате в подкаталоге `target` будет создан файл `ydb-importer-X.Y-SNAPSHOT-bin.zip`, где `X.Y` - номер версии утилиты.
-
-## 7. Расширение состава поддерживаемых источников
-
-Для добавления поддержки нового типа источника данных необходимо реализовать и зарегистрировать новый потомок базового класса `AnyTableLister`. В качестве образца можно использовать классы `PostgresTableLister` и `OracleTableLister`.
-
-Переопределяя абстрактные методы класса `AnyTableLister`, необходимо реализовать логику решения следующих задач:
-* получение списка имён схем источника;
-* получение списка имён таблиц для конкретной схемы;
-* получение описаний колонок для конкретной таблицы, включая позиции, имена и типы данных;
-* получение списка колонок первичного ключа для указанной таблицы;
-* (опционально) определение примерного количества строк в таблице.
-
-При извлечении списка таблиц важно исключить лишние элементы, такие как представления и системные таблицы, для исключения бессмысленных операций по их автоматическому импорту в виде стандартных таблиц в YDB.

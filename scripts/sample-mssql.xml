@@ -39,7 +39,6 @@
         <blob-name-format>mssql1/${schema}/${table}_${field}</blob-name-format>
         <!-- DATE, INT, STR -->
         <conv-date>INT</conv-date>
-        <!-- DATE, INT, STR -->
         <conv-timestamp>STR</conv-timestamp>
         <skip-unknown-types>true</skip-unknown-types>
     </table-options>

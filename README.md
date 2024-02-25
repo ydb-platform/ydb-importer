@@ -2,11 +2,26 @@
 
 This tool imports table structures and data records from a JDBC data source to YDB.
 
-Right now the tested data sources include Oracle Database, PostgreSQL and MySQL.
+Right now the tested data sources include the following:
 
-## 1. Program logic
+* [PostgreSQL](https://www.postgresql.org/),
+* [MySQL](https://www.mysql.com/),
+* [Oracle Database](https://www.oracle.com/database/),
+* [Microsoft SQL Server](https://www.microsoft.com/sql-server/),
+* [IBM Db2](https://www.ibm.com/products/db2),
+* [IBM Informix](https://www.ibm.com/products/informix).
 
-The tool reads the XML configuration file on startup. The file name needs to be specified as a command line agrument.
+Other data sources will probably work, too, as the tool uses the generic JDBC APIs to retrieve data and metadata.
+
+Some data types and table structures are known to be unsupported:
+
+* the embedded tables for Oracle Database,
+* spatial data type for Microsoft SQL Server,
+* object data types for Informix.
+
+## 1. Operating instructions
+
+The tool reads the XML configuration file on startup. The file name needs to be specified as a command line agrument when running the tool.
 
 Settings in the configuration file define:
 * source database type and connection preferences;
@@ -20,9 +35,9 @@ Data import is performed as the following sequence of actions:
 1. The tool connects to the source database, and determines the list of tables and custom SQL queries to be imported.
 2. The structure of target YDB tables is generated, and optionally saved as YQL script.
 3. Target database is checked for existence of the target tables. Missing tables are created, already existing ones may be left as is, or re-created.
-4. Row data is imported by reading from the source database using the SELECT statement, and writing into the target database using the Bulk Upsert mechanizm.
+4. Row data is imported by reading from the source database using the SELECT statements, and written into the target YDB database using the Bulk Upsert mechanizm.
 
-All operations, including metadata extration from the source database, table creation (and re-creation) in the target database, and row data import, are performed in parallel mode (thread-per-table), using multiple concurrent threads and multiple open connections to both source and target databases. The maximum degree of parallelizm is configurable, although the actual number of concurrent operations cannot exceed the number of tables being imported.
+All operations, including metadata extraction from the source database, table creation (and re-creation) in the target database, and row data import, are performed in parallel mode (thread-per-table), using multiple concurrent threads and multiple open connections to both source and target databases. The maximum degree of parallelizm is configurable, although the actual number of concurrent operations cannot exceed the number of tables being imported.
 
 ## 2. Running the tool
 
@@ -75,8 +90,11 @@ This identifier is also stored in the "main" target table in the field having th
 
 Sample configuration files:
 * [for PostgreSQL](scripts/sample-postgres.xml);
-* [for Oracle](scripts/sample-oracle.xml);
-* [for MySQL](scripts/sample-mysql.xml).
+* [for MySQL](scripts/sample-mysql.xml);
+* [for Oracle Database](scripts/sample-oracle.xml);
+* [for Microsoft SQL Server](scripts/sample-mssql.xml);
+* [for IBM Db2](scripts/sample-db2.xml);
+* [for IBM Informix](scripts/sample-informix.xml).
 
 Below is the definition of the configuration file structure:
 
@@ -92,21 +110,25 @@ Below is the definition of the configuration file structure:
     <!-- Source database connection parameters.
          type - the required attribute defining the type of the data source
       -->
-    <source type="oracle|postgresql|mysql">
-        <!-- 
-            JDBC driver class name to be used. Typical values:
-              oracle.jdbc.driver.OracleDriver
+    <source type="generic|postgresql|mysql|oracle|mssql|db2|informix">
+        <!-- JDBC driver class name to be used. Typical values:
               org.postgresql.Driver
               com.mysql.cj.jdbc.Driver
               org.mariadb.jdbc.Driver
+              oracle.jdbc.driver.OracleDriver
+              com.microsoft.sqlserver.jdbc.SQLServerDriver
+              com.ibm.db2.jcc.DB2Driver
+              com.informix.jdbc.IfxDriver
         -->
         <jdbc-class>driver-class-name</jdbc-class>
-        <!--
-            JDBC driver URL. Value templates:
-              jdbc:oracle:thin:@//hostname:1521/serviceName
+        <!-- JDBC driver URL. Value templates:
               jdbc:postgresql://hostname:5432/dbname
               jdbc:mysql://hostname:3306/dbname
               jdbc:mariadb://hostname:3306/dbname
+              jdbc:oracle:thin:@//hostname:1521/serviceName
+              jdbc:sqlserver://localhost;encrypt=true;trustServerCertificate=true;database=AdventureWorks2022;
+              jdbc:db2://localhost:50000/SAMPLE
+              jdbc:informix-sqli://localhost:9088/stores_demo:INFORMIXSERVER=informix
         -->
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
@@ -119,13 +141,13 @@ Below is the definition of the configuration file structure:
              It can also be used without specifying the connection string,
              if the actual target schema creation is not required.
         -->
-        <script-file>sample-oracle.yql.tmp</script-file>
+        <script-file>sample-database.yql.tmp</script-file>
         <!-- Connection string: protocol + endpoint + database. Typical values:
             grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g
             grpcs://localhost:2135?database=/local
             grpc://localhost:2136?database=/Root/testdb
          -->
-        <connection-string>grpcs://host:2135?database=/dbpath</connection-string>
+        <connection-string>ydb-connection-string</connection-string>
         <!-- Authentication mode:
           ENV      Configure authentication through the environment
           NONE     Anonymous access, or static credentials in the connection string
@@ -175,13 +197,19 @@ Below is the definition of the configuration file structure:
              The values ${schema}, ${table} and ${field}
              are used for source schema, table and BLOB field names. -->
         <blob-name-format>oraimp1/${schema}/${table}_${field}</blob-name-format>
-        <!-- Date data type values conversion mode.
+        <!-- Date and timestamp data type values conversion mode.
              Possible values: DATE (use YDB Date datatype, default), INT, STR.
              DATE does not support input values before January, 1, 1970.
-             INT saves date as 32-bit integer YYYYMMDD.
-             STR saves date as character string Utf8 in format YYYY-MM-DD.
+             INT saves date as 32-bit integer YYYYMMDD for dates,
+                 and as a 64-bit milliseconds since epoch for timestamps.
+             STR saves dates as character strings (Utf8) in format "YYYY-MM-DD",
+                 and in "YYYY-MM-DD hh:mm:ss.xxx" for timestamps.
          -->
         <conv-date>INT</conv-date>
+        <conv-timestamp>STR</conv-timestamp>
+        <!-- If true, columns with unsupported types are skipped with warning,
+             otherwise import error is generated, and the whole table is skipped. -->
+        <skip-unknown-types>true</skip-unknown-types>
     </table-options>
     <!-- Table map filters the source tables and defines the conversion modes for them. -->
     <table-map options="default">
@@ -210,9 +238,7 @@ Below is the definition of the configuration file structure:
 
 ## 6. Building the tool from the source code
 
-Java 11 or higher is required to build and run the tool (technically Java 8 may work, but that has not been tested).
-
-Maven is required to build the tool (tested on version 3.8.6).
+Java 8 or higher is required to build and run the tool. Maven is required to build the tool (tested on version 3.8.6).
 
 To build the tool run the following command in the directory with the source code:
 ```bash
@@ -220,16 +246,3 @@ mvn package
 ```
 
 After build is complete, the `target` subdirectory will contain the file `ydb-importer-X.Y-SNAPSHOT-bin.zip`, where `X.Y` is the version number.
-
-## 7. Adding support for a new data source type
-
-To support the new data source type in this tool, the new implementation class derived from the `AnyTableLister` abstract class needs to be created. `PostgresTableLister` and `OracleTableLister` classes can be used as a reference implementation for that.
-
-The implementation of abstract methods defined in `AnyTableLister` should solve the following tasks:
-* retrieval of schema names list from the data source;
-* retrieval of table names list for the specified schema;
-* retrieval of column definitions for the particular table, including the position, names and datatypes;
-* obtaining the list of primary key columns for the specified table;
-* (optional) retrieval of an approximate number of rows in the specified table.
-
-It is important to exclude extra elements, like views or system tables, from the list of tables retrieved. That is required to avoid the unneeded creation (and data import operations) of those objects as standard YDB tables.
