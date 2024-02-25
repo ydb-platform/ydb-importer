@@ -2,11 +2,15 @@
 <!-- IBM Informix to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
-        <pool size="8"/>
+        <pool size="1"/>
     </workers>
     <source type="informix">
         <jdbc-class>com.informix.jdbc.IfxDriver</jdbc-class>
         <jdbc-url>jdbc:informix-sqli://localhost:9088/stores_demo:INFORMIXSERVER=informix</jdbc-url>
+        <!-- 
+             Typical demo databases: sales_demo, stores_demo, superstores_demo.
+             To enable transactional logging: ontape -s -B sales_demo
+        -->
         <username>informix</username>
         <password>in4mix</password>
     </source>

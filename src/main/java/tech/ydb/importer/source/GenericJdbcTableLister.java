@@ -15,8 +15,11 @@ import tech.ydb.importer.config.TableIdentity;
  */
 public class GenericJdbcTableLister extends AnyTableLister {
 
-    public GenericJdbcTableLister(TableMapList tableMaps) {
+    private final String quotingSymbol;
+
+    public GenericJdbcTableLister(TableMapList tableMaps, Connection con) throws SQLException {
         super(tableMaps);
+        this.quotingSymbol = con.getMetaData().getIdentifierQuoteString();
     }
 
     @Override
@@ -111,10 +114,13 @@ public class GenericJdbcTableLister extends AnyTableLister {
 
     @Override
     protected String safeId(String id) {
-        if (id.contains("\"")) {
-            throw new IllegalArgumentException("Double quotes within the identifier: " + id);
+        if (quotingSymbol.length()==0 || quotingSymbol.equals(" ")) {
+            return id;
         }
-        return "\"" + id + "\"";
+        if (id.contains(quotingSymbol)) {
+            throw new IllegalArgumentException("Quoting symbol within the identifier: " + id);
+        }
+        return quotingSymbol + id + quotingSymbol;
     }
 
 }

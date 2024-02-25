@@ -75,11 +75,12 @@ public class YdbImporter {
         }
         LOG.info("Connecting to the source database {}", 
                 config.getSource().getJdbcUrl());
-        tableLister = AnyTableLister.getInstance(tableMaps);
         sourceCP = new SourceCP(config.getSource(), config.getWorkers().getPoolSize());
         try {
             final List<TableDecision> tables = new ArrayList<>();
             try (Connection con = sourceCP.getConnection()) {
+                LOG.info("Initializing the table lister...");
+                tableLister = AnyTableLister.getInstance(tableMaps, con);
                 LOG.info("Retrieving table list...");
                 for (TableDecision nd : tableLister.selectTables(con)) {
                     tables.add(nd);

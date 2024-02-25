@@ -113,7 +113,7 @@ public abstract class AnyTableLister {
             sql = makeSelectSql(td, tm.getColumns());
             tm.setBasicSql(sql);
         }
-        sql = "SELECT q.* FROM (" + sql + ") q WHERE 0=1"; // retrieve zero rows
+        sql = "SELECT q.* FROM (" + sql + ") AS q WHERE 0=1"; // retrieve zero rows
         LOG.debug("Metadata retrieval SQL: {}", sql);
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             try (ResultSet rs = ps.executeQuery()) {
@@ -172,13 +172,15 @@ public abstract class AnyTableLister {
     /**
      * Build the instance of a customized table lister for a particular source database type
      * @param tableMaps
-     * @return 
+     * @param con
+     * @return Table lister instance
+     * @throws java.sql.SQLException
      */
-    public static AnyTableLister getInstance(TableMapList tableMaps) {
+    public static AnyTableLister getInstance(TableMapList tableMaps, Connection con) throws SQLException {
         final SourceType st = tableMaps.getConfig().getSource().getType();
         switch (st) {
             case GENERIC:
-                return new GenericJdbcTableLister(tableMaps);
+                return new GenericJdbcTableLister(tableMaps, con);
             case ORACLE:
                 return new OracleTableLister(tableMaps);
             case POSTGRESQL:
@@ -188,7 +190,7 @@ public abstract class AnyTableLister {
             case INFORMIX:
             case DB2:
             case MSSQL:
-                return new GenericJdbcTableLister(tableMaps);
+                return new GenericJdbcTableLister(tableMaps, con);
             default:
                 throw new RuntimeException("Unsupported source type: " + st);
         }
