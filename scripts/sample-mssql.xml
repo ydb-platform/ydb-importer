@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Microsoft SQL Server to YDB importer job configuration example -->
+<ydb-importer>
+    <workers>
+        <pool size="1"/>
+    </workers>
+    <source type="mssql">
+        <jdbc-class>com.microsoft.sqlserver.jdbc.SQLServerDriver</jdbc-class>
+        <jdbc-url>jdbc:sqlserver://localhost;encrypt=true;trustServerCertificate=true;database=AdventureWorks2022;</jdbc-url>
+        <username>sa</username>
+        <password>xeeFop6Tah0doh1+</password>
+    </source>
+    <target type="ydb">
+        <script-file>sample-mssql.yql.tmp</script-file>
+        <connection-string>grpc://localhost:2136?database=/Root/test</connection-string>
+        <!--
+        <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
+        -->
+        <!-- Custom TLS certificate file, if needed
+        <tls-certificate-file>ca.crt</tls-certificate-file>
+        -->
+        <!-- ENV, NONE, STATIC, METADATA, SAKEY -->
+        <auth-mode>NONE</auth-mode>
+        <!-- auth-mode: STATIC
+        <static-login>username</static-login>
+        <static-password>password</static-password>
+        -->
+        <!-- auth-mode: SAKEY
+        <sa-key-file>ydb-sa-keyfile.json</sa-key-file>
+        -->
+        <replace-existing>true</replace-existing>
+        <load-data>true</load-data>
+        <max-batch-rows>1000</max-batch-rows>
+        <max-blob-rows>200</max-blob-rows>
+    </target>
+    <table-options name="default">
+        <!--  ASIS, LOWER, UPPER -->
+        <case-mode>ASIS</case-mode>
+        <!-- Substitution values: ${schema}, ${table} -->
+        <table-name-format>mssql1/${schema}/${table}</table-name-format>
+        <!-- Substitution values: ${schema}, ${table}, ${field} -->
+        <blob-name-format>mssql1/${schema}/${table}_${field}</blob-name-format>
+        <!-- DATE, INT, STR -->
+        <conv-date>INT</conv-date>
+    </table-options>
+    <table-map options="default">
+        <include-schemas regexp="true">.*</include-schemas>
+        <!-- Possible extra tags: include-tables, exclude-tables, exclude-schemas -->
+    </table-map>
+</ydb-importer>
