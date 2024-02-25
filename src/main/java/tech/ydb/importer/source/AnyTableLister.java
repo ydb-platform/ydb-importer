@@ -110,7 +110,7 @@ public abstract class AnyTableLister {
             throws SQLException {
         String sql = tm.getBasicSql();
         if (isBlank(sql)) {
-            sql = makeSql(td, tm.getColumns());
+            sql = makeSelectSql(td, tm.getColumns());
             tm.setBasicSql(sql);
         }
         sql = "SELECT q.* FROM (" + sql + ") q WHERE 0=1"; // retrieve zero rows
@@ -134,7 +134,7 @@ public abstract class AnyTableLister {
         }
     }
 
-    private String makeSql(TableDecision td, List<ColumnInfo> columns) {
+    private String makeSelectSql(TableDecision td, List<ColumnInfo> columns) {
         if (td.getTableRef() != null && td.getTableRef().hasQueryText())
             return td.getTableRef().getQueryText();
         StringBuilder sql = new StringBuilder();

@@ -56,8 +56,8 @@ public class YdbTableBuilder {
                         ci.getName(), tab.getSchema(), tab.getTable(), ci.getSqlType());
                 continue;
             }
-            types.put(ci.getName(), type.makeOptional());
-            sb.append("  `").append(ci.getName()).append("` ");
+            types.put(ci.getDestinationName(), type.makeOptional());
+            sb.append("  `").append(ci.getDestinationName()).append("` ");
             sb.append(type.toString());
             sb.append(",").append(EOL);
         }
@@ -72,7 +72,7 @@ public class YdbTableBuilder {
 
     private TargetTable buildBlobTable(TargetTable main, ColumnInfo ci) {
         final StringBuilder sb = new StringBuilder();
-        final String fullName = makeBlobName(ci.getName());
+        final String fullName = makeBlobName(ci.getDestinationName());
         sb.append("CREATE TABLE `").append(fullName).append("` (").append(EOL);
         sb.append("  `id` Int64,").append(EOL);
         sb.append("  `pos` Int32,").append(EOL);
@@ -218,7 +218,7 @@ public class YdbTableBuilder {
         boolean comma = false;
         for (ColumnInfo ci : tab.getMetadata().getKey()) {
             if (comma) sb.append(", "); else comma = true;
-            sb.append('`').append(ci.getName()).append('`');
+            sb.append('`').append(ci.getDestinationName()).append('`');
         }
         sb.append(")");
     }

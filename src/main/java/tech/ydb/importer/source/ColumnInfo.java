@@ -7,6 +7,7 @@ package tech.ydb.importer.source;
 public class ColumnInfo {
     
     private final String name;
+    private final String destinationName;
     private int position;
     private int sqlType;
     private int sqlPrecision;
@@ -15,6 +16,7 @@ public class ColumnInfo {
 
     public ColumnInfo(String name) {
         this.name = (name==null) ? "" : name;
+        this.destinationName = safeYdbColumnName(name);
         this.position = -1;
         this.sqlType = java.sql.Types.VARCHAR;
         this.sqlPrecision = 0;
@@ -24,6 +26,10 @@ public class ColumnInfo {
 
     public String getName() {
         return name;
+    }
+
+    public String getDestinationName() {
+        return destinationName;
     }
 
     public int getPosition() {
@@ -78,6 +84,17 @@ public class ColumnInfo {
     
     public boolean isBlob() {
         return isBlob(sqlType);
+    }
+
+    public static String safeYdbColumnName(String name) {
+        if (name==null || name.length()==0) {
+            return "";
+        }
+        name = name.replace(' ', '_');
+        name = name.replace('.', '_');
+        name = name.replace('/', '_');
+        name = name.replace('`', '_');
+        return name;
     }
     
 }

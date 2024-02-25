@@ -42,13 +42,15 @@ public class TableMetadata {
     public List<ColumnInfo> getColumns() {
         return Collections.unmodifiableList(columns);
     }
-    
+
     public void addColumn(ColumnInfo ci) {
         if (lookup.containsKey(ci.getName()))
             throw new IllegalArgumentException("Duplicate column: " + ci.getName());
         columns.add(ci);
         ci.setPosition(columns.size());
         lookup.put(ci.getName(), ci);
+        // Nasty trick to allow lookups by both original and altered column names.
+        lookup.put(ci.getDestinationName(), ci);
     }
     
     public void addColumns(List<ColumnInfo> cis) {

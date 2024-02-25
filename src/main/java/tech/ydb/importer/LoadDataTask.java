@@ -111,7 +111,9 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
         mainIndex.clear();
         final Map<String, Integer> sourceColumns = new HashMap<>();
         for (int i = 1; i <= rsmd.getColumnCount(); ++i) {
-            sourceColumns.put(rsmd.getColumnName(i), i);
+            String columnName = rsmd.getColumnName(i);
+            columnName = ColumnInfo.safeYdbColumnName(columnName);
+            sourceColumns.put(columnName, i);
         }
         for (int ixTarget = 0; ixTarget < paramListType.getMembersCount(); ixTarget++) {
             String name = paramListType.getMemberName(ixTarget);

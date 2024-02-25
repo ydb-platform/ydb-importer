@@ -191,8 +191,9 @@ public class YdbImporter {
             CreateTableTask.Out r = rf.get();
             if (r.success) {
                 ++successCount;
-                if (r.existingTable != null)
+                if (r.existingTable != null) {
                     adjustTargetStructure(r.table, r.existingTable);
+                }
             } else {
                 r.table.getOriginal().setFailure(true);
             }
