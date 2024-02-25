@@ -2,7 +2,7 @@
 <!-- Microsoft SQL Server to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
-        <pool size="8"/>
+        <pool size="4"/>
     </workers>
     <source type="mssql">
         <jdbc-class>com.microsoft.sqlserver.jdbc.SQLServerDriver</jdbc-class>

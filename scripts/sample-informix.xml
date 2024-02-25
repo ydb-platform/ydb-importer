@@ -2,7 +2,7 @@
 <!-- IBM Informix to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
-        <pool size="1"/>
+        <pool size="4"/>
     </workers>
     <source type="informix">
         <jdbc-class>com.informix.jdbc.IfxDriver</jdbc-class>

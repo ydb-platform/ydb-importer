@@ -2,7 +2,7 @@
 <!-- IBM Db2 to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
-        <pool size="8"/>
+        <pool size="4"/>
     </workers>
     <source type="db2">
         <jdbc-class>com.ibm.db2.jcc.DB2Driver</jdbc-class>
