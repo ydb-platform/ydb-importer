@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Microsoft SQL Server to YDB importer job configuration example -->
+<!-- IBM Db2 to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
         <pool size="8"/>
     </workers>
-    <source type="mssql">
-        <jdbc-class>com.microsoft.sqlserver.jdbc.SQLServerDriver</jdbc-class>
-        <jdbc-url>jdbc:sqlserver://localhost;encrypt=true;trustServerCertificate=true;database=AdventureWorks2022;</jdbc-url>
-        <username>sa</username>
-        <password>xeeFop6Tah0doh1+</password>
+    <source type="db2">
+        <jdbc-class>com.ibm.db2.jcc.DB2Driver</jdbc-class>
+        <jdbc-url>jdbc:db2://localhost:50000/SAMPLE</jdbc-url>
+        <username>db2inst1</username>
+        <password>password</password>
     </source>
     <target type="ydb">
-        <script-file>sample-mssql.yql.tmp</script-file>
+        <script-file>sample-db2.yql.tmp</script-file>
         <connection-string>grpc://localhost:2136?database=/Root/test</connection-string>
         <!-- Custom TLS certificate file, if needed
         <tls-certificate-file>ca.crt</tls-certificate-file>
@@ -34,9 +34,9 @@
         <!--  ASIS, LOWER, UPPER -->
         <case-mode>ASIS</case-mode>
         <!-- Substitution values: ${schema}, ${table} -->
-        <table-name-format>mssql1/${schema}/${table}</table-name-format>
+        <table-name-format>db2_1/${schema}/${table}</table-name-format>
         <!-- Substitution values: ${schema}, ${table}, ${field} -->
-        <blob-name-format>mssql1/${schema}/${table}_${field}</blob-name-format>
+        <blob-name-format>db2_1/${schema}/${table}_${field}</blob-name-format>
         <!-- DATE, INT, STR -->
         <conv-date>INT</conv-date>
         <!-- DATE, INT, STR -->
@@ -45,7 +45,6 @@
     </table-options>
     <table-map options="default">
         <include-schemas regexp="true">.*</include-schemas>
-        <exclude-schemas>sys</exclude-schemas>
         <exclude-schemas>INFORMATION_SCHEMA</exclude-schemas>
         <!-- Possible extra tags: include-tables, exclude-tables, exclude-schemas -->
     </table-map>
