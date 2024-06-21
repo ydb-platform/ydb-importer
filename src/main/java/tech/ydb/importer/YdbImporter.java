@@ -41,7 +41,7 @@ public class YdbImporter {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(YdbImporter.class);
 
     // X.Y[-SNAPSHOT]
-    public static final String VERSION = "1.6-SNAPSHOT";
+    public static final String VERSION = "1.7-SNAPSHOT";
 
     private final ImporterConfig config;
     private final TableMapList tableMaps;
