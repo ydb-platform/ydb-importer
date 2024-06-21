@@ -124,7 +124,6 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             tm.setBasicSql(sql);
         }
         sql = "SELECT q.* FROM (" + sql + ") AS q WHERE 0=1"; // retrieve zero rows
-        LOG.debug("Metadata retrieval SQL: {}", sql);
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             try (ResultSet rs = ps.executeQuery()) {
                 final ResultSetMetaData rsmd = rs.getMetaData();
@@ -141,6 +140,9 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                     ci.setSqlScale(rsmd.getScale(i));
                 }
             }
+        } catch (Exception ex) {
+            LOG.error("Failed metadata retrieval using SQL: {}", sql);
+            throw ex;
         }
     }
 
