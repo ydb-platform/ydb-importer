@@ -2,20 +2,23 @@ package tech.ydb.importer.target;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Async data load progress measurement and tracing.
  *
  * @author zinal
  */
 public class ProgressCounter implements AutoCloseable {
-
-    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
-            .getLogger(ProgressCounter.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ProgressCounter.class);
 
     private final ProgressWorker worker;
     private final AtomicLong normalRows;
     private final AtomicLong blobRows;
     private final long tvStart;
+    private final Thread workerThread;
+
     private long tvCur;
     private long normalPrev;
     private long blobPrev;
@@ -28,10 +31,14 @@ public class ProgressCounter implements AutoCloseable {
         this.blobPrev = 0L;
         this.tvStart = System.currentTimeMillis();
         this.tvCur = this.tvStart;
-        Thread t = new Thread(worker);
-        t.setDaemon(true);
-        t.setName("AsyncProgressThread");
-        t.start();
+
+        this.workerThread = new Thread(worker);
+        this.workerThread.setDaemon(true);
+        this.workerThread.setName("AsyncProgressThread");
+    }
+
+    public void start() {
+        this.workerThread.start();
     }
 
     @Override

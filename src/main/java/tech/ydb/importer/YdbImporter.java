@@ -235,6 +235,8 @@ public class YdbImporter {
             return;
         }
         try (ProgressCounter progress = new ProgressCounter()) {
+            progress.start();
+
             final List<Future<LoadDataTask.Out>> results = new ArrayList<>();
             for (TableDecision td : tables) {
                 if (td.isFailure()) {
