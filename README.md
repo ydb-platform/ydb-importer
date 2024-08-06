@@ -243,7 +243,7 @@ Below is the definition of the configuration file structure:
 
 ## 6. Building the tool from the source code
 
-Java 8 or higher is required to build and run the tool. Maven is required to build the tool (tested on version 3.8.6).
+Java 11 or higher is required to build and run the tool. Maven is required to build the tool (tested on version 3.8.6).
 
 To build the tool run the following command in the directory with the source code:
 ```bash
