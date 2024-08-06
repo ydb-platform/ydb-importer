@@ -18,8 +18,7 @@ public class TargetTable extends tech.ydb.importer.config.JdomHelper {
     private StructType fields;
     private int synthKeyPos;
 
-    public TargetTable(TableDecision original, String fullName,
-            String yqlScript, StructType fields) {
+    public TargetTable(TableDecision original, String fullName, String yqlScript, StructType fields) {
         this.original = original;
         this.fullName = fullName;
         this.yqlScript = yqlScript;

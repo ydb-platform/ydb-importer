@@ -27,7 +27,6 @@ import tech.ydb.importer.config.JdomHelper;
 import tech.ydb.importer.source.AnyTableLister;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.importer.source.TableMapList;
-import tech.ydb.importer.target.BlobSaver;
 import tech.ydb.importer.target.LoadDataTask;
 import tech.ydb.importer.target.ProgressCounter;
 import tech.ydb.importer.target.TargetCP;
@@ -237,7 +236,7 @@ public class YdbImporter {
         try (ProgressCounter progress = new ProgressCounter()) {
             progress.start();
 
-            final List<Future<LoadDataTask.Out>> results = new ArrayList<>();
+            final List<Future<Boolean>> results = new ArrayList<>();
             for (TableDecision td : tables) {
                 if (td.isFailure()) {
                     continue;
@@ -249,12 +248,10 @@ public class YdbImporter {
                 return;
             }
             int successCount = 0;
-            for (Future<LoadDataTask.Out> rf : results) {
-                LoadDataTask.Out r = rf.get();
-                if (r.isSuccess()) {
+            for (Future<Boolean> rf : results) {
+                Boolean r = rf.get();
+                if (r != null && r) {
                     ++successCount;
-                } else {
-                    r.getTab().setFailure(true);
                 }
             }
             LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
@@ -301,10 +298,7 @@ public class YdbImporter {
         @Override
         public Thread newThread(Runnable r) {
             int workerId = counter.incrementAndGet();
-            final Thread t = new Thread(() -> {
-                BlobSaver.initCounter(workerId);
-                r.run();
-            }, "YdbImporter-worker-" + workerId);
+            final Thread t = new Thread(r, "YdbImporter-worker-" + workerId);
             t.setDaemon(false);
             return t;
         }

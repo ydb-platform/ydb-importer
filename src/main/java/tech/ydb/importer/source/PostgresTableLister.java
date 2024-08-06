@@ -232,7 +232,7 @@ public class PostgresTableLister extends AnyTableLister {
                     ColumnInfo ci = tm.findColumn(colname);
                     if (ci != null) {
                         ci.setSqlType(java.sql.Types.BLOB);
-                        ci.setBlobAsObject(true);
+//                        ci.setBlobAsObject(true);
                     }
                 }
             }

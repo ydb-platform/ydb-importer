@@ -13,7 +13,6 @@ public class ColumnInfo {
     private int sqlType;
     private int sqlPrecision;
     private int sqlScale;
-    private boolean blobAsObject;
 
     public ColumnInfo(String name) {
         this.name = (name == null) ? "" : name;
@@ -22,7 +21,6 @@ public class ColumnInfo {
         this.sqlType = java.sql.Types.VARCHAR;
         this.sqlPrecision = 0;
         this.sqlScale = 0;
-        this.blobAsObject = false;
     }
 
     public String getName() {
@@ -63,29 +61,6 @@ public class ColumnInfo {
 
     public void setSqlScale(int sqlScale) {
         this.sqlScale = sqlScale;
-    }
-
-    public boolean isBlobAsObject() {
-        return blobAsObject;
-    }
-
-    public void setBlobAsObject(boolean blobAsObject) {
-        this.blobAsObject = blobAsObject;
-    }
-
-    public static boolean isBlob(int sqlType) {
-        switch (sqlType) {
-            case java.sql.Types.BLOB:
-            case java.sql.Types.LONGVARBINARY:
-            case java.sql.Types.SQLXML:
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    public boolean isBlob() {
-        return isBlob(sqlType);
     }
 
     public static String safeYdbColumnName(String name) {

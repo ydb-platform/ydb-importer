@@ -1,25 +1,23 @@
 package tech.ydb.importer.target;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.YdbImporter;
 import tech.ydb.importer.source.ColumnInfo;
+import tech.ydb.importer.source.SourceCP;
 import tech.ydb.table.values.ListType;
-import tech.ydb.table.values.PrimitiveValue;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.StructValue;
 import tech.ydb.table.values.Value;
@@ -29,59 +27,54 @@ import tech.ydb.table.values.VoidValue;
  *
  * @author zinal
  */
-public class LoadDataTask extends ValueConverter implements Callable<LoadDataTask.Out> {
+public class LoadDataTask implements Callable<Boolean> {
+    private static final Logger LOG = LoggerFactory.getLogger(LoadDataTask.class);
 
-    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(LoadDataTask.class);
+    private final SourceCP source;
+    private final TargetCP target;
 
-    private final YdbImporter owner;
     private final YdbUpsertOp ydbOp;
     private final TableDecision tab;
     private final ProgressCounter progress;
 
     private final int maxBatchRows;
-    private final String mainTablePath;
-
-    // Total number of rows transferred.
-    private final RowCounter counter;
-    // ResultSet column position -> StructType element index
-    private final List<ConvInfo> mainIndex = new ArrayList<>();
-    // Used to build synthetic keys
-    private MessageDigest synthDigest = null;
-    private Base64.Encoder base64Encoder = null;
-    // Used to save BLOB values
-    private BlobSaver blobSaver = null;
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab) {
-        this.owner = owner;
-        this.ydbOp = new YdbUpsertOp(owner.getTargetCP().getRetryCtx());
+        this.source = owner.getSourceCP();
+        this.target = owner.getTargetCP();
+
+        this.ydbOp = new YdbUpsertOp(
+                target.getRetryCtx(),
+                target.getDatabase() + "/" + tab.getTarget().getFullName(),
+                "failed upsert to " + tab.getTarget().getFullName(),
+                progress::addWritedRows
+        );
         this.tab = tab;
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
-        this.mainTablePath = owner.getTargetCP().getDatabase() + "/" + tab.getTarget().getFullName();
-        this.counter = new RowCounter("failed upsert to " + tab.getTarget().getFullName(), progress);
     }
 
     @Override
-    public Out call() throws Exception {
+    public Boolean call() throws Exception {
         if (!tab.isValid()) {
             LOG.warn("Skipping incomplete source table {}.{}", tab.getSchema(), tab.getTable());
-            return new Out(tab, false, 0L);
+            return false;
         }
         if (tab.isFailure()) {
             LOG.warn("Skipping failed source table {}.{}", tab.getSchema(), tab.getTable());
-            return new Out(tab, false, 0L);
+            return false;
         }
         LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
-        try (Connection con = owner.getSourceCP().getConnection();
+        try (Connection con = source.getConnection();
                 PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql());
                 ResultSet rs = ps.executeQuery()) {
-            copyData(rs);
-            LOG.info("Copied {} rows from source table {}.{}",
-                    counter.getValue(), tab.getSchema(), tab.getTable());
-            return new Out(tab, true, counter.getValue());
+            long copied = copyData(rs);
+            LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
+            return true;
         } catch (Throwable e) {
             LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
-            return new Out(tab, false, counter.getValue());
+            tab.setFailure(true);
+            return false;
         }
     }
 
@@ -91,195 +84,148 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
      * @param rs Input result set
      * @throws Exception
      */
-    private void copyData(ResultSet rs) throws Exception {
+    private long copyData(ResultSet rs) throws Exception {
         final StructType paramType = tab.getTarget().getFields();
         final ListType paramListType = ListType.of(paramType);
         final ResultSetMetaData rsmd = rs.getMetaData();
-        buildMainIndex(paramType, rsmd);
+        final ColumnIndex[] columns = buildMainIndex(paramType, rsmd);
 
         final List<Value<?>> batch = new ArrayList<>(maxBatchRows);
+        final SynthKey synchKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
+
+        long copied = 0;
+
         while (rs.next()) {
-            batch.add(convert(paramType, rs, rsmd));
+            copied++;
+            progress.addReadedRows(1);
+
+            batch.add(read(rs, paramType, columns, synchKey));
             if (batch.size() >= maxBatchRows) {
-                ydbOp.start(mainTablePath, paramListType.newValue(batch), counter);
+                ydbOp.upload(paramListType.newValue(batch));
                 batch.clear();
             }
         }
 
-        flushBlobSaver();
         if (!batch.isEmpty()) {
-            ydbOp.start(mainTablePath, paramListType.newValue(batch), counter);
+            ydbOp.upload(paramListType.newValue(batch));
             batch.clear();
         }
-        ydbOp.finish();
+
+        return copied;
     }
 
-    private void buildMainIndex(StructType paramListType, ResultSetMetaData rsmd) throws Exception {
-        mainIndex.clear();
-        final Map<String, Integer> sourceColumns = new HashMap<>();
-        for (int i = 1; i <= rsmd.getColumnCount(); ++i) {
-            String columnName = rsmd.getColumnName(i);
-            columnName = ColumnInfo.safeYdbColumnName(columnName);
-            sourceColumns.put(columnName, i);
+    private ColumnIndex[] buildMainIndex(StructType paramListType, ResultSetMetaData rsmd) throws Exception {
+        final Map<String, Integer> targetColumns = new HashMap<>();
+        for (int i = 0; i < paramListType.getMembersCount(); ++i) {
+            String memberName = paramListType.getMemberName(i);
+            targetColumns.put(memberName, i);
         }
-        for (int ixTarget = 0; ixTarget < paramListType.getMembersCount(); ixTarget++) {
-            String name = paramListType.getMemberName(ixTarget);
-            if (TargetTable.SYNTH_KEY_FIELD.equals(name)) {
-                continue;
-            }
-            ColumnInfo ci = tab.getMetadata().findColumn(name);
+
+        ColumnIndex[] index = new ColumnIndex[rsmd.getColumnCount()];
+        for (int i = 0; i < rsmd.getColumnCount(); i++) {
+            String columnName = rsmd.getColumnName(i + 1);
+            ColumnInfo ci = tab.getMetadata().findColumn(columnName);
             if (ci == null) {
-                LOG.warn("Unexpected column {} in the source table {}.{} - SKIPPED", name,
+                LOG.warn("Unexpected column {} in the source table {}.{} - SKIPPED", columnName,
                         tab.getSchema(), tab.getTable());
                 continue;
             }
-            Integer ixSource = sourceColumns.get(name);
-            if (ixSource == null) {
-                LOG.warn("Missing column {} in the source table {}.{} - SKIPPED", name,
+
+            Integer ixTarget = targetColumns.get(ci.getDestinationName());
+            if (ixTarget == null) {
+                LOG.warn("Unexpected struct member {} in the source table {}.{} - SKIPPED", ci.getDestinationName(),
                         tab.getSchema(), tab.getTable());
                 continue;
             }
+
             // Blob checking has to be done based on the ColumnInfo declared type.
             // The reason for this is PostgreSQL ugly approach, where the driver
             // does not return BLOB type even for "lo" typed columns.
-            if (ColumnInfo.isBlob(ci.getSqlType())) {
+            if (isBlob(ci.getSqlType())) {
                 // We need the full path of the BLOB storage table.
-                TargetTable tt = tab.getBlobTargets().get(name);
+                TargetTable tt = tab.getBlobTargets().get(columnName);
                 if (tt == null) {
                     LOG.warn("Missing aux target table for BLOB column {} "
-                            + "of source {}.{}", name, tab.getSchema(), tab.getTable());
+                            + "of source {}.{}", columnName, tab.getSchema(), tab.getTable());
                 } else {
-                    ConvMode cm = ci.isBlobAsObject() ? ConvMode.BLOB_OBJECT : ConvMode.BLOB_STREAM;
-                    String blobPath = owner.getTargetCP().getDatabase() + "/" + tt.getFullName();
-                    mainIndex.add(new ConvInfo(ixSource, ixTarget, cm, blobPath));
+                    String blobPath = target.getDatabase() + "/" + tt.getFullName();
+                    ValueReader reader = new BlobReader(blobPath, target.getRetryCtx(), progress, maxBatchRows);
+                    index[i] = new ColumnIndex(ixTarget, reader);
                 }
             } else {
-                // All but BLOB - generate conversion mode
-                ConvMode cm = chooseMode(ixSource, ixTarget, paramListType, rsmd);
-                // And put it to the index entry
-                mainIndex.add(new ConvInfo(ixSource, ixTarget, cm));
+                ValueReader reader = ValueReader.getReader(paramListType.getMemberType(ixTarget), ci.getSqlType());
+                if (reader == null) {
+                    LOG.warn("Missing aux target table for BLOB column {} "
+                            + "of source {}.{}", columnName, tab.getSchema(), tab.getTable());
+                } else {
+                    index[i] = new ColumnIndex(ixTarget, reader);
+                }
             }
         }
+        return index;
     }
+
+    private static boolean isBlob(int sqlType) {
+        switch (sqlType) {
+            case java.sql.Types.BLOB:
+            case java.sql.Types.LONGVARBINARY:
+            case java.sql.Types.SQLXML:
+                return true;
+            default:
+                return false;
+        }
+    }
+
 
     /**
      * Converts the current row from the source ResultSet to the StructValue representation.
      *
-     * @param mainType StructValue type definition
+     * @param type StructValue type definition
      * @param rs Input result set
      * @return StructValue with the converted copies of fields
      * @throws Exception
      */
-    private StructValue convert(StructType mainType, ResultSet rs, ResultSetMetaData rsmd)
-            throws Exception {
-        final Value<?>[] members = new Value<?>[mainType.getMembersCount()];
-        Arrays.fill(members, VoidValue.of());
-        for (ConvInfo ci : mainIndex) {
+    private StructValue read(ResultSet rs, StructType type, ColumnIndex[] columns, SynthKey synthKey) throws Exception {
+        Value<?>[] values = new Value[type.getMembersCount()];
+        for (int idx = 0; idx < values.length; idx += 1) {
+            values[idx] = VoidValue.of();
+        }
+
+        for (int rsIdx = 1; rsIdx <= columns.length; rsIdx += 1) {
+            ColumnIndex column = columns[rsIdx - 1];
+            if (column == null) {
+                continue;
+            }
+
+            int valuesIdx = column.getStructIndex();
             try {
-                members[ci.getTargetIndex()] = convertValue(rs, ci);
+                values[valuesIdx] = column.getReader().readValue(synthKey, rs, rsIdx);
             } catch (Exception ex) {
-                throw new Exception("Failed conversion for column "
-                        + mainType.getMemberName(ci.getTargetIndex()), ex);
+                throw new Exception("Failed conversion for column " + rsIdx + " " + type.getMemberName(valuesIdx), ex);
             }
         }
-        if (tab.getTarget().hasSynthKey()) {
-            members[tab.getTarget().getSynthKeyPos()] = calcSynthKey(rs, rsmd);
+
+        if (synthKey != null) {
+            values[tab.getTarget().getSynthKeyPos()] = synthKey.build();
         }
-        return mainType.newValueUnsafe(members);
+        return type.newValueUnsafe(values);
     }
 
-    public BlobSaver makeBlobSaver() {
-        if (blobSaver == null) {
-            blobSaver = new BlobSaver(owner.getConfig().getTarget().getMaxBlobRows(), progress);
-        }
-        return blobSaver;
-    }
+    private class ColumnIndex {
+        private final int structIndex;
+        private final ValueReader reader;
 
-    public void flushBlobSaver() {
-        if (blobSaver != null) {
-            blobSaver.flush(ydbOp);
+        ColumnIndex(int structIndex, ValueReader reader) {
+            this.structIndex = structIndex;
+            this.reader = reader;
         }
-    }
 
-    @Override
-    public PrimitiveValue convertBlob(ResultSet rs, ConvInfo ci) throws Exception {
-        try (InputStream is = openStream(rs, ci)) {
-            long id = makeBlobSaver().saveBlob(ydbOp, is, ci.getBlobPath());
-            return PrimitiveValue.newInt64(id);
+        public int getStructIndex() {
+            return this.structIndex;
+        }
+
+        public ValueReader getReader() {
+            return reader;
         }
     }
-
-    private InputStream openStream(ResultSet rs, ConvInfo ci) throws Exception {
-        if (ConvMode.BLOB_STREAM == ci.getMode()) {
-            return rs.getBinaryStream(ci.getSourceIndex());
-        }
-        return rs.getBlob(ci.getSourceIndex()).getBinaryStream();
-    }
-
-    private MessageDigest getSynthDigest() throws Exception {
-        if (synthDigest == null) {
-            synthDigest = MessageDigest.getInstance("SHA-256");
-        }
-        return synthDigest;
-    }
-
-    private Base64.Encoder getBase64Encoder() {
-        if (base64Encoder == null) {
-            base64Encoder = Base64.getUrlEncoder().withoutPadding();
-        }
-        return base64Encoder;
-    }
-
-    /**
-     * Calculates the synthetic key as a hash over the non-BLOB column values
-     *
-     * @param rs Input result set positioned to the current row
-     * @param rsmd Input result set metadata
-     * @return Base64-encoded hash value as a 'String' YDB data type
-     * @throws Exception
-     */
-    private PrimitiveValue calcSynthKey(ResultSet rs, ResultSetMetaData rsmd) throws Exception {
-        final StringBuilder sb = new StringBuilder();
-        for (int i = 1; i <= rsmd.getColumnCount(); ++i) {
-            if (!ColumnInfo.isBlob(rsmd.getColumnType(i))) {
-                String v = rs.getString(i);
-                if (v != null) {
-                    sb.append(v);
-                }
-                sb.append(Character.toChars(2));
-            }
-        }
-        byte[] v = getSynthDigest().digest(sb.toString().getBytes(StandardCharsets.UTF_8));
-        String base64v = getBase64Encoder().encodeToString(v);
-        return PrimitiveValue.newBytes(base64v.getBytes(StandardCharsets.ISO_8859_1));
-    }
-
-    /**
-     * Output of each LoadDataTask
-     */
-    public static final class Out {
-
-        private final TableDecision tab;
-        private final boolean success;
-        private final long rowCount;
-
-        public Out(TableDecision tab, boolean success, long rowCount) {
-            this.tab = tab;
-            this.success = success;
-            this.rowCount = rowCount;
-        }
-
-        public TableDecision getTab() {
-            return tab;
-        }
-
-        public boolean isSuccess() {
-            return success;
-        }
-
-        public long getRowCount() {
-            return rowCount;
-        }
-    }
-
 }

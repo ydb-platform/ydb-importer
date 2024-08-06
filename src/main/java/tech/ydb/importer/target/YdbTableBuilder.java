@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.source.ColumnInfo;
@@ -18,9 +20,7 @@ import tech.ydb.table.values.Type;
  * @author zinal
  */
 public class YdbTableBuilder {
-
-    private static final org.slf4j.Logger LOG
-            = org.slf4j.LoggerFactory.getLogger(YdbTableBuilder.class);
+    private static final Logger LOG = LoggerFactory.getLogger(YdbTableBuilder.class);
 
     public static final String EOL = System.getProperty("line.separator");
     private final TableDecision tab;
@@ -32,12 +32,6 @@ public class YdbTableBuilder {
     public void build() {
         tab.setTarget(buildMainTable());
         tab.getBlobTargets().clear();
-        for (ColumnInfo ci : tab.getMetadata().getColumns()) {
-            if (ci.isBlob()) {
-                tab.getBlobTargets().put(ci.getName(),
-                        buildBlobTable(tab.getTarget(), ci));
-            }
-        }
     }
 
     private TargetTable buildMainTable() {
@@ -75,15 +69,15 @@ public class YdbTableBuilder {
         return new TargetTable(tab, fullName, sb.toString(), StructType.of(types));
     }
 
-    private TargetTable buildBlobTable(TargetTable main, ColumnInfo ci) {
+    private TargetTable buildBlobTable(ColumnInfo ci) {
         final StringBuilder sb = new StringBuilder();
         final String fullName = makeBlobName(ci.getDestinationName());
         sb.append("CREATE TABLE `").append(fullName).append("` (").append(EOL);
         sb.append("  `id` Int64,").append(EOL);
         sb.append("  `pos` Int32,").append(EOL);
-        sb.append("  `val` String,").append(EOL);
+        sb.append("  `val` Bytes,").append(EOL);
         sb.append("  PRIMARY KEY(`id`, `pos`));").append(EOL);
-        return new TargetTable(tab, fullName, sb.toString(), BlobSaver.BLOB_ROW);
+        return new TargetTable(tab, fullName, sb.toString(), BlobReader.BLOB_ROW);
     }
 
     private String makeTableName() {
