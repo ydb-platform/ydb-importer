@@ -16,13 +16,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import tech.ydb.importer.config.ImporterConfig;
 import tech.ydb.importer.config.JdomHelper;
-import static tech.ydb.importer.config.JdomHelper.isBlank;
 import tech.ydb.importer.source.AnyTableLister;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.importer.source.TableMapList;
@@ -77,7 +77,7 @@ public class YdbImporter {
 
     public void run() throws Exception {
         String jdbcClassName = config.getSource().getClassName();
-        if (!isBlank(jdbcClassName)) {
+        if (!JdomHelper.isBlank(jdbcClassName)) {
             LOG.info("Loading driver class {}", jdbcClassName);
             Class.forName(config.getSource().getClassName());
         }
@@ -139,8 +139,7 @@ public class YdbImporter {
     }
 
     private ExecutorService makeWorkers() {
-        return Executors.newFixedThreadPool(config.getWorkers().getPoolSize(),
-                new WorkerFactory(this));
+        return Executors.newFixedThreadPool(config.getWorkers().getPoolSize(), new WorkerFactory());
     }
 
     private void retrieveSourceMetadata(List<TableDecision> tables, ExecutorService workers)
@@ -293,25 +292,18 @@ public class YdbImporter {
     }
 
     public static final class WorkerFactory implements ThreadFactory {
-
-        private final YdbImporter owner;
-        private int counter = 0;
-
-        public WorkerFactory(YdbImporter owner) {
-            this.owner = owner;
-        }
+        private final AtomicInteger counter = new AtomicInteger();
 
         @Override
         public Thread newThread(Runnable r) {
+            int workerId = counter.getAndIncrement();
             final Thread t = new Thread(() -> {
-                BlobSaver.initCounter(counter);
+                BlobSaver.initCounter(workerId);
                 r.run();
-            }, "YdbImporter-worker-" + counter);
+            }, "YdbImporter-worker-" + workerId);
             t.setDaemon(false);
-            ++counter;
             return t;
         }
-
     }
 
 }
