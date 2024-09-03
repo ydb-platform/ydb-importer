@@ -26,7 +26,6 @@ import tech.ydb.importer.config.JdomHelper;
 import tech.ydb.importer.source.AnyTableLister;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.importer.source.TableMapList;
-import tech.ydb.importer.target.BlobSaver;
 import tech.ydb.importer.target.LoadDataTask;
 import tech.ydb.importer.target.ProgressCounter;
 import tech.ydb.importer.target.TargetCP;
@@ -232,6 +231,8 @@ public class YdbImporter {
             return;
         }
         try (ProgressCounter progress = new ProgressCounter()) {
+            progress.start();
+
             final List<Future<LoadDataTask.Out>> results = new ArrayList<>();
             for (TableDecision td : tables) {
                 if (td.isFailure()) {
@@ -297,10 +298,7 @@ public class YdbImporter {
         @Override
         public Thread newThread(Runnable r) {
             int workerId = counter.getAndIncrement();
-            final Thread t = new Thread(() -> {
-                BlobSaver.initCounter(workerId);
-                r.run();
-            }, "YdbImporter-worker-" + workerId);
+            final Thread t = new Thread(r, "YdbImporter-worker-" + workerId);
             t.setDaemon(false);
             return t;
         }

@@ -1,8 +1,7 @@
 package tech.ydb.importer.target;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.function.IntConsumer;
 
-import tech.ydb.core.Status;
 import tech.ydb.table.SessionRetryContext;
 import tech.ydb.table.settings.BulkUpsertSettings;
 import tech.ydb.table.values.ListValue;
@@ -14,47 +13,27 @@ import tech.ydb.table.values.ListValue;
 public class YdbUpsertOp {
 
     private final SessionRetryContext retryCtx;
-    private BulkUpsertSettings upsertSettings = null;
-    private CompletableFuture<Status> status = null;
-    private int currentRows = -1;
-    private AnyCounter counter = null;
+    private final String tablePath;
+    private final String errorMsg;
+    private final IntConsumer counter;
+    private final BulkUpsertSettings upsertSettings = new BulkUpsertSettings();
 
-    public YdbUpsertOp(SessionRetryContext retryCtx) {
+    public YdbUpsertOp(SessionRetryContext retryCtx, String tablePath, String errorMsg, IntConsumer counter) {
         this.retryCtx = retryCtx;
-    }
-
-    public BulkUpsertSettings getUpsertSettings() {
-        if (upsertSettings == null) {
-            upsertSettings = new BulkUpsertSettings();
-        }
-        return upsertSettings;
-    }
-
-    public int finish() {
-        if (status == null) {
-            return 0;
-        }
-        final int retval = (currentRows > 0) ? currentRows : 0;
-        final String m = (counter == null) ? "bulk upsert problem" : counter.getIssueMessage();
-        status.join().expectSuccess(m);
-        if (counter != null) {
-            counter.addValue(retval);
-        }
-        currentRows = -1;
-        return retval;
-    }
-
-    public int start(String tablePath, ListValue newValue, AnyCounter counter) {
-        if (newValue == null || newValue.isEmpty()) {
-            return 0;
-        }
-        final int retval = finish();
-        this.currentRows = newValue.size();
+        this.errorMsg = errorMsg;
+        this.tablePath = tablePath;
         this.counter = counter;
-        this.status = retryCtx.supplyStatus(
-                session -> session.executeBulkUpsert(tablePath, newValue, getUpsertSettings())
-        );
-        return retval;
     }
 
+    public void upload(ListValue newValue) {
+        if (newValue == null || newValue.isEmpty()) {
+            return;
+        }
+
+        retryCtx.supplyStatus(
+                session -> session.executeBulkUpsert(tablePath, newValue, upsertSettings)
+        ).join().expectSuccess(errorMsg);
+
+        counter.accept(newValue.size());
+    }
 }
