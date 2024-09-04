@@ -29,7 +29,7 @@ import tech.ydb.table.values.VoidValue;
  *
  * @author zinal
  */
-public class LoadDataTask extends ValueConverter implements Callable<LoadDataTask.Out> {
+public class LoadDataTask extends ValueConverter implements Callable<Boolean> {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(LoadDataTask.class);
 
@@ -61,14 +61,16 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
     }
 
     @Override
-    public Out call() throws Exception {
+    public Boolean call() throws Exception {
         if (!tab.isValid()) {
             LOG.warn("Skipping incomplete source table {}.{}", tab.getSchema(), tab.getTable());
-            return new Out(tab, false);
+            tab.setFailure(true);
+            return false;
         }
         if (tab.isFailure()) {
             LOG.warn("Skipping failed source table {}.{}", tab.getSchema(), tab.getTable());
-            return new Out(tab, false);
+            tab.setFailure(true);
+            return false;
         }
         LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
         try (Connection con = owner.getSourceCP().getConnection();
@@ -76,10 +78,11 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
                 ResultSet rs = ps.executeQuery()) {
             long copied = copyData(rs);
             LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
-            return new Out(tab, true);
+            return true;
         } catch (Throwable e) {
             LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
-            return new Out(tab, false);
+            tab.setFailure(true);
+            return false;
         }
     }
 
@@ -250,27 +253,5 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
         byte[] v = getSynthDigest().digest(sb.toString().getBytes(StandardCharsets.UTF_8));
         String base64v = getBase64Encoder().encodeToString(v);
         return PrimitiveValue.newBytes(base64v.getBytes(StandardCharsets.ISO_8859_1));
-    }
-
-    /**
-     * Output of each LoadDataTask
-     */
-    public static final class Out {
-
-        private final TableDecision tab;
-        private final boolean success;
-
-        public Out(TableDecision tab, boolean success) {
-            this.tab = tab;
-            this.success = success;
-        }
-
-        public TableDecision getTab() {
-            return tab;
-        }
-
-        public boolean isSuccess() {
-            return success;
-        }
     }
 }

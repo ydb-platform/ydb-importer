@@ -231,9 +231,7 @@ public class YdbImporter {
             return;
         }
         try (ProgressCounter progress = new ProgressCounter()) {
-            progress.start();
-
-            final List<Future<LoadDataTask.Out>> results = new ArrayList<>();
+            final List<Future<Boolean>> results = new ArrayList<>();
             for (TableDecision td : tables) {
                 if (td.isFailure()) {
                     continue;
@@ -245,12 +243,9 @@ public class YdbImporter {
                 return;
             }
             int successCount = 0;
-            for (Future<LoadDataTask.Out> rf : results) {
-                LoadDataTask.Out r = rf.get();
-                if (r.isSuccess()) {
+            for (Future<Boolean> rf : results) {
+                if (rf.get() != null && rf.get()) {
                     ++successCount;
-                } else {
-                    r.getTab().setFailure(true);
                 }
             }
             LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
