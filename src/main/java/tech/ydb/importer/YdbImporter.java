@@ -2,6 +2,8 @@ package tech.ydb.importer;
 
 import java.io.BufferedWriter;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
@@ -9,10 +11,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import tech.ydb.importer.config.ImporterConfig;
 import tech.ydb.importer.config.JdomHelper;
@@ -30,18 +37,12 @@ import tech.ydb.table.description.TableDescription;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.Type;
 
-import static tech.ydb.importer.config.JdomHelper.isBlank;
-
 /**
  *
  * @author zinal
  */
 public class YdbImporter {
-
-    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(YdbImporter.class);
-
-    // X.Y[-SNAPSHOT]
-    public static final String VERSION = "1.7-SNAPSHOT";
+    private static final Logger LOG = LoggerFactory.getLogger(YdbImporter.class);
 
     private final ImporterConfig config;
     private final TableMapList tableMaps;
@@ -76,7 +77,7 @@ public class YdbImporter {
 
     public void run() throws Exception {
         String jdbcClassName = config.getSource().getClassName();
-        if (!isBlank(jdbcClassName)) {
+        if (!JdomHelper.isBlank(jdbcClassName)) {
             LOG.info("Loading driver class {}", jdbcClassName);
             Class.forName(config.getSource().getClassName());
         }
@@ -138,8 +139,7 @@ public class YdbImporter {
     }
 
     private ExecutorService makeWorkers() {
-        return Executors.newFixedThreadPool(config.getWorkers().getPoolSize(),
-                new WorkerFactory(this));
+        return Executors.newFixedThreadPool(config.getWorkers().getPoolSize(), new WorkerFactory());
     }
 
     private void retrieveSourceMetadata(List<TableDecision> tables, ExecutorService workers)
@@ -257,7 +257,7 @@ public class YdbImporter {
     }
 
     public static void main(String[] args) {
-        LOG.info("{} version {}", YdbImporter.class.getSimpleName(), VERSION);
+        LOG.info("{} version {}", YdbImporter.class.getSimpleName(), getVersion());
         if (args.length != 1) {
             LOG.info("Single argument is expected: config-file.xml");
             System.exit(2);
@@ -279,26 +279,31 @@ public class YdbImporter {
         }
     }
 
-    public static final class WorkerFactory implements ThreadFactory {
-
-        private final YdbImporter owner;
-        private int counter = 0;
-
-        public WorkerFactory(YdbImporter owner) {
-            this.owner = owner;
+    public static String getVersion() {
+        try {
+            Properties prop = new Properties();
+            InputStream in = YdbImporter.class.getResourceAsStream("/importer_version.properties");
+            prop.load(in);
+            return prop.getProperty("version");
+        } catch (IOException ex) {
+            LOG.error("cannot load version", ex);
+            return "unknown";
         }
+    }
+
+    public static final class WorkerFactory implements ThreadFactory {
+        private final AtomicInteger counter = new AtomicInteger();
 
         @Override
         public Thread newThread(Runnable r) {
+            int workerId = counter.getAndIncrement();
             final Thread t = new Thread(() -> {
-                BlobSaver.initCounter(counter);
+                BlobSaver.initCounter(workerId);
                 r.run();
-            }, "YdbImporter-worker-" + counter);
+            }, "YdbImporter-worker-" + workerId);
             t.setDaemon(false);
-            ++counter;
             return t;
         }
-
     }
 
 }
