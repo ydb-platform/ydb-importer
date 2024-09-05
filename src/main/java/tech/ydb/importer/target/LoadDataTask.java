@@ -115,6 +115,13 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
             batch.clear();
         }
 
+        // Flush all blob columns savers
+        for (ConvInfo ci: mainIndex) {
+            if (ci.getBlobSaver() != null) {
+                ci.getBlobSaver().flush();
+            }
+        }
+
         return copied;
     }
 

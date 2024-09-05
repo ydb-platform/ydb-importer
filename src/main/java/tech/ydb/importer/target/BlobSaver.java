@@ -41,6 +41,9 @@ public class BlobSaver {
     private final int posPos;
     private final int posVal;
 
+    private final List<Value<?>> currentBulk = new ArrayList<>();
+
+
     public BlobSaver(String tablePath, SessionRetryContext ctx, ProgressCounter progress, int maxBlobRecords) {
         this.upsertOp = new YdbUpsertOp(
                 ctx, tablePath, "blob rows upsert issue for " + tablePath, progress::addBlobRows
@@ -64,8 +67,6 @@ public class BlobSaver {
         byte[] block = new byte[BLOCK_SIZE];
         int position = 0;
 
-        List<Value<?>> bulk = new ArrayList<>();
-
         while (true) {
             // Read next BLOB block
             final int bytesRead = is.read(block);
@@ -78,21 +79,23 @@ public class BlobSaver {
             members[posId] = id;
             members[posPos] = PrimitiveValue.newInt32(position);
             members[posVal] = PrimitiveValue.newBytes(ByteString.copyFrom(block, 0, bytesRead));
-            bulk.add(BLOB_ROW.newValueUnsafe(members));
+            currentBulk.add(BLOB_ROW.newValueUnsafe(members));
             position += 1;
 
             // Send the values list to YDB if it's time
-            if (bulk.size() >= maxBlobRecords) {
-                upsertOp.upload(BLOB_LIST.newValue(bulk));
-                bulk.clear();
+            if (currentBulk.size() >= maxBlobRecords) {
+                upsertOp.upload(BLOB_LIST.newValue(currentBulk));
+                currentBulk.clear();
             }
         }
 
-        if (!bulk.isEmpty()) {
-            upsertOp.upload(BLOB_LIST.newValue(bulk));
-            bulk.clear();
-        }
-
         return id;
+    }
+
+    public void flush() {
+        if (!currentBulk.isEmpty()) {
+            upsertOp.upload(BLOB_LIST.newValue(currentBulk));
+            currentBulk.clear();
+        }
     }
 }
