@@ -83,7 +83,7 @@ public class YdbTableBuilder {
         sb.append("  `pos` Int32,").append(EOL);
         sb.append("  `val` String,").append(EOL);
         sb.append("  PRIMARY KEY(`id`, `pos`));").append(EOL);
-        return new TargetTable(tab, fullName, sb.toString(), BlobSaver.BLOB_ROW);
+        return new TargetTable(tab, fullName, sb.toString(), BlobReader.BLOB_ROW);
     }
 
     private String makeTableName() {
