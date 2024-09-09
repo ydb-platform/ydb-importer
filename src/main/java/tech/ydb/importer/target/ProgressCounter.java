@@ -2,123 +2,127 @@ package tech.ydb.importer.target;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Async data load progress measurement and tracing.
  *
  * @author zinal
  */
 public class ProgressCounter implements AutoCloseable {
+    private static final Logger LOG = LoggerFactory.getLogger(ProgressCounter.class);
 
-    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
-            .getLogger(ProgressCounter.class);
-
-    private final ProgressWorker worker;
-    private final AtomicLong normalRows;
+    private final AtomicLong readedRows;
+    private final AtomicLong writedRows;
     private final AtomicLong blobRows;
-    private final long tvStart;
-    private long tvCur;
-    private long normalPrev;
-    private long blobPrev;
+    private final Thread workerThread;
+    private final long startedAt;
 
     public ProgressCounter() {
-        this.worker = new ProgressWorker(this);
-        this.normalRows = new AtomicLong(0L);
+        this.readedRows = new AtomicLong(0L);
+        this.writedRows = new AtomicLong(0L);
         this.blobRows = new AtomicLong(0L);
-        this.normalPrev = 0L;
-        this.blobPrev = 0L;
-        this.tvStart = System.currentTimeMillis();
-        this.tvCur = this.tvStart;
-        Thread t = new Thread(worker);
-        t.setDaemon(true);
-        t.setName("AsyncProgressThread");
-        t.start();
+
+        this.workerThread = new Thread(new ProgressWorker());
+        this.workerThread.setDaemon(true);
+        this.workerThread.setName("AsyncProgressThread");
+
+        this.startedAt = System.currentTimeMillis();
+    }
+
+    public void start() {
+        this.workerThread.start();
     }
 
     @Override
     public void close() {
-        worker.stop();
+        try {
+            this.workerThread.interrupt();
+            this.workerThread.join();
+        } catch (InterruptedException ex) {
+            LOG.warn("Process worker stopping was interrupted", ex);
+            Thread.currentThread().interrupt();
+        }
     }
 
-    public long addNormal(int count) {
-        return normalRows.addAndGet(count);
+    public long addReadedRows(int count) {
+        return readedRows.addAndGet(count);
     }
 
-    public long addBlob(int count) {
+    public long addWritedRows(int count) {
+        return writedRows.addAndGet(count);
+    }
+
+    public long addBlobRows(int count) {
         return blobRows.addAndGet(count);
     }
 
-    public long getNormal() {
-        return normalRows.get();
-    }
-
-    public long getBlob() {
-        return normalRows.get();
-    }
-
-    private void traceIfNeeded() {
-        final long cur = System.currentTimeMillis();
-        final long diff = cur - tvCur;
-        if (diff < 30000L) {
-            return;
-        }
-        final long normalTemp = normalRows.get();
-        final long normalInc = normalTemp - normalPrev;
-        final double normalRate = ((double) normalInc) * 1000.0 / ((double) diff);
-
-        final long blobTemp = blobRows.get();
-        final long blobInc = blobTemp - blobPrev;
-        final double blobRate = ((double) blobInc) * 1000.0 / ((double) diff);
-
-        LOG.info("Progress: {} rows total, {} rows increment ({} rows/sec)",
-                normalTemp, normalInc, String.format("%.2f", normalRate));
-        if (blobInc > 0L) {
-            LOG.info("\t BLOB fragments: {} rows total, {} rows increment ({} rows/sec)",
-                    blobTemp, blobInc, String.format("%.2f", blobRate));
-        }
-
-        tvCur = cur;
-        normalPrev = normalTemp;
-        blobPrev = blobTemp;
-    }
-
-    private void traceFinal() {
-        final long cur = System.currentTimeMillis();
-        final long diff = cur - tvStart;
-        final long sumposTemp = normalRows.get();
-        final double rate = ((double) sumposTemp) * 1000.0 / ((double) diff);
-
-        LOG.info("Final: {} rows total ({} rows/sec average)",
-                sumposTemp, String.format("%.2f", rate));
-    }
-
-    public static final class ProgressWorker implements Runnable {
-
-        private final ProgressCounter owner;
-        private volatile boolean active;
-
-        private ProgressWorker(ProgressCounter owner) {
-            this.owner = owner;
-            this.active = true;
-        }
-
-        private void stop() {
-            active = false;
-        }
+    private class ProgressWorker implements Runnable {
+        private long lastReaded = 0;
+        private long lastWrited = 0;
+        private long lastBlobs = 0;
+        private long lastTs = 0;
 
         @Override
+        @SuppressWarnings("SleepWhileInLoop")
         public void run() {
-            while (active) {
+            lastReaded = readedRows.get();
+            lastWrited = writedRows.get();
+            lastBlobs = blobRows.get();
+            lastTs = System.currentTimeMillis();
+
+            while (!Thread.currentThread().isInterrupted()) {
                 try {
                     Thread.sleep(500L);
+                    traceIfNeeded();
                 } catch (InterruptedException ix) {
-                }
-                if (active) {
-                    owner.traceIfNeeded();
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
-            owner.traceFinal();
+            traceFinal();
         }
 
-    }
+        private void traceIfNeeded() {
+            long ts = System.currentTimeMillis();
+            final long diff = ts - lastTs;
+            if (diff < 30000L) {
+                return;
+            }
 
+            long readed = readedRows.get();
+            long writed = writedRows.get();
+            long blobs = blobRows.get();
+
+            double readedRate = 1000d * (readed - lastReaded) / diff;
+            double writedRate = 1000d * (writed - lastWrited) / diff;
+
+            LOG.info("Progress: {} rows readed total [{} rows/sec], {} rows writed total [{} rows/sec]",
+                    readed, String.format("%.2f", readedRate), writed, String.format("%.2f", writedRate));
+
+            if (blobs > lastBlobs) {
+                double blobsRate = 1000d * (blobs - lastBlobs) / diff;
+                LOG.info("\t BLOB fragments: {} rows total [{} rows/sec]", blobs, String.format("%.2f", blobsRate));
+            }
+
+            lastTs = ts;
+            lastReaded = readed;
+            lastWrited = writed;
+            lastBlobs = blobs;
+        }
+
+        private void traceFinal() {
+            long ts = System.currentTimeMillis();
+            final long diff = ts - startedAt;
+
+            long readed = readedRows.get();
+            long writed = writedRows.get();
+            double readedRate = 1000d * (readed - lastReaded) / diff;
+            double writedRate = 1000d * (writed - lastWrited) / diff;
+
+            LOG.info("Final: {} rows readed total [{} rows/sec], {} rows writed total [{} rows/sec]",
+                    readed, String.format("%.2f", readedRate), writed, String.format("%.2f", writedRate));
+        }
+    }
 }

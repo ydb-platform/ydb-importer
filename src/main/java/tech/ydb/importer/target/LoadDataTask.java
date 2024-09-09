@@ -39,49 +39,47 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
     private final ProgressCounter progress;
 
     private final int maxBatchRows;
-    private final String mainTablePath;
 
-    // Total number of rows transferred.
-    private final RowCounter counter;
     // ResultSet column position -> StructType element index
     private final List<ConvInfo> mainIndex = new ArrayList<>();
     // Used to build synthetic keys
     private MessageDigest synthDigest = null;
     private Base64.Encoder base64Encoder = null;
-    // Used to save BLOB values
-    private BlobSaver blobSaver = null;
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab) {
         this.owner = owner;
-        this.ydbOp = new YdbUpsertOp(owner.getTargetCP().getRetryCtx());
+
+        this.ydbOp = new YdbUpsertOp(
+                owner.getTargetCP().getRetryCtx(),
+                owner.getTargetCP().getDatabase() + "/" + tab.getTarget().getFullName(),
+                "failed upsert to " + tab.getTarget().getFullName(),
+                progress::addWritedRows
+        );
         this.tab = tab;
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
-        this.mainTablePath = owner.getTargetCP().getDatabase() + "/" + tab.getTarget().getFullName();
-        this.counter = new RowCounter("failed upsert to " + tab.getTarget().getFullName(), progress);
     }
 
     @Override
     public Out call() throws Exception {
         if (!tab.isValid()) {
             LOG.warn("Skipping incomplete source table {}.{}", tab.getSchema(), tab.getTable());
-            return new Out(tab, false, 0L);
+            return new Out(tab, false);
         }
         if (tab.isFailure()) {
             LOG.warn("Skipping failed source table {}.{}", tab.getSchema(), tab.getTable());
-            return new Out(tab, false, 0L);
+            return new Out(tab, false);
         }
         LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
         try (Connection con = owner.getSourceCP().getConnection();
                 PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql());
                 ResultSet rs = ps.executeQuery()) {
-            copyData(rs);
-            LOG.info("Copied {} rows from source table {}.{}",
-                    counter.getValue(), tab.getSchema(), tab.getTable());
-            return new Out(tab, true, counter.getValue());
+            long copied = copyData(rs);
+            LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
+            return new Out(tab, true);
         } catch (Throwable e) {
             LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
-            return new Out(tab, false, counter.getValue());
+            return new Out(tab, false);
         }
     }
 
@@ -91,27 +89,40 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
      * @param rs Input result set
      * @throws Exception
      */
-    private void copyData(ResultSet rs) throws Exception {
+    private long copyData(ResultSet rs) throws Exception {
         final StructType paramType = tab.getTarget().getFields();
         final ListType paramListType = ListType.of(paramType);
         final ResultSetMetaData rsmd = rs.getMetaData();
         buildMainIndex(paramType, rsmd);
 
         final List<Value<?>> batch = new ArrayList<>(maxBatchRows);
+
+        long copied = 0;
+
         while (rs.next()) {
+            copied++;
+            progress.addReadedRows(1);
+
             batch.add(convert(paramType, rs, rsmd));
             if (batch.size() >= maxBatchRows) {
-                ydbOp.start(mainTablePath, paramListType.newValue(batch), counter);
+                ydbOp.upload(paramListType.newValue(batch));
                 batch.clear();
             }
         }
 
-        flushBlobSaver();
         if (!batch.isEmpty()) {
-            ydbOp.start(mainTablePath, paramListType.newValue(batch), counter);
+            ydbOp.upload(paramListType.newValue(batch));
             batch.clear();
         }
-        ydbOp.finish();
+
+        // Flush all blob columns savers
+        for (ConvInfo ci: mainIndex) {
+            if (ci.getBlobSaver() != null) {
+                ci.getBlobSaver().flush();
+            }
+        }
+
+        return copied;
     }
 
     private void buildMainIndex(StructType paramListType, ResultSetMetaData rsmd) throws Exception {
@@ -151,7 +162,8 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
                 } else {
                     ConvMode cm = ci.isBlobAsObject() ? ConvMode.BLOB_OBJECT : ConvMode.BLOB_STREAM;
                     String blobPath = owner.getTargetCP().getDatabase() + "/" + tt.getFullName();
-                    mainIndex.add(new ConvInfo(ixSource, ixTarget, cm, blobPath));
+                    BlobSaver saver = new BlobSaver(blobPath, owner.getTargetCP().getRetryCtx(), progress, maxBatchRows);
+                    mainIndex.add(new ConvInfo(ixSource, ixTarget, cm, saver));
                 }
             } else {
                 // All but BLOB - generate conversion mode
@@ -188,24 +200,10 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
         return mainType.newValueUnsafe(members);
     }
 
-    public BlobSaver makeBlobSaver() {
-        if (blobSaver == null) {
-            blobSaver = new BlobSaver(owner.getConfig().getTarget().getMaxBlobRows(), progress);
-        }
-        return blobSaver;
-    }
-
-    public void flushBlobSaver() {
-        if (blobSaver != null) {
-            blobSaver.flush(ydbOp);
-        }
-    }
-
     @Override
     public PrimitiveValue convertBlob(ResultSet rs, ConvInfo ci) throws Exception {
         try (InputStream is = openStream(rs, ci)) {
-            long id = makeBlobSaver().saveBlob(ydbOp, is, ci.getBlobPath());
-            return PrimitiveValue.newInt64(id);
+            return ci.getBlobSaver().saveBlob(is);
         }
     }
 
@@ -261,12 +259,10 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
 
         private final TableDecision tab;
         private final boolean success;
-        private final long rowCount;
 
-        public Out(TableDecision tab, boolean success, long rowCount) {
+        public Out(TableDecision tab, boolean success) {
             this.tab = tab;
             this.success = success;
-            this.rowCount = rowCount;
         }
 
         public TableDecision getTab() {
@@ -276,10 +272,5 @@ public class LoadDataTask extends ValueConverter implements Callable<LoadDataTas
         public boolean isSuccess() {
             return success;
         }
-
-        public long getRowCount() {
-            return rowCount;
-        }
     }
-
 }

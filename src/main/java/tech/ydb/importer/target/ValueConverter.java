@@ -285,13 +285,13 @@ public abstract class ValueConverter {
         private final int sourceIndex; // 1-based position in the input ResultSet
         private final int targetIndex; // 0-based position in the destination StructValue
         private final ConvMode mode; // field conversion mode
-        private final String blobPath; // full BLOB table path, when mode==BLOB
+        private final BlobSaver blobSaver; // blob saver, when mode==BLOB
 
-        public ConvInfo(int sourceIndex, int targetIndex, ConvMode mode, String blobPath) {
+        public ConvInfo(int sourceIndex, int targetIndex, ConvMode mode, BlobSaver blobSaver) {
             this.sourceIndex = sourceIndex;
             this.targetIndex = targetIndex;
             this.mode = mode;
-            this.blobPath = blobPath;
+            this.blobSaver = blobSaver;
         }
 
         public ConvInfo(int sourceIndex, int targetIndex, ConvMode mode) {
@@ -310,8 +310,8 @@ public abstract class ValueConverter {
             return mode;
         }
 
-        public String getBlobPath() {
-            return blobPath;
+        public BlobSaver getBlobSaver() {
+            return blobSaver;
         }
     }
 

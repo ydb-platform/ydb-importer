@@ -2,12 +2,12 @@ package tech.ydb.importer.target;
 
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.protobuf.ByteString;
 
+import tech.ydb.table.SessionRetryContext;
 import tech.ydb.table.values.ListType;
 import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.PrimitiveValue;
@@ -21,21 +21,19 @@ import tech.ydb.table.values.Value;
  * @author zinal
  */
 public class BlobSaver {
-
     public static final int BLOCK_SIZE = 65536;
 
     public static final StructType BLOB_ROW = StructType.of(
             "id", PrimitiveType.Int64,
             "pos", PrimitiveType.Int32,
-            "val", PrimitiveType.Bytes);
+            "val", PrimitiveType.Bytes
+    );
+
     public static final ListType BLOB_LIST = ListType.of(BLOB_ROW);
 
-    // Id generator for the current worker thread.
-    private static final ThreadLocal<Long> VALUE_ID = ThreadLocal.withInitial(() -> -1L);
+    private final YdbUpsertOp upsertOp;
+    private final AtomicLong nextIdGen = new AtomicLong(0);
 
-    private final ProgressCounter progress;
-    // BLOB path -> unwritten BLOB records
-    private final Map<String, Datum> data = new HashMap<>();
     // max number of records before flush
     private final int maxBlobRecords;
     // target table value positions
@@ -43,8 +41,14 @@ public class BlobSaver {
     private final int posPos;
     private final int posVal;
 
-    public BlobSaver(int maxBlobRecords, ProgressCounter progress) {
-        this.progress = progress;
+    private final List<Value<?>> currentBulk = new ArrayList<>();
+
+
+    public BlobSaver(String tablePath, SessionRetryContext ctx, ProgressCounter progress, int maxBlobRecords) {
+        this.upsertOp = new YdbUpsertOp(
+                ctx, tablePath, "blob rows upsert issue for " + tablePath, progress::addBlobRows
+        );
+
         if (maxBlobRecords < 1) {
             maxBlobRecords = 1;
         } else if (maxBlobRecords > 1000) {
@@ -56,81 +60,42 @@ public class BlobSaver {
         this.posVal = BLOB_ROW.getMemberIndex("val");
     }
 
-    public static void initCounter(int counter) {
-        final long base = (((long) counter))
-                * (((long) Integer.MAX_VALUE) + 1L)
-                * 256L;
-        VALUE_ID.set(base);
-    }
 
-    private Datum makeDatum(String blobPath) {
-        Datum v = data.get(blobPath);
-        if (v == null) {
-            v = new Datum(progress, blobPath);
-            data.put(blobPath, v);
-        }
-        return v;
-    }
+    public PrimitiveValue saveBlob(InputStream is) throws Exception {
+        PrimitiveValue id = PrimitiveValue.newInt64(nextIdGen.incrementAndGet());
 
-    public long nextId() {
-        final long x = VALUE_ID.get();
-        if (x < 0L) {
-            throw new IllegalStateException("Worker thread has not been initialized");
-        }
-        final long v = x + 1;
-        VALUE_ID.set(v);
-        return v;
-    }
-
-    public long saveBlob(YdbUpsertOp ydbOp, InputStream is, String blobPath) throws Exception {
-        final long id = nextId();
-        final Value<?> idValue = PrimitiveValue.newInt64(id);
-        final Datum v = makeDatum(blobPath);
+        byte[] block = new byte[BLOCK_SIZE];
         int position = 0;
-        final byte[] block = new byte[BLOCK_SIZE];
+
         while (true) {
             // Read next BLOB block
             final int bytesRead = is.read(block);
             if (bytesRead < 1) {
                 break;
             }
+
             // Create and append the block to the values list
             final Value<?>[] members = new Value<?>[3];
-            members[posId] = idValue;
+            members[posId] = id;
             members[posPos] = PrimitiveValue.newInt32(position);
             members[posVal] = PrimitiveValue.newBytes(ByteString.copyFrom(block, 0, bytesRead));
-            v.values.add(BLOB_ROW.newValueUnsafe(members));
-            ++position;
+            currentBulk.add(BLOB_ROW.newValueUnsafe(members));
+            position += 1;
+
             // Send the values list to YDB if it's time
-            if (v.values.size() >= maxBlobRecords) {
-                ydbOp.start(blobPath, BLOB_LIST.newValue(v.values), v.counter);
-                v.values.clear();
+            if (currentBulk.size() >= maxBlobRecords) {
+                upsertOp.upload(BLOB_LIST.newValue(currentBulk));
+                currentBulk.clear();
             }
         }
+
         return id;
     }
 
-    public void flush(YdbUpsertOp ydbOp) {
-        for (Datum d : data.values()) {
-            if (!d.values.isEmpty()) {
-                ydbOp.start(d.tablePath, BLOB_LIST.newValue(d.values), d.counter);
-            }
-        }
-        data.clear();
-        ydbOp.finish();
-    }
-
-    static class Datum {
-
-        final String tablePath;
-        final AnyCounter counter;
-        final List<Value<?>> values;
-
-        Datum(ProgressCounter pc, String tablePath) {
-            this.tablePath = tablePath;
-            this.counter = new BlobCounter("blob rows upsert issue for " + tablePath, pc);
-            this.values = new ArrayList<>();
+    public void flush() {
+        if (!currentBulk.isEmpty()) {
+            upsertOp.upload(BLOB_LIST.newValue(currentBulk));
+            currentBulk.clear();
         }
     }
-
 }
