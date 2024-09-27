@@ -1,6 +1,8 @@
 package tech.ydb.importer.target;
 
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -13,6 +15,7 @@ import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.PrimitiveValue;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.Value;
+import tech.ydb.table.values.VoidValue;
 
 /**
  * JDBC to YDB BLOB copying logic. Each BLOB value is converted to a sequence of records in an
@@ -20,7 +23,7 @@ import tech.ydb.table.values.Value;
  *
  * @author zinal
  */
-public class BlobSaver {
+public class BlobReader extends ValueReader {
     public static final int BLOCK_SIZE = 65536;
 
     public static final StructType BLOB_ROW = StructType.of(
@@ -41,10 +44,11 @@ public class BlobSaver {
     private final int posPos;
     private final int posVal;
 
+    private final boolean isBlob;
     private final List<Value<?>> currentBulk = new ArrayList<>();
 
-
-    public BlobSaver(String tablePath, SessionRetryContext ctx, ProgressCounter progress, int maxBlobRecords) {
+    public BlobReader(String tablePath, SessionRetryContext ctx, ProgressCounter progress, int maxBlobRecords,
+            boolean isBlob) {
         this.upsertOp = new YdbUpsertOp(
                 ctx, tablePath, "blob rows upsert issue for " + tablePath, progress::addBlobRows
         );
@@ -58,12 +62,39 @@ public class BlobSaver {
         this.posId = BLOB_ROW.getMemberIndex("id");
         this.posPos = BLOB_ROW.getMemberIndex("pos");
         this.posVal = BLOB_ROW.getMemberIndex("val");
+        this.isBlob = isBlob;
     }
 
+    @Override
+    public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
+        try (InputStream is = openStream(rs, index)) {
+            if (rs.wasNull()) {
+                if (synthKey != null) {
+                    synthKey.updateSeparator();
+                }
+                return VoidValue.of();
+            }
 
-    public PrimitiveValue saveBlob(InputStream is) throws Exception {
-        PrimitiveValue id = PrimitiveValue.newInt64(nextIdGen.incrementAndGet());
+            long id = nextIdGen.incrementAndGet();
+            PrimitiveValue ydbId = PrimitiveValue.newInt64(id);
+            saveBlob(ydbId, is);
+            if (synthKey != null) {
+                ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+                buffer.putLong(id);
+                synthKey.update(buffer);
+            }
+            return ydbId;
+        }
+    }
 
+    private InputStream openStream(ResultSet rs, int index) throws Exception {
+        if (isBlob) {
+            return rs.getBlob(index).getBinaryStream();
+        }
+        return rs.getBinaryStream(index);
+    }
+
+    public void saveBlob(PrimitiveValue id, InputStream is) throws Exception {
         byte[] block = new byte[BLOCK_SIZE];
         int position = 0;
 
@@ -88,10 +119,9 @@ public class BlobSaver {
                 currentBulk.clear();
             }
         }
-
-        return id;
     }
 
+    @Override
     public void flush() {
         if (!currentBulk.isEmpty()) {
             upsertOp.upload(BLOB_LIST.newValue(currentBulk));
