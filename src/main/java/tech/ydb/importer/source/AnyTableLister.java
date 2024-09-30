@@ -123,7 +123,7 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             sql = makeSelectSql(td, tm.getColumns());
             tm.setBasicSql(sql);
         }
-        sql = "SELECT q.* FROM (" + sql + ") AS q WHERE 0=1"; // retrieve zero rows
+        sql = "SELECT q.* FROM (" + sql + ") q WHERE 0=1"; // retrieve zero rows
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             try (ResultSet rs = ps.executeQuery()) {
                 final ResultSetMetaData rsmd = rs.getMetaData();
