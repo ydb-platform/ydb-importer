@@ -3,8 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>tech.ydb.importer</groupId>
     <artifactId>ydb-importer</artifactId>
-    <version>1.7-SNAPSHOT</version>
-    <!-- <version>X.Y[-SNAPSHOT]</version> -->
+    <version>1.7</version>
     <packaging>jar</packaging>
 
     <name>YDB JDBC Importer</name>
