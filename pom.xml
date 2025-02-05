@@ -22,20 +22,12 @@
             <url>https://www.apache.org/licenses/LICENSE-2.0</url>
         </license>
     </licenses>
-    <developers>
-        <developer>
-            <name>Maksim Zinal</name>
-            <email>mzinal@ydb.tech</email>
-            <organization>YDB</organization>
-            <organizationUrl>https://ydb.tech/</organizationUrl>
-        </developer>
-    </developers>
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>tech.ydb</groupId>
                 <artifactId>ydb-sdk-bom</artifactId>
-                <version>2.2.2</version>
+                <version>2.3.8</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -50,12 +42,12 @@
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
-            <version>2.23.1</version>
+            <version>2.24.2</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-slf4j-impl</artifactId>
-            <version>2.23.1</version>
+            <version>2.24.2</version>
         </dependency>
         <dependency>
             <groupId>tech.ydb</groupId>
@@ -148,9 +140,9 @@
     </build>
     <profiles>
         <profile>
-            <id>jdk8-bootstrap</id>
+            <id>release-profile</id>
             <activation>
-                <jdk>[9</jdk>
+                <activeByDefault>true</activeByDefault>
             </activation>
             <build>
                 <plugins>
@@ -162,16 +154,21 @@
                             <release>8</release>
                         </configuration>
                     </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>release-profile</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <build>
-                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.1</version>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.11.2</version>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <version>3.1.2</version>
+                    </plugin>
                     <plugin>
                         <artifactId>maven-assembly-plugin</artifactId>
                         <version>3.7.1</version>
@@ -199,7 +196,7 @@
                                 <compress>true</compress>
                                 <manifest>
                                     <addClasspath>true</addClasspath>
-                                    <!--                            <classpathPrefix>lib/</classpathPrefix> -->
+                                    <!-- <classpathPrefix>lib/</classpathPrefix> -->
                                     <mainClass>tech.ydb.importer.YdbImporter</mainClass>
                                 </manifest>
                             </archive>
