@@ -3,6 +3,12 @@ package tech.ydb.importer.config;
 import org.jdom2.Element;
 
 /**
+ * Source configuration.
+ *
+ * <p>
+ * The source configuration is used to specify the source database connection
+ * parameters.
+ * </p>
  *
  * @author zinal
  */

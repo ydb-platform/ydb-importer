@@ -3,6 +3,12 @@ package tech.ydb.importer.config;
 import org.jdom2.Element;
 
 /**
+ * Target configuration.
+ *
+ * <p>
+ * The target configuration is used to specify the target database connection
+ * parameters and processing options.
+ * </p>
  *
  * @author zinal
  */
@@ -16,6 +22,7 @@ public class TargetConfig extends tech.ydb.importer.config.JdomHelper {
     private String connectionString;
     private String tlsCertificateFile;
     private String saKeyFile;
+
     private boolean replaceExisting;
     private boolean loadData;
     private int maxBatchRows;
