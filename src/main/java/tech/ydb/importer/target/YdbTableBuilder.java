@@ -168,9 +168,13 @@ public class YdbTableBuilder {
                 } else {
                     if (tab.getOptions().isAllowCustomDecimal()) {
                         int prec = ci.getSqlPrecision();
-                        if (prec > 35) prec = 35;
+                        if (prec > 35) {
+                            prec = 35;
+                        }
                         int scale = ci.getSqlScale();
-                        if (scale > prec) scale = prec;
+                        if (scale > prec) {
+                            scale = prec;
+                        }
                         return DecimalType.of(prec, scale);
                     }
                     return DecimalType.getDefault();
