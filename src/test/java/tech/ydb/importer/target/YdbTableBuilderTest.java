@@ -1,6 +1,7 @@
 package tech.ydb.importer.target;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.source.*;
 import tech.ydb.importer.config.*;
