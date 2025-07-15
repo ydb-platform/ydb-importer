@@ -2,12 +2,14 @@ package tech.ydb.importer.target;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.UUID;
 import java.util.function.Function;
 
 import tech.ydb.table.values.DecimalType;
@@ -18,6 +20,7 @@ import tech.ydb.table.values.Value;
 import tech.ydb.table.values.VoidValue;
 
 /**
+ * Adapter for converting values of different SQL types to YDB values.
  *
  * @author zinal
  */
@@ -40,6 +43,7 @@ public abstract class ValueReader {
     private static final ValueReader UINT64 = new LongReader(PrimitiveValue::newUint64);
 
     private static final ValueReader DATE = new DateReader(date -> PrimitiveValue.newDate(date.toLocalDate()));
+    private static final ValueReader DATE32 = new DateReader(date -> PrimitiveValue.newDate32(date.toLocalDate()));
     private static final ValueReader DATE_INT32 = new DateReader(date -> PrimitiveValue.newInt32(date2int(date)));
     private static final ValueReader DATE_UINT32 = new DateReader(date -> PrimitiveValue.newUint32(date2int(date)));
     private static final ValueReader DATE_INT64 = new DateReader(date -> PrimitiveValue.newInt64(date2int(date)));
@@ -48,14 +52,28 @@ public abstract class ValueReader {
 
     private static final ValueReader TIME_INT32 = new TimeReader(time -> PrimitiveValue.newInt32(time2int(time)));
 
-    private static final ValueReader DATETIME = new TimestampReader(ts -> PrimitiveValue.newDatetime(ts.toInstant()));
-    private static final ValueReader TIMESTAMP = new TimestampReader(ts -> PrimitiveValue.newTimestamp(ts.toInstant()));
+    private static final ValueReader DATETIME = new TimestampReader(
+            ts -> PrimitiveValue.newDatetime(ts.toInstant()));
+    private static final ValueReader TIMESTAMP = new TimestampReader(
+            ts -> PrimitiveValue.newTimestamp(ts.toInstant()));
     private static final ValueReader TS_DATE = new TimestampReader(
             ts -> PrimitiveValue.newDate(ts.toLocalDateTime().toLocalDate())
     );
+
+    private static final ValueReader TS_DATE32 = new TimestampReader(
+            ts -> PrimitiveValue.newDate32(ts.toLocalDateTime().toLocalDate())
+    );
+    private static final ValueReader DATETIME64 = new TimestampReader(
+            ts -> PrimitiveValue.newDatetime64(ts.toInstant()));
+    private static final ValueReader TIMESTAMP64 = new TimestampReader(
+            ts -> PrimitiveValue.newTimestamp64(ts.toInstant()));
+
     private static final ValueReader TS_INT64 = new TimestampReader(ts -> PrimitiveValue.newInt64(ts.getTime()));
     private static final ValueReader TS_UINT64 = new TimestampReader(ts -> PrimitiveValue.newUint64(ts.getTime()));
     private static final ValueReader TS_STR = new TimestampReader(ts -> PrimitiveValue.newText(ts.toString()));
+
+    private static final ValueReader UUID_BINARY = new UuidReaderBinary();
+    private static final ValueReader UUID_TEXT = new UuidReaderText();
 
     /**
      * Converts a single source ResultSet column value to YDB format.
@@ -110,10 +128,21 @@ public abstract class ValueReader {
                         default:
                             return DATE;
                     }
+                case Date32:
+                    switch (sqlType) {
+                        case java.sql.Types.TIMESTAMP:
+                            return TS_DATE32;
+                        default:
+                            return DATE32;
+                    }
                 case Datetime:
                     return DATETIME;
                 case Timestamp:
                     return TIMESTAMP;
+                case Datetime64:
+                    return DATETIME64;
+                case Timestamp64:
+                    return TIMESTAMP64;
                 case Float:
                     return FLOAT;
                 case Double:
@@ -163,6 +192,14 @@ public abstract class ValueReader {
                     }
                 case Bytes: // SQL BINARY, VARBINARY
                     return BYTES;
+                case Uuid:
+                    switch (sqlType) {
+                        case java.sql.Types.BINARY:
+                        case java.sql.Types.VARBINARY:
+                            return UUID_BINARY;
+                        default:
+                            return UUID_TEXT;
+                    }
                 default:
                     throw new IllegalArgumentException("unsupported type: " + paramType);
             }
@@ -480,6 +517,48 @@ public abstract class ValueReader {
         }
     }
 
+    private static class UuidReaderText extends ValueReader {
+        @Override
+        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
+            String value = rs.getString(index);
+            if (rs.wasNull()) {
+                if (synthKey != null) {
+                    synthKey.updateSeparator();
+                }
+                return VoidValue.of();
+            }
+
+            if (synthKey != null) {
+                synthKey.update(value.getBytes(StandardCharsets.UTF_8));
+                synthKey.updateSeparator();
+            }
+
+            return PrimitiveValue.newUuid(value);
+        }
+    }
+
+    private static class UuidReaderBinary extends ValueReader {
+        @Override
+        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
+            byte[] value = rs.getBytes(index);
+            if (rs.wasNull()) {
+                if (synthKey != null) {
+                    synthKey.updateSeparator();
+                }
+                return VoidValue.of();
+            }
+
+            if (synthKey != null) {
+                synthKey.update(value);
+                synthKey.updateSeparator();
+            }
+
+            ByteBuffer byteBuffer = ByteBuffer.wrap(value);
+            long high = byteBuffer.getLong();
+            long low = byteBuffer.getLong();
+            return PrimitiveValue.newUuid(new UUID(high, low));
+        }
+    }
 
     private static boolean str2bool(String value) {
         if (value == null) {

@@ -161,23 +161,18 @@ public class YdbTableBuilder {
                     if (ci.getSqlPrecision() < 20) {
                         return PrimitiveType.Int64;
                     }
-                    // TEMP: only DECIMAL(22,9) is supported for table columns.
-                    // For now Int64 is the best substitute for DECIMAL(38,0).
+                    if (tab.getOptions().isAllowCustomDecimal()) {
+                        return DecimalType.of(35, 0);
+                    }
                     return PrimitiveType.Int64;
-                    /*
-                    int prec = ci.getSqlPrecision();
-                    if (prec > 35) prec = 35;
-                    return "Decimal(" + String.valueOf(prec) + ",0)";
-                     */
                 } else {
-                    /*
-                    int prec = ci.getSqlPrecision();
-                    if (prec > 35) prec = 35;
-                    int scale = ci.getSqlScale();
-                    if (scale > prec) scale = prec;
-                    return "Decimal(" + String.valueOf(prec) + "," + String.valueOf(scale) + ")";
-                     */
-                    // TEMP: only DECIMAL(22,9) is supported for table columns.
+                    if (tab.getOptions().isAllowCustomDecimal()) {
+                        int prec = ci.getSqlPrecision();
+                        if (prec > 35) prec = 35;
+                        int scale = ci.getSqlScale();
+                        if (scale > prec) scale = prec;
+                        return DecimalType.of(prec, scale);
+                    }
                     return DecimalType.getDefault();
                 }
             case java.sql.Types.DOUBLE:
@@ -211,7 +206,7 @@ public class YdbTableBuilder {
                         /* noop */
                     }
                 }
-                return PrimitiveType.Date;
+                return PrimitiveType.Date32;
             case java.sql.Types.TIME:
                 return PrimitiveType.Int32;
             case java.sql.Types.TIMESTAMP:
@@ -230,9 +225,9 @@ public class YdbTableBuilder {
                     }
                 }
                 if (ci.getSqlScale() == 0) {
-                    return PrimitiveType.Datetime;
+                    return PrimitiveType.Datetime64;
                 }
-                return PrimitiveType.Timestamp;
+                return PrimitiveType.Timestamp64;
             default: {
                 /* noop */
             }

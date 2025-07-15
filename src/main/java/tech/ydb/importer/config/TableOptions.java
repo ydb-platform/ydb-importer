@@ -15,14 +15,16 @@ public class TableOptions extends JdomHelper {
     private CaseMode caseMode;
     private DateConv dateConv;
     private DateConv timestampConv;
+    private boolean allowCustomDecimal;
     private boolean skipUnknownTypes;
 
     public TableOptions(String name, String template) {
         this.name = name;
         this.mainTemplate = template;
         this.caseMode = CaseMode.ASIS;
-        this.dateConv = DateConv.DATE;
-        this.timestampConv = DateConv.DATE;
+        this.dateConv = DateConv.DATE_NEW;
+        this.timestampConv = DateConv.DATE_NEW;
+        this.allowCustomDecimal = true;
         this.skipUnknownTypes = false;
     }
 
@@ -37,24 +39,22 @@ public class TableOptions extends JdomHelper {
         } catch (Exception ex) {
             throw raiseIllegal(c, "case-mode", v);
         }
-        v = getText(c, "conv-date", DateConv.DATE.name());
+        v = getText(c, "conv-date", DateConv.DATE_NEW.name());
         try {
             this.dateConv = DateConv.valueOf(v.toUpperCase());
         } catch (Exception ex) {
             throw raiseIllegal(c, "conv-date", v);
         }
-        v = getText(c, "conv-timestamp", DateConv.DATE.name());
+        v = getText(c, "conv-timestamp", DateConv.DATE_NEW.name());
         try {
             this.timestampConv = DateConv.valueOf(v.toUpperCase());
         } catch (Exception ex) {
             throw raiseIllegal(c, "conv-timestamp", v);
         }
+        v = getText(c, "allow-custom-decimal", "true");
+        this.allowCustomDecimal = Boolean.parseBoolean(v);
         v = getText(c, "skip-unknown-types", "false");
-        try {
-            this.skipUnknownTypes = Boolean.parseBoolean(v);
-        } catch (Exception ex) {
-            throw raiseIllegal(c, "skip-unknown-types", v);
-        }
+        this.skipUnknownTypes = Boolean.parseBoolean(v);
     }
 
     public String getName() {
@@ -101,6 +101,14 @@ public class TableOptions extends JdomHelper {
         this.timestampConv = timestampConv;
     }
 
+    public boolean isAllowCustomDecimal() {
+        return allowCustomDecimal;
+    }
+
+    public void setAllowCustomDecimal(boolean allowCustomDecimal) {
+        this.allowCustomDecimal = allowCustomDecimal;
+    }
+
     public boolean isSkipUnknownTypes() {
         return skipUnknownTypes;
     }
@@ -109,15 +117,43 @@ public class TableOptions extends JdomHelper {
         this.skipUnknownTypes = skipUnknownTypes;
     }
 
+    /**
+     * Case mode for table name.
+     */
     public enum CaseMode {
+        /**
+         * Leave table name as is.
+         */
         ASIS,
+        /**
+         * Convert table name to upper case.
+         */
         UPPER,
+        /**
+         * Convert table name to lower case.
+         */
         LOWER
     }
 
+    /**
+     * Date conversion mode.
+     */
     public enum DateConv {
+        /**
+         * Date in YDB format, Date32, Datetime64 and Timestamp64 data types.
+         */
+        DATE_NEW,
+        /**
+         * Date in YDB format, classical Date, Datetime and Timestamp data types.
+         */
         DATE,
+        /**
+         * Date or time as string, using formats "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SSZ" and "YYYY-MM-DDTHH:MM:SS.SSSZ".
+         */
         STR,
+        /**
+         * Date or time as integer, using format "YYYYMMDD" for dates and epoch-based milliseconds for timestamps.
+         */
         INT
     }
 
