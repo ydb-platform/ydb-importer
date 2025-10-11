@@ -175,15 +175,17 @@ public class YdbImporter {
         }
         String fileName = config.getTarget().getScript().getFileName();
         try (OutputStreamWriter osw = new OutputStreamWriter(
-                new FileOutputStream(fileName), StandardCharsets.UTF_8); BufferedWriter writer = new BufferedWriter(osw)) {
-            for (TableDecision td : tables) {
-                if (td.isFailure()) {
-                    continue;
+                new FileOutputStream(fileName), StandardCharsets.UTF_8)) {
+            try (BufferedWriter writer = new BufferedWriter(osw)) {
+                for (TableDecision td : tables) {
+                    if (td.isFailure()) {
+                        continue;
+                    }
+                    for (TargetTable blobTable : td.getBlobTargets().values()) {
+                        YdbTableBuilder.appendTo(writer, blobTable);
+                    }
+                    YdbTableBuilder.appendTo(writer, td.getTarget());
                 }
-                for (TargetTable blobTable : td.getBlobTargets().values()) {
-                    YdbTableBuilder.appendTo(writer, blobTable);
-                }
-                YdbTableBuilder.appendTo(writer, td.getTarget());
             }
         }
         LOG.info("YDB DDL saved to {}", fileName);
