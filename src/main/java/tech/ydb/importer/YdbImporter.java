@@ -37,10 +37,12 @@ import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.Type;
 
 /**
+ * YDB Importer main application logic and entry point.
  *
  * @author zinal
  */
 public class YdbImporter {
+
     private static final Logger LOG = LoggerFactory.getLogger(YdbImporter.class);
 
     private final ImporterConfig config;
@@ -154,9 +156,14 @@ public class YdbImporter {
                 // proceed only with tables which had no failures
                 out.getTd().setMetadata(out.getTm());
                 new YdbTableBuilder(out.getTd()).build();
-                tables.add(out.getTd());
+                if (out.getTd().getTarget() != null) {
+                    tables.add(out.getTd());
+                } else {
+                    // Mark the failed table, as we failed to convert it.
+                    out.getTd().setFailure(true);
+                }
             } else {
-                // Mark the failed table
+                // Mark the failed table, as no metadata was obtained.
                 out.getTd().setFailure(true);
             }
         }
@@ -168,8 +175,7 @@ public class YdbImporter {
         }
         String fileName = config.getTarget().getScript().getFileName();
         try (OutputStreamWriter osw = new OutputStreamWriter(
-                new FileOutputStream(fileName), StandardCharsets.UTF_8);
-                BufferedWriter writer = new BufferedWriter(osw)) {
+                new FileOutputStream(fileName), StandardCharsets.UTF_8); BufferedWriter writer = new BufferedWriter(osw)) {
             for (TableDecision td : tables) {
                 if (td.isFailure()) {
                     continue;
@@ -289,6 +295,7 @@ public class YdbImporter {
     }
 
     public static final class WorkerFactory implements ThreadFactory {
+
         private final AtomicInteger counter = new AtomicInteger();
 
         @Override

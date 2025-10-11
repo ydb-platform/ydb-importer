@@ -7,6 +7,7 @@ import java.util.Map;
 import org.apache.commons.text.StringSubstitutor;
 
 import tech.ydb.importer.TableDecision;
+import tech.ydb.importer.config.TableOptions;
 import tech.ydb.importer.source.ColumnInfo;
 import tech.ydb.table.values.DecimalType;
 import tech.ydb.table.values.PrimitiveType;
@@ -30,12 +31,15 @@ public class YdbTableBuilder {
     }
 
     public void build() {
-        tab.setTarget(buildMainTable());
-        tab.getBlobTargets().clear();
-        for (ColumnInfo ci : tab.getMetadata().getColumns()) {
-            if (ci.isBlob()) {
-                tab.getBlobTargets().put(ci.getName(),
-                        buildBlobTable(tab.getTarget(), ci));
+        TargetTable tt = buildMainTable();
+        if (tt != null) {
+            tab.setTarget(tt);
+            tab.getBlobTargets().clear();
+            for (ColumnInfo ci : tab.getMetadata().getColumns()) {
+                if (ci.isBlob()) {
+                    tab.getBlobTargets().put(ci.getName(),
+                            buildBlobTable(tab.getTarget(), ci));
+                }
             }
         }
     }
@@ -61,13 +65,14 @@ public class YdbTableBuilder {
                         ci.getName(), tab.getSchema(), tab.getTable(), ci.getSqlType());
                 continue;
             }
+            sb.append("  `").append(ci.getDestinationName()).append("` ");
+            sb.append(type.toString());
             if (ci.isNullable()) {
                 types.put(ci.getDestinationName(), type.makeOptional());
             } else {
                 types.put(ci.getDestinationName(), type);
+                sb.append(" NOT NULL");
             }
-            sb.append("  `").append(ci.getDestinationName()).append("` ");
-            sb.append(type.toString());
             sb.append(",").append(EOL);
         }
         if (types.isEmpty()) {
@@ -80,6 +85,15 @@ public class YdbTableBuilder {
             addSyntheticKey(sb, types);
         } else {
             addPrimaryKey(sb);
+        }
+        sb.append(") WITH (").append(EOL);
+        if (TableOptions.StoreType.COLUMN.equals(tab.getOptions().getStoreType())) {
+            sb.append("  STORE = COLUMN").append(EOL);
+        } else {
+            sb.append("  AUTO_PARTITIONING_BY_SIZE = ENABLED").append(EOL);
+            sb.append(", AUTO_PARTITIONING_BY_LOAD = ENABLED").append(EOL);
+            sb.append(", AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 9999").append(EOL);
+            sb.append(", AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9999").append(EOL);
         }
         sb.append(");").append(EOL);
         return new TargetTable(tab, fullName, sb.toString(), StructType.of(types));
@@ -263,7 +277,7 @@ public class YdbTableBuilder {
         String field = TargetTable.SYNTH_KEY_FIELD;
         types.put(field, PrimitiveType.Text);
         sb.append("  ").append(field).append(" Text,").append(EOL)
-                .append("  PRIMARY KEY (").append(field).append(")");
+                .append("  PRIMARY KEY (").append(field).append(")").append(EOL);
     }
 
     private void addPrimaryKey(StringBuilder sb) {
@@ -277,7 +291,7 @@ public class YdbTableBuilder {
             }
             sb.append('`').append(ci.getDestinationName()).append('`');
         }
-        sb.append(")");
+        sb.append(")").append(EOL);
     }
 
     public static void appendTo(BufferedWriter bw, TargetTable yt) throws Exception {

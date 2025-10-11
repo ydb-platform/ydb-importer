@@ -17,6 +17,7 @@ public class TableOptions extends JdomHelper {
     private DateConv timestampConv;
     private boolean allowCustomDecimal;
     private boolean skipUnknownTypes;
+    private StoreType storeType;
 
     public TableOptions(String name, String template) {
         this.name = name;
@@ -26,6 +27,7 @@ public class TableOptions extends JdomHelper {
         this.timestampConv = DateConv.DATE_NEW;
         this.allowCustomDecimal = true;
         this.skipUnknownTypes = false;
+        this.storeType = StoreType.ROW;
     }
 
     public TableOptions(Element c) {
@@ -55,6 +57,12 @@ public class TableOptions extends JdomHelper {
         this.allowCustomDecimal = Boolean.parseBoolean(v);
         v = getText(c, "skip-unknown-types", "false");
         this.skipUnknownTypes = Boolean.parseBoolean(v);
+        v = getText(c, "store-type", StoreType.ROW.name());
+        try {
+            this.storeType = StoreType.valueOf(v.toUpperCase());
+        } catch (Exception ex) {
+            throw raiseIllegal(c, "store-type", v);
+        }
     }
 
     public String getName() {
@@ -115,6 +123,14 @@ public class TableOptions extends JdomHelper {
 
     public void setSkipUnknownTypes(boolean skipUnknownTypes) {
         this.skipUnknownTypes = skipUnknownTypes;
+    }
+
+    public StoreType getStoreType() {
+        return storeType;
+    }
+
+    public void setStoreType(StoreType storeType) {
+        this.storeType = storeType;
     }
 
     /**
