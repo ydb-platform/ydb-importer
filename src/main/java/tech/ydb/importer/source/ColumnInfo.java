@@ -13,6 +13,7 @@ public class ColumnInfo {
     private int sqlType;
     private int sqlPrecision;
     private int sqlScale;
+    private boolean nullable;
     private boolean blobAsObject;
 
     public ColumnInfo(String name) {
@@ -22,6 +23,7 @@ public class ColumnInfo {
         this.sqlType = java.sql.Types.VARCHAR;
         this.sqlPrecision = 0;
         this.sqlScale = 0;
+        this.nullable = true;
         this.blobAsObject = false;
     }
 
@@ -63,6 +65,14 @@ public class ColumnInfo {
 
     public void setSqlScale(int sqlScale) {
         this.sqlScale = sqlScale;
+    }
+
+    public boolean isNullable() {
+        return nullable;
+    }
+
+    public void setNullable(boolean nullable) {
+        this.nullable = nullable;
     }
 
     public boolean isBlobAsObject() {

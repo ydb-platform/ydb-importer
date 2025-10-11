@@ -50,7 +50,7 @@ public class BlobReader extends ValueReader {
     public BlobReader(String tablePath, SessionRetryContext ctx, ProgressCounter progress, int maxBlobRecords,
             boolean isBlob) {
         this.upsertOp = new YdbUpsertOp(
-                ctx, tablePath, "blob rows upsert issue for " + tablePath, progress::addBlobRows
+                ctx, tablePath, "blob rows upsert issue for " + tablePath, progress::countBlobRows
         );
 
         if (maxBlobRecords < 1) {

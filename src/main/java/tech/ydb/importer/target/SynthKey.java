@@ -1,7 +1,6 @@
 package tech.ydb.importer.target;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
@@ -14,7 +13,8 @@ import tech.ydb.table.values.Value;
  * @author Aleksandr Gorshenin
  */
 public class SynthKey {
-    private static final byte[] SEPARATOR = new byte[] {0x02};
+
+    private static final byte[] SEPARATOR = new byte[]{0x02};
     private final MessageDigest digest;
     private final Base64.Encoder base64Encoder;
 
@@ -37,7 +37,6 @@ public class SynthKey {
 
     public Value<?> build() {
         byte[] sign = digest.digest();
-        String base64v = base64Encoder.encodeToString(sign);
-        return PrimitiveValue.newBytes(base64v.getBytes(StandardCharsets.ISO_8859_1));
+        return PrimitiveValue.newText(base64Encoder.encodeToString(sign));
     }
 }

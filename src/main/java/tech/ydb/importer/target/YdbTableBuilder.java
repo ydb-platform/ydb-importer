@@ -61,10 +61,20 @@ public class YdbTableBuilder {
                         ci.getName(), tab.getSchema(), tab.getTable(), ci.getSqlType());
                 continue;
             }
-            types.put(ci.getDestinationName(), type.makeOptional());
+            if (ci.isNullable()) {
+                types.put(ci.getDestinationName(), type.makeOptional());
+            } else {
+                types.put(ci.getDestinationName(), type);
+            }
             sb.append("  `").append(ci.getDestinationName()).append("` ");
             sb.append(type.toString());
             sb.append(",").append(EOL);
+        }
+        if (types.isEmpty()) {
+            // unknown type, and skip mode is enabled
+            LOG.warn("No columns are defined in table {}.{} - SKIPPING",
+                    tab.getSchema(), tab.getTable());
+            return null;
         }
         if (tab.getMetadata().getKey().isEmpty()) {
             addSyntheticKey(sb, types);
@@ -200,6 +210,8 @@ public class YdbTableBuilder {
                 return PrimitiveType.Int64; // Id of record sequence in the separate table.
             case java.sql.Types.DATE:
                 switch (tab.getOptions().getDateConv()) {
+                    case DATE_NEW:
+                        return PrimitiveType.Date32;
                     case DATE:
                         return PrimitiveType.Date;
                     case INT:
@@ -215,6 +227,11 @@ public class YdbTableBuilder {
                 return PrimitiveType.Int32;
             case java.sql.Types.TIMESTAMP:
                 switch (tab.getOptions().getTimestampConv()) {
+                    case DATE_NEW:
+                        if (ci.getSqlScale() == 0) {
+                            return PrimitiveType.Datetime64;
+                        }
+                        return PrimitiveType.Timestamp64;
                     case DATE:
                         if (ci.getSqlScale() == 0) {
                             return PrimitiveType.Datetime;
@@ -243,9 +260,10 @@ public class YdbTableBuilder {
     }
 
     private void addSyntheticKey(StringBuilder sb, Map<String, Type> types) {
-        types.put(TargetTable.SYNTH_KEY_FIELD, PrimitiveType.Bytes);
-        sb.append("  ydb_synth_key String,").append(EOL)
-                .append("  PRIMARY KEY (ydb_synth_key)");
+        String field = TargetTable.SYNTH_KEY_FIELD;
+        types.put(field, PrimitiveType.Text);
+        sb.append("  ").append(field).append(" Text,").append(EOL)
+                .append("  PRIMARY KEY (").append(field).append(")");
     }
 
     private void addPrimaryKey(StringBuilder sb) {

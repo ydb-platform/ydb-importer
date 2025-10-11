@@ -47,7 +47,7 @@ public class LoadDataTask implements Callable<Boolean> {
                 target.getRetryCtx(),
                 target.getDatabase() + "/" + tab.getTarget().getFullName(),
                 "failed upsert to " + tab.getTarget().getFullName(),
-                progress::addWritedRows
+                progress::countWrittenRows
         );
         this.tab = tab;
         this.progress = progress;
@@ -97,7 +97,7 @@ public class LoadDataTask implements Callable<Boolean> {
 
         while (rs.next()) {
             copied++;
-            progress.addReadedRows(1);
+            progress.countReadRows(1);
 
             batch.add(read(rs, paramType, columns, synchKey));
             if (batch.size() >= maxBatchRows) {

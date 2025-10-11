@@ -138,6 +138,7 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                     ci.setSqlType(rsmd.getColumnType(i));
                     ci.setSqlPrecision(rsmd.getPrecision(i));
                     ci.setSqlScale(rsmd.getScale(i));
+                    ci.setNullable(rsmd.isNullable(i) != 0);
                 }
             }
         } catch (Exception ex) {
@@ -188,7 +189,8 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
     }
 
     /**
-     * Build the instance of a customized table lister for a particular source database type
+     * Build the instance of a customized table lister for a particular source
+     * database type
      *
      * @param tableMaps
      * @param con

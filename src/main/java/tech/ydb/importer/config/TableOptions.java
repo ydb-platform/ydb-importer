@@ -118,6 +118,20 @@ public class TableOptions extends JdomHelper {
     }
 
     /**
+     * The store type to be used by the target tables.
+     */
+    public enum StoreType {
+        /**
+         * Row organized storage.
+         */
+        ROW,
+        /**
+         * Column organized storage.
+         */
+        COLUMN
+    }
+
+    /**
      * Case mode for table name.
      */
     public enum CaseMode {
@@ -140,19 +154,23 @@ public class TableOptions extends JdomHelper {
      */
     public enum DateConv {
         /**
-         * Date in YDB format, Date32, Datetime64 and Timestamp64 data types.
+         * Date in YDB format, new Date32, Datetime64 and Timestamp64 data
+         * types.
          */
         DATE_NEW,
         /**
-         * Date in YDB format, classical Date, Datetime and Timestamp data types.
+         * Date in YDB format, classical Date, Datetime and Timestamp data
+         * types.
          */
         DATE,
         /**
-         * Date or time as string, using formats "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SSZ" and "YYYY-MM-DDTHH:MM:SS.SSSZ".
+         * Date or time as string, using formats "YYYY-MM-DD",
+         * "YYYY-MM-DDTHH:MM:SSZ" and "YYYY-MM-DDTHH:MM:SS.SSSZ".
          */
         STR,
         /**
-         * Date or time as integer, using format "YYYYMMDD" for dates and epoch-based milliseconds for timestamps.
+         * Date or time as integer, using format "YYYYMMDD" for dates and
+         * epoch-based milliseconds for timestamps.
          */
         INT
     }

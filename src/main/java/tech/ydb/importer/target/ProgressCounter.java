@@ -11,18 +11,19 @@ import org.slf4j.LoggerFactory;
  * @author zinal
  */
 public class ProgressCounter implements AutoCloseable {
+
     private static final Logger LOG = LoggerFactory.getLogger(ProgressCounter.class);
 
-    private final AtomicLong readedRows;
-    private final AtomicLong writedRows;
-    private final AtomicLong blobRows;
+    private final AtomicLong numRowsRRead;
+    private final AtomicLong numRowsWritten;
+    private final AtomicLong numRowsBlob;
     private final Thread workerThread;
     private final long startedAt;
 
     public ProgressCounter() {
-        this.readedRows = new AtomicLong(0L);
-        this.writedRows = new AtomicLong(0L);
-        this.blobRows = new AtomicLong(0L);
+        this.numRowsRRead = new AtomicLong(0L);
+        this.numRowsWritten = new AtomicLong(0L);
+        this.numRowsBlob = new AtomicLong(0L);
 
         this.workerThread = new Thread(new ProgressWorker());
         this.workerThread.setDaemon(true);
@@ -46,30 +47,31 @@ public class ProgressCounter implements AutoCloseable {
         }
     }
 
-    public long addReadedRows(int count) {
-        return readedRows.addAndGet(count);
+    public long countReadRows(int count) {
+        return numRowsRRead.addAndGet(count);
     }
 
-    public long addWritedRows(int count) {
-        return writedRows.addAndGet(count);
+    public long countWrittenRows(int count) {
+        return numRowsWritten.addAndGet(count);
     }
 
-    public long addBlobRows(int count) {
-        return blobRows.addAndGet(count);
+    public long countBlobRows(int count) {
+        return numRowsBlob.addAndGet(count);
     }
 
     private class ProgressWorker implements Runnable {
-        private long lastReaded = 0;
-        private long lastWrited = 0;
+
+        private long lastRead = 0;
+        private long lastWritten = 0;
         private long lastBlobs = 0;
         private long lastTs = 0;
 
         @Override
         @SuppressWarnings("SleepWhileInLoop")
         public void run() {
-            lastReaded = readedRows.get();
-            lastWrited = writedRows.get();
-            lastBlobs = blobRows.get();
+            lastRead = numRowsRRead.get();
+            lastWritten = numRowsWritten.get();
+            lastBlobs = numRowsBlob.get();
             lastTs = System.currentTimeMillis();
 
             while (!Thread.currentThread().isInterrupted()) {
@@ -91,14 +93,14 @@ public class ProgressCounter implements AutoCloseable {
                 return;
             }
 
-            long readed = readedRows.get();
-            long writed = writedRows.get();
-            long blobs = blobRows.get();
+            long readed = numRowsRRead.get();
+            long writed = numRowsWritten.get();
+            long blobs = numRowsBlob.get();
 
-            double readedRate = 1000d * (readed - lastReaded) / diff;
-            double writedRate = 1000d * (writed - lastWrited) / diff;
+            double readedRate = 1000d * (readed - lastRead) / diff;
+            double writedRate = 1000d * (writed - lastWritten) / diff;
 
-            LOG.info("Progress: {} rows readed total [{} rows/sec], {} rows writed total [{} rows/sec]",
+            LOG.info("Progress: {} rows read total [{} rows/sec], {} rows written total [{} rows/sec]",
                     readed, String.format("%.2f", readedRate), writed, String.format("%.2f", writedRate));
 
             if (blobs > lastBlobs) {
@@ -107,8 +109,8 @@ public class ProgressCounter implements AutoCloseable {
             }
 
             lastTs = ts;
-            lastReaded = readed;
-            lastWrited = writed;
+            lastRead = readed;
+            lastWritten = writed;
             lastBlobs = blobs;
         }
 
@@ -116,12 +118,12 @@ public class ProgressCounter implements AutoCloseable {
             long ts = System.currentTimeMillis();
             final long diff = ts - startedAt;
 
-            long readed = readedRows.get();
-            long writed = writedRows.get();
-            double readedRate = 1000d * (readed - lastReaded) / diff;
-            double writedRate = 1000d * (writed - lastWrited) / diff;
+            long readed = numRowsRRead.get();
+            long writed = numRowsWritten.get();
+            double readedRate = 1000d * (readed - lastRead) / diff;
+            double writedRate = 1000d * (writed - lastWritten) / diff;
 
-            LOG.info("Final: {} rows readed total [{} rows/sec], {} rows writed total [{} rows/sec]",
+            LOG.info("Final: {} rows read total [{} rows/sec], {} rows written total [{} rows/sec]",
                     readed, String.format("%.2f", readedRate), writed, String.format("%.2f", writedRate));
         }
     }

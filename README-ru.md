@@ -142,7 +142,7 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
     </source>
     <!-- Параметры подключения к БД-получателю. -->
     <target type="ydb">
-        <!-- Выгрузить скрипт создания таблиц для YDB в указанный файл. 
+        <!-- Выгрузить скрипт создания таблиц для YDB в указанный файл.
              Может использоваться в том числе при отсутствии указания
              connection-string для генерации схемы без фактического создания
              таблиц.  -->
@@ -153,7 +153,7 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
             grpc://localhost:2136?database=/Root/testdb
          -->
         <connection-string>ydb-connection-string</connection-string>
-        <!-- Режим аутентификации: 
+        <!-- Режим аутентификации:
             ENV      использование переменных окружения для настройки аутентификации
             NONE     анонимное подключение к БД - не для продуктивных систем
             STATIC   аутентификация по логину и паролю
@@ -161,7 +161,7 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
             METADATA Аутентификация по метаданным виртуальной машины облака (управляемый сервис YDB)
         -->
         <auth-mode>ENV</auth-mode>
-        <!-- 
+        <!--
             В режиме ENV данные аутентификации необходимо установить в переменных окружения,
             как описано в документации: https://ydb.tech/ru/docs/reference/ydb-sdk/auth#env
             Если аутентификация по ключу сервисного аккаунта (явно либо через указание переменной
@@ -197,13 +197,14 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
              соответствующие схеме, имени копируемой исходной таблицы и имени
              поля типа BLOB. -->
         <blob-name-format>oraimp1/${schema}/${table}_${field}</blob-name-format>
-        <!-- Возможные значения: DATE (по умолчанию), INT, STR.
+        <!-- Возможные значения: DATE_NEW (по умолчанию), DATE, INT, STR.
+             Вариант DATE_NEW требует YDB версии 25.1 или более поздней.
              Вариант DATE не позволяет сохранить даты ранее 1 января 1970 года.
              Вариант INT хранит дату как 32-битное целое в формате ГГГГММДД.
              Вариант STR хранит дату как строку в формате ГГГГ-ММ-ДД.
          -->
-        <conv-date>INT</conv-date>
-        <conv-timestamp>STR</conv-timestamp>
+        <conv-date>DATE_NEW</conv-date>
+        <conv-timestamp>DATE_NEW</conv-timestamp>
         <!-- Если указано значение true, колонки таблиц неподдерживаемых типов пропускаются
              с выводов в лог соответствующего предупреждения. В противном случае генерируется
              ошибка импорта, и соответствующая таблица пропускается целиком. -->
@@ -215,7 +216,7 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
         <include-schemas regexp="true">.*</include-schemas>
         <!-- Исключаемые схемы -->
         <exclude-schemas>SOMESCHEMA</exclude-schemas>
-        <!-- Также могут присутствовать include-tables и exclude-tables, 
+        <!-- Также могут присутствовать include-tables и exclude-tables,
              для явного указания фильтра по именам таблиц
              и/или регулярным выражениям над именами таблиц. -->
     </table-map>
