@@ -28,6 +28,7 @@ import tech.ydb.table.values.VoidValue;
  * @author zinal
  */
 public class LoadDataTask implements Callable<Boolean> {
+
     private static final Logger LOG = LoggerFactory.getLogger(LoadDataTask.class);
 
     private final SourceCP source;
@@ -65,12 +66,14 @@ public class LoadDataTask implements Callable<Boolean> {
             return false;
         }
         LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
-        try (Connection con = source.getConnection();
-                PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql());
-                ResultSet rs = ps.executeQuery()) {
-            long copied = copyData(rs);
-            LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
-            return true;
+        try (Connection con = source.getConnection()) {
+            try (PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql())) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    long copied = copyData(rs);
+                    LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
+                    return true;
+                }
+            }
         } catch (Throwable e) {
             LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
             tab.setFailure(true);
@@ -112,8 +115,10 @@ public class LoadDataTask implements Callable<Boolean> {
         }
 
         // Flush all readers
-        for (ColumnIndex ci: columns) {
-            ci.getReader().flush();
+        for (ColumnIndex ci : columns) {
+            if (ci != null) {
+                ci.getReader().flush();
+            }
         }
 
         return copied;
@@ -172,7 +177,8 @@ public class LoadDataTask implements Callable<Boolean> {
     }
 
     /**
-     * Converts the current row from the source ResultSet to the StructValue representation.
+     * Converts the current row from the source ResultSet to the StructValue
+     * representation.
      *
      * @param type StructValue type definition
      * @param rs Input result set
@@ -205,7 +211,8 @@ public class LoadDataTask implements Callable<Boolean> {
         return type.newValueUnsafe(values);
     }
 
-    private class ColumnIndex {
+    private static class ColumnIndex {
+
         private final int structIndex;
         private final ValueReader reader;
 
