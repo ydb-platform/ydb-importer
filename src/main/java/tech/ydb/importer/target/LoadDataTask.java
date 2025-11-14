@@ -136,14 +136,14 @@ public class LoadDataTask implements Callable<Boolean> {
             String columnName = rsmd.getColumnName(i + 1);
             ColumnInfo ci = tab.getMetadata().findColumn(columnName);
             if (ci == null) {
-                LOG.warn("Unexpected column {} in the source table {}.{} - SKIPPED", columnName,
+                LOG.warn("Unexpected column {} in the source table {}.{} - column SKIPPED", columnName,
                         tab.getSchema(), tab.getTable());
                 continue;
             }
 
             Integer ixTarget = targetColumns.get(ci.getDestinationName());
             if (ixTarget == null) {
-                LOG.warn("Unexpected struct member {} in the source table {}.{} - SKIPPED", ci.getDestinationName(),
+                LOG.warn("Unexpected struct member {} in the source table {}.{} - column SKIPPED", ci.getDestinationName(),
                         tab.getSchema(), tab.getTable());
                 continue;
             }
