@@ -205,6 +205,9 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
          -->
         <conv-date>DATE_NEW</conv-date>
         <conv-timestamp>DATE_NEW</conv-timestamp>
+        <!-- Разрешить использование Decimal(M,N) с настраиваемыми параметрами M,N
+             (требует YDB 25.1 и выше). -->
+        <allow-custom-decimal>true</allow-custom-decimal>
         <!-- Если указано значение true, колонки таблиц неподдерживаемых типов пропускаются
              с выводов в лог соответствующего предупреждения. В противном случае генерируется
              ошибка импорта, и соответствующая таблица пропускается целиком. -->

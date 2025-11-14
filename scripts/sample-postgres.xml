@@ -43,6 +43,7 @@
         <!-- DATE_NEW, DATE, INT, STR -->
         <conv-date>DATE_NEW</conv-date>
         <conv-timestamp>DATE_NEW</conv-timestamp>
+        <allow-custom-decimal>true</allow-custom-decimal>
         <skip-unknown-types>true</skip-unknown-types>
     </table-options>
     <table-map options="default">

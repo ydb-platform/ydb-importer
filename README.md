@@ -212,6 +212,9 @@ Below is the definition of the configuration file structure:
          -->
         <conv-date>DATE_NEW</conv-date>
         <conv-timestamp>DATE_NEW</conv-timestamp>
+        <!-- Allow usage of Decimal(M,N) with custom M,N parameters
+             (requires YDB 25.1 or newer). -->
+        <allow-custom-decimal>true</allow-custom-decimal>
         <!-- If true, columns with unsupported types are skipped with warning,
              otherwise import error is generated, and the whole table is skipped. -->
         <skip-unknown-types>true</skip-unknown-types>
