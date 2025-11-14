@@ -2,6 +2,7 @@ package tech.ydb.importer.target;
 
 import java.util.function.IntConsumer;
 
+import tech.ydb.core.Status;
 import tech.ydb.table.SessionRetryContext;
 import tech.ydb.table.settings.BulkUpsertSettings;
 import tech.ydb.table.values.ListValue;
@@ -11,6 +12,8 @@ import tech.ydb.table.values.ListValue;
  * @author zinal
  */
 public class YdbUpsertOp {
+
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(YdbUpsertOp.class);
 
     private final SessionRetryContext retryCtx;
     private final String tablePath;
@@ -25,15 +28,35 @@ public class YdbUpsertOp {
         this.counter = counter;
     }
 
-    public void upload(ListValue newValue) {
-        if (newValue == null || newValue.isEmpty()) {
+    public void upload(ListValue values) {
+        if (values == null || values.isEmpty()) {
             return;
         }
 
-        retryCtx.supplyStatus(
-                session -> session.executeBulkUpsert(tablePath, newValue, upsertSettings)
-        ).join().expectSuccess(errorMsg);
+        Status status = retryCtx.supplyStatus(
+                session -> session.executeBulkUpsert(tablePath, values, upsertSettings)
+        ).join();
 
-        counter.accept(newValue.size());
+        if (status.isSuccess()) {
+            counter.accept(values.size());
+            return;
+        }
+
+        if (LOG.isDebugEnabled()) {
+            logValues(values);
+        }
+
+        status.expectSuccess(errorMsg);
+    }
+
+    private void logValues(ListValue values) {
+        int size = values.size();
+        LOG.debug("********************************");
+        LOG.debug("Problematic data block dump START, size is {}", size);
+        for (int i = 0; i < size; ++i) {
+            LOG.debug("{} {}", i, values.get(i));
+        }
+        LOG.debug("Problematic data block dump FINISH");
+        LOG.debug("********************************");
     }
 }
