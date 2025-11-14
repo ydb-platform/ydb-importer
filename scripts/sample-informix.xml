@@ -7,7 +7,7 @@
     <source type="informix">
         <jdbc-class>com.informix.jdbc.IfxDriver</jdbc-class>
         <jdbc-url>jdbc:informix-sqli://localhost:9088/stores_demo:INFORMIXSERVER=informix</jdbc-url>
-        <!-- 
+        <!--
              Typical demo databases: sales_demo, stores_demo, superstores_demo.
              To enable transactional logging: ontape -s -B sales_demo
         -->
@@ -41,9 +41,9 @@
         <table-name-format>ifx1/${schema}/${table}</table-name-format>
         <!-- Substitution values: ${schema}, ${table}, ${field} -->
         <blob-name-format>ifx1/${schema}/${table}_${field}</blob-name-format>
-        <!-- DATE, INT, STR -->
-        <conv-date>INT</conv-date>
-        <conv-timestamp>STR</conv-timestamp>
+        <!-- DATE_NEW, DATE, INT, STR -->
+        <conv-date>DATE_NEW</conv-date>
+        <conv-timestamp>DATE_NEW</conv-timestamp>
         <skip-unknown-types>true</skip-unknown-types>
     </table-options>
     <table-map options="default">

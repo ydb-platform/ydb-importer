@@ -203,15 +203,15 @@ Below is the definition of the configuration file structure:
              are used for source schema, table and BLOB field names. -->
         <blob-name-format>oraimp1/${schema}/${table}_${field}</blob-name-format>
         <!-- Date and timestamp data type values conversion mode.
-             Possible values: DATE (use YDB Date datatype, default), INT, STR.
+             Possible values: DATE_NEW (YDB Date32/Timestamp64, default), DATE (YDB Date/Timestamp), INT, STR.
              DATE does not support input values before January, 1, 1970.
              INT saves date as 32-bit integer YYYYMMDD for dates,
                  and as a 64-bit milliseconds since epoch for timestamps.
              STR saves dates as character strings (Utf8) in format "YYYY-MM-DD",
                  and in "YYYY-MM-DD hh:mm:ss.xxx" for timestamps.
          -->
-        <conv-date>INT</conv-date>
-        <conv-timestamp>STR</conv-timestamp>
+        <conv-date>DATE_NEW</conv-date>
+        <conv-timestamp>DATE_NEW</conv-timestamp>
         <!-- If true, columns with unsupported types are skipped with warning,
              otherwise import error is generated, and the whole table is skipped. -->
         <skip-unknown-types>true</skip-unknown-types>

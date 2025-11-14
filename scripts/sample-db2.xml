@@ -37,9 +37,9 @@
         <table-name-format>db2_1/${schema}/${table}</table-name-format>
         <!-- Substitution values: ${schema}, ${table}, ${field} -->
         <blob-name-format>db2_1/${schema}/${table}_${field}</blob-name-format>
-        <!-- DATE, INT, STR -->
-        <conv-date>INT</conv-date>
-        <conv-timestamp>STR</conv-timestamp>
+        <!-- DATE_NEW, DATE, INT, STR -->
+        <conv-date>DATE_NEW</conv-date>
+        <conv-timestamp>DATE_NEW</conv-timestamp>
         <skip-unknown-types>true</skip-unknown-types>
     </table-options>
     <table-map options="default">
