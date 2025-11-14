@@ -25,7 +25,6 @@ import tech.ydb.table.values.VoidValue;
  * @author zinal
  */
 public abstract class ValueReader {
-    private static final ValueReader BIG_DECIMAL = new BigDecimalReader(DecimalType.getDefault()::newValue);
 
     private static final ValueReader BOOL = new BoolReader(PrimitiveValue::newBool);
     private static final ValueReader INT_BOOL = new IntReader(i -> PrimitiveValue.newBool(i != 0));
@@ -97,7 +96,8 @@ public abstract class ValueReader {
         }
 
         if (paramType.getKind() == Type.Kind.DECIMAL) {
-            return BIG_DECIMAL;
+            final DecimalType theType = (DecimalType) paramType;
+            return new BigDecimalReader(theType::newValue);
         }
 
         if (paramType.getKind() == Type.Kind.PRIMITIVE) {
@@ -208,6 +208,7 @@ public abstract class ValueReader {
     }
 
     private static class StringReader extends ValueReader {
+
         private final Function<String, Value<?>> func;
 
         StringReader(Function<String, Value<?>> func) {
@@ -234,6 +235,7 @@ public abstract class ValueReader {
     }
 
     private static class BytesReader extends ValueReader {
+
         private final Function<byte[], Value<?>> func;
 
         BytesReader(Function<byte[], Value<?>> func) {
@@ -260,6 +262,7 @@ public abstract class ValueReader {
     }
 
     private static class IntReader extends ValueReader {
+
         private final Function<Integer, Value<?>> func;
 
         IntReader(Function<Integer, Value<?>> func) {
@@ -288,6 +291,7 @@ public abstract class ValueReader {
     }
 
     private static class LongReader extends ValueReader {
+
         private final Function<Long, Value<?>> func;
 
         LongReader(Function<Long, Value<?>> func) {
@@ -316,6 +320,7 @@ public abstract class ValueReader {
     }
 
     private static class FloatReader extends ValueReader {
+
         private final Function<Float, Value<?>> func;
 
         FloatReader(Function<Float, Value<?>> func) {
@@ -344,6 +349,7 @@ public abstract class ValueReader {
     }
 
     private static class DoubleReader extends ValueReader {
+
         private final Function<Double, Value<?>> func;
 
         DoubleReader(Function<Double, Value<?>> func) {
@@ -370,7 +376,9 @@ public abstract class ValueReader {
             return func.apply(value);
         }
     }
+
     private static class BoolReader extends ValueReader {
+
         private final Function<Boolean, Value<?>> func;
 
         BoolReader(Function<Boolean, Value<?>> func) {
@@ -399,6 +407,7 @@ public abstract class ValueReader {
     }
 
     private static class BigDecimalReader extends ValueReader {
+
         private final Function<BigDecimal, Value<?>> func;
 
         BigDecimalReader(Function<BigDecimal, Value<?>> func) {
@@ -429,6 +438,7 @@ public abstract class ValueReader {
     }
 
     private static class DateReader extends ValueReader {
+
         private final Function<Date, Value<?>> func;
 
         DateReader(Function<Date, Value<?>> func) {
@@ -457,6 +467,7 @@ public abstract class ValueReader {
     }
 
     private static class TimeReader extends ValueReader {
+
         private final Function<Time, Value<?>> func;
 
         TimeReader(Function<Time, Value<?>> func) {
@@ -489,6 +500,7 @@ public abstract class ValueReader {
     }
 
     private static class TimestampReader extends ValueReader {
+
         private final Function<Timestamp, Value<?>> func;
 
         TimestampReader(Function<Timestamp, Value<?>> func) {
@@ -518,6 +530,7 @@ public abstract class ValueReader {
     }
 
     private static class UuidReaderText extends ValueReader {
+
         @Override
         public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
             String value = rs.getString(index);
@@ -538,6 +551,7 @@ public abstract class ValueReader {
     }
 
     private static class UuidReaderBinary extends ValueReader {
+
         @Override
         public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
             byte[] value = rs.getBytes(index);
