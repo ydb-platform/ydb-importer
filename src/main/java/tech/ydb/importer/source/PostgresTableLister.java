@@ -125,24 +125,35 @@ public class PostgresTableLister extends AnyTableLister {
     @Override
     protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm)
             throws SQLException {
-        // Retrieve the primary key (if one is defined)
+        if (grabPrimaryKeyConstraint(con, ti, tm)) {
+            return;
+        }
+        chooseBestUniqueIndexAsKey(con, ti, tm);
+    }
+
+    /**
+     * Retrieve the real PRIMARY KEY definition, if it exists
+     */
+    private boolean grabPrimaryKeyConstraint(Connection con, TableIdentity ti, TableMetadata tm)
+            throws SQLException {
+        tm.clearKey();
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT ia.attname "
-                + "FROM pg_catalog.pg_attribute ia "
-                + "INNER JOIN pg_catalog.pg_class ic "
-                + "  ON ic.\"oid\" = ia.attrelid "
-                + "INNER JOIN pg_catalog.pg_index ix "
-                + "  ON ix.indexrelid =ic.\"oid\" "
-                + "INNER JOIN pg_catalog.pg_constraint x "
-                + "  ON x.conindid = ix.indexrelid "
-                + "INNER JOIN pg_catalog.pg_class c "
-                + "  ON c.\"oid\" = x.conrelid "
-                + "INNER JOIN pg_catalog.pg_namespace n "
-                + "  ON n.\"oid\" = c.relnamespace "
-                + "WHERE n.nspname = ? AND c.relname = ? "
-                + "  AND x.contype IN ('p', 'u') "
-                + "AND ix.indisvalid AND ix.indisunique "
-                + "ORDER BY ia.attnum")) {
+                        + "FROM pg_catalog.pg_attribute ia "
+                        + "INNER JOIN pg_catalog.pg_class ic "
+                        + "  ON ic.\"oid\" = ia.attrelid "
+                        + "INNER JOIN pg_catalog.pg_index ix "
+                        + "  ON ix.indexrelid = ic.\"oid\" "
+                        + "INNER JOIN pg_catalog.pg_constraint x "
+                        + "  ON x.conindid = ix.indexrelid "
+                        + "INNER JOIN pg_catalog.pg_class c "
+                        + "  ON c.\"oid\" = x.conrelid "
+                        + "INNER JOIN pg_catalog.pg_namespace n "
+                        + "  ON n.\"oid\" = c.relnamespace "
+                        + "WHERE n.nspname = ? AND c.relname = ? "
+                        + "  AND x.contype = 'p' "
+                        + "  AND ix.indisvalid AND ix.indisunique "
+                        + "ORDER BY ia.attnum")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
@@ -151,46 +162,77 @@ public class PostgresTableLister extends AnyTableLister {
                 }
             }
         }
-        if (tm.getKey().isEmpty()) {
-            // If the key was not defined as a PK constraint, look for unique indexes.
-            // MAYBE: logic to prefer all-integer keys over varchar-based.
-            try (PreparedStatement ps = con.prepareStatement(
-                    "SELECT ix.indexrelid, COUNT(*) "
-                    + "FROM pg_catalog.pg_index ix "
-                    + "INNER JOIN pg_catalog.pg_class c "
-                    + "  ON c.\"oid\" = ix.indrelid  "
-                    + "INNER JOIN pg_catalog.pg_namespace n "
-                    + "  ON n.\"oid\" = c.relnamespace "
-                    + "WHERE n.nspname = ? AND c.relname = ? "
-                    + "  AND ix.indisvalid AND ix.indisunique "
-                    + "GROUP BY ix.indexrelid "
-                    + "ORDER BY COUNT(*), ix.indexrelid")) {
-                ps.setString(1, ti.getSchema());
-                ps.setString(2, ti.getTable());
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (rs.next()) {
-                        long ixid = rs.getLong(1);
-                        if (!rs.wasNull()) {
-                            grabIndexColumns(con, ixid, tm);
-                        }
+        return !tm.getKey().isEmpty();
+    }
+
+    /**
+     * Choose the best UNIQUE or UNIQUE index when there is no PRIMARY KEY.
+     * <p>
+     * (a) Prefer an index with the smallest number of columns.
+     * (b) For equal-length indexes, compare sorted column-name lists.
+     */
+    private void chooseBestUniqueIndexAsKey(Connection con, TableIdentity ti, TableMetadata tm)
+            throws SQLException {
+        Long bestIndexId = null;
+        int bestKeyCount = 0;
+
+        try (PreparedStatement ps = con.prepareStatement(
+                "WITH unique_indexes AS ("
+                        + "  SELECT ix.indexrelid, "
+                        + "         ix.indnkeyatts AS key_count, "
+                        + "         array_agg(ia.attname ORDER BY ia.attname) AS sorted_columns "
+                        + "  FROM pg_catalog.pg_index ix "
+                        + "  INNER JOIN pg_catalog.pg_class c "
+                        + "    ON c.\"oid\" = ix.indrelid "
+                        + "  INNER JOIN pg_catalog.pg_namespace n "
+                        + "    ON n.\"oid\" = c.relnamespace "
+                        + "  INNER JOIN pg_catalog.pg_attribute ia "
+                        + "    ON ia.attrelid = ix.indexrelid "
+                        + "   AND ia.attnum > 0 "
+                        + "   AND NOT ia.attisdropped "
+                        + "   AND ia.attnum <= ix.indnkeyatts "
+                        + "  LEFT JOIN pg_catalog.pg_constraint x "
+                        + "    ON x.conindid = ix.indexrelid AND x.contype = 'p' "
+                        + "  WHERE n.nspname = ? AND c.relname = ? "
+                        + "    AND ix.indisvalid AND ix.indisunique "
+                        + "    AND x.conindid IS NULL "
+                        + "  GROUP BY ix.indexrelid, ix.indnkeyatts"
+                        + ") "
+                        + "SELECT indexrelid, key_count "
+                        + "FROM unique_indexes "
+                        + "ORDER BY key_count, sorted_columns, indexrelid "
+                        + "LIMIT 1")) {
+            ps.setString(1, ti.getSchema());
+            ps.setString(2, ti.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    bestIndexId = rs.getLong(1);
+                    if (rs.wasNull()) {
+                        bestIndexId = null;
+                    } else {
+                        bestKeyCount = rs.getInt(2);
                     }
                 }
             }
         }
+
+        if (bestIndexId != null && bestKeyCount > 0) {
+            readIndexColumns(con, bestIndexId, bestKeyCount, tm);
+        }
     }
 
-    private void grabIndexColumns(Connection con, long ixid, TableMetadata tm)
+    private void readIndexColumns(Connection con, long indexRelId, int keyCount, TableMetadata tm)
             throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT ia.attname "
                 + "FROM pg_catalog.pg_attribute ia "
-                + "INNER JOIN pg_catalog.pg_class ic "
-                + "  ON ic.\"oid\" = ia.attrelid "
-                + "INNER JOIN pg_catalog.pg_index ix "
-                + "  ON ix.indexrelid =ic.\"oid\" "
-                + "WHERE ix.indexrelid = ? "
+                + "WHERE ia.attrelid = ? "
+                + "  AND ia.attnum > 0 "
+                + "  AND NOT ia.attisdropped "
+                + "  AND ia.attnum <= ? "
                 + "ORDER BY ia.attnum")) {
-            ps.setLong(1, ixid);
+            ps.setLong(1, indexRelId);
+            ps.setInt(2, keyCount);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     tm.addKey(rs.getString(1));
