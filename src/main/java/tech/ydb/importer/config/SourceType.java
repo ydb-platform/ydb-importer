@@ -7,6 +7,7 @@ package tech.ydb.importer.config;
  */
 public enum SourceType {
     GENERIC,
+    CLICKHOUSE,
     ORACLE,
     POSTGRESQL,
     MYSQL,

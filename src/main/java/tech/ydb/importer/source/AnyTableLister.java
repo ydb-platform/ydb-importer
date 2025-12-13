@@ -202,6 +202,8 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         switch (st) {
             case GENERIC:
                 return new GenericJdbcTableLister(tableMaps, con);
+            case CLICKHOUSE:
+                return new ClickHouseTableLister(tableMaps);
             case ORACLE:
                 return new OracleTableLister(tableMaps);
             case POSTGRESQL:
