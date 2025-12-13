@@ -21,6 +21,7 @@ import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.PrimitiveValue;
 import tech.ydb.table.values.Type;
 import tech.ydb.table.values.Value;
+import tech.ydb.table.values.VoidValue;
 
 /**
  * Client for reading schema and data from YDB.
@@ -193,6 +194,15 @@ public final class TestYdbClient implements AutoCloseable {
 
         ValueReader valueReader = resultSet.getColumn(columnIndex);
         Type columnType = resultSet.getColumnType(columnIndex);
+
+        // Handle NULLs for optional columns.
+        if (Type.Kind.OPTIONAL.equals(columnType.getKind())) {
+            if (!valueReader.isOptionalItemPresent()) {
+                return VoidValue.of();
+            }
+            valueReader = valueReader.getOptionalItem();
+        }
+
         Type bareType = unwrapOptionalType(columnType);
 
         if (bareType.getKind() == Type.Kind.PRIMITIVE) {

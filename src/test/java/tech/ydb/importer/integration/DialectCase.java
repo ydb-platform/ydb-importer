@@ -1,6 +1,7 @@
 package tech.ydb.importer.integration;
 
-import java.sql.Connection;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Single dialect-specific end-to-end test case.
@@ -13,16 +14,14 @@ public interface DialectCase {
     ImportCase getImportCase();
 
     /**
-     * Prepare schema and data in the source database.
+     * SQL statements to prepare schema and data in the source database.
      */
-    void prepareSourceData(Connection connection) throws Exception;
+    List<String> prepareSourceSql();
 
     /**
-     * Optional cleanup after test.
+     * SQL statements to cleanup the source database after the test.
      */
-    default void cleanupSourceData(Connection connection) throws Exception {
+    default List<String> cleanupSourceSql() {
+        return Collections.emptyList();
     }
 }
-
-
-

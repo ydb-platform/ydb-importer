@@ -29,5 +29,3 @@ public final class ExpectedYdbColumn {
         return nullable;
     }
 }
-
-

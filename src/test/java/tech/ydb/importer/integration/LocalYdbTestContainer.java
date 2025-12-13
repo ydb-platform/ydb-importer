@@ -11,7 +11,7 @@ public class LocalYdbTestContainer extends GenericContainer<LocalYdbTestContaine
     private static final int TEST_GRPC_PORT = 52137;
 
     public LocalYdbTestContainer() {
-        super(DockerImageName.parse("ydbplatform/local-ydb:latest"));
+        super(DockerImageName.parse("ydbplatform/local-ydb:25.3"));
 
         withEnv("GRPC_PORT", String.valueOf(TEST_GRPC_PORT));
         withEnv("YDB_USE_IN_MEMORY_PDISKS", "true");

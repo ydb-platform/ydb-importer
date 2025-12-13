@@ -1,7 +1,8 @@
 package tech.ydb.importer.integration;
 
 import java.sql.Connection;
-import java.util.Collections;
+import java.sql.Statement;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -10,6 +11,8 @@ import org.junit.jupiter.api.TestFactory;
 import org.testcontainers.containers.JdbcDatabaseContainer;
 
 import tech.ydb.importer.config.ImporterConfig;
+import tech.ydb.importer.integration.dialects.ClickHouseImportDialect;
+import tech.ydb.importer.integration.dialects.PostgresImportDialect;
 import tech.ydb.table.description.TableDescription;
 
 /**
@@ -19,30 +22,45 @@ public class ImportIntegrationMatrixTest extends BaseImportIntegrationTest {
 
     @Override
     protected List<ImportDialect> dialects() {
-        return Collections.singletonList(new PostgresImportDialect());
+        return Arrays.asList(
+                new PostgresImportDialect(),
+                new ClickHouseImportDialect()
+        );
     }
 
     @TestFactory
     Stream<DynamicTest> importIntegrationMatrixTest() {
         return dialects().stream()
-                .flatMap(dialect -> dialect.cases().stream().map(dialectCase -> {
-                    ImportCase testCase = dialectCase.getImportCase();
-                    String displayName = dialect.name() + "/" + testCase.getId();
-                    return DynamicTest.dynamicTest(displayName,
-                            () -> runSingleCase(dialect, dialectCase));
-                }));
+                .map(dialect -> DynamicTest.dynamicTest(dialect.name(), () -> runDialect(dialect)));
     }
 
-    private void runSingleCase(ImportDialect dialect, DialectCase dialectCase) throws Exception {
+    private void runDialect(ImportDialect dialect) throws Exception {
         JdbcDatabaseContainer<?> source = dialect.createContainer();
         source.start();
         try {
-            ImportCase testCase = dialectCase.getImportCase();
-
-            try (Connection con = openSourceConnection(source)) {
-                dialectCase.prepareSourceData(con);
+            for (DialectCase dialectCase : dialect.cases()) {
+                ImportCase testCase = dialectCase.getImportCase();
+                try {
+                    runSingleCase(dialect, dialectCase, source);
+                } catch (Exception e) {
+                    throw new AssertionError(dialect.name() + "/" + testCase.getId() + " failed: "
+                            + testCase.getDescription(), e);
+                }
             }
+        } finally {
+            source.stop();
+        }
+    }
 
+    private void runSingleCase(ImportDialect dialect, DialectCase dialectCase, JdbcDatabaseContainer<?> source)
+            throws Exception {
+        ImportCase testCase = dialectCase.getImportCase();
+
+        try (Connection con = openSourceConnection(source)) {
+            executeSql(con, dialectCase.prepareSourceSql());
+        }
+
+        try {
             ImporterConfig config = buildImporterConfig(dialect, testCase, source);
             runImporter(config);
 
@@ -55,7 +73,17 @@ public class ImportIntegrationMatrixTest extends BaseImportIntegrationTest {
                 }
             }
         } finally {
-            source.stop();
+            try (Connection con = openSourceConnection(source)) {
+                executeSql(con, dialectCase.cleanupSourceSql());
+            }
+        }
+    }
+
+    private static void executeSql(Connection con, List<String> statements) throws Exception {
+        try (Statement st = con.createStatement()) {
+            for (String sql : statements) {
+                st.execute(sql);
+            }
         }
     }
 }

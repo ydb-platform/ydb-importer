@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import tech.ydb.table.values.Value;
+import tech.ydb.table.values.VoidValue;
 
 /**
  * Expected row data for a YDB table.
@@ -39,13 +40,11 @@ public final class ExpectedRow {
             Object value = keyValues[i + 1];
             if (value != null && !(value instanceof Value)) {
                 throw new IllegalArgumentException(
-                        "Value for key '" + key + "' is not a YDB Value<?> instance"
-                );
+                        "Value for key '" + key + "' is not a YDB Value<?> instance");
             }
-            map.put(key, (Value<?>) value);
+            Value<?> ydbValue = value == null ? VoidValue.of() : (Value<?>) value;
+            map.put(key, ydbValue);
         }
         return new ExpectedRow(map);
     }
 }
-
-

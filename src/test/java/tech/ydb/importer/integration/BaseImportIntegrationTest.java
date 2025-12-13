@@ -22,6 +22,7 @@ import tech.ydb.importer.config.SourceConfig;
 import tech.ydb.importer.config.TableOptions;
 import tech.ydb.importer.config.TableRef;
 import tech.ydb.importer.config.TargetConfig;
+import tech.ydb.importer.config.TargetScript;
 import tech.ydb.importer.config.TargetType;
 import tech.ydb.importer.config.WorkerConfig;
 import tech.ydb.importer.config.YdbAuthMode;
@@ -135,7 +136,7 @@ public abstract class BaseImportIntegrationTest {
         configureWorkers(config);
         configureSource(config, dialect, source);
         configureTarget(config, testCase);
-        configureTableOptions(config, testCase);
+        configureTableOptions(config, dialect, testCase);
         configureTableRefs(config, testCase);
 
         return config;
@@ -255,16 +256,18 @@ public abstract class BaseImportIntegrationTest {
         config.setTarget(tgt);
     }
 
-    private void configureTableOptions(ImporterConfig config, ImportCase testCase) {
+    private void configureTableOptions(ImporterConfig config, ImportDialect dialect, ImportCase testCase) {
         if (testCase.getTableOptions().isEmpty()) {
-            createDefaultTableOptions(config);
+            createDefaultTableOptions(config, dialect);
         } else {
             createCustomTableOptions(config, testCase);
         }
     }
 
-    private void createDefaultTableOptions(ImporterConfig config) {
-        TableOptions options = new TableOptions(DEFAULT_TABLE_OPTIONS_NAME, "${schema}.${table}");
+    private void createDefaultTableOptions(ImporterConfig config, ImportDialect dialect) {
+        String prefix = dialect.name();
+        TableOptions options = new TableOptions(DEFAULT_TABLE_OPTIONS_NAME, prefix + ".${schema}.${table}");
+        options.setBlobTemplate(prefix + ".${schema}.${table}_${field}");
         config.getOptionsMap().put(options.getName(), options);
     }
 
