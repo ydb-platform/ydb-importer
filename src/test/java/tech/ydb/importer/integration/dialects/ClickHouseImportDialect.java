@@ -487,7 +487,7 @@ public final class ClickHouseImportDialect implements ImportDialect {
             ExpectedYdbTable expectedTable = new ExpectedYdbTable(
                     "clickhouse.public.no_pk_table",
                     Arrays.asList(
-                            new ExpectedYdbColumn("ydb_synth_key", PrimitiveType.Text, true),
+                            new ExpectedYdbColumn("ydb_synth_key", PrimitiveType.Text, false),
                             new ExpectedYdbColumn("session_id", PrimitiveType.Text, false),
                             new ExpectedYdbColumn("duration", PrimitiveType.Int32, true)
                     ),
