@@ -5,7 +5,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import org.testcontainers.containers.ClickHouseContainer;
+import org.testcontainers.clickhouse.ClickHouseContainer;
 import org.testcontainers.containers.JdbcDatabaseContainer;
 
 import tech.ydb.importer.config.SourceType;
@@ -25,7 +25,6 @@ import tech.ydb.table.values.PrimitiveValue;
 /**
  * ClickHouse dialect for integration matrix tests.
  */
-@SuppressWarnings({"deprecation", "resource"})
 public final class ClickHouseImportDialect implements ImportDialect {
 
     static final TableOptionsConfig DEFAULT_OPTIONS = new TableOptionsConfig(
@@ -57,8 +56,9 @@ public final class ClickHouseImportDialect implements ImportDialect {
     }
 
     @Override
+    @SuppressWarnings("resource")
     public JdbcDatabaseContainer<?> createContainer() {
-        return new ClickHouseContainerFixedDriver("clickhouse/clickhouse-server:25.3.10.19")
+        return new ClickHouseContainer("clickhouse/clickhouse-server:25.3.10.19")
                 .withEnv("CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT", "1");
     }
 
@@ -72,17 +72,6 @@ public final class ClickHouseImportDialect implements ImportDialect {
                 new SkipUnsupportedTypesCase(),
                 new NoPrimaryKeyCase()
         );
-    }
-
-    private static final class ClickHouseContainerFixedDriver extends ClickHouseContainer {
-        ClickHouseContainerFixedDriver(String dockerImageName) {
-            super(dockerImageName);
-        }
-
-        @Override
-        public String getDriverClassName() {
-            return "com.clickhouse.jdbc.ClickHouseDriver";
-        }
     }
 
     private static final class DeclaredKeyLoadDataCase implements DialectCase {
