@@ -88,6 +88,7 @@ public class YdbImporter {
         try {
             final List<TableDecision> tables = new ArrayList<>();
             try (Connection con = sourceCP.getConnection()) {
+                con.setAutoCommit(true);
                 LOG.info("Initializing the table lister...");
                 tableLister = AnyTableLister.getInstance(tableMaps, con);
                 LOG.info("Retrieving table list...");

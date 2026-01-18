@@ -25,6 +25,7 @@ public class MetadataTask implements Callable<MetadataTask.Out> {
     @Override
     public Out call() throws Exception {
         try (Connection con = owner.getSourceCP().getConnection()) {
+            con.setAutoCommit(true);
             TableMetadata tm = owner.getTableLister().readMetadata(con, td);
             return new Out(td, tm);
         } catch (Throwable ex) {
