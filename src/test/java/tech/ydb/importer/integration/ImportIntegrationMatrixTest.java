@@ -12,6 +12,7 @@ import org.testcontainers.containers.JdbcDatabaseContainer;
 
 import tech.ydb.importer.config.ImporterConfig;
 import tech.ydb.importer.integration.dialects.ClickHouseImportDialect;
+import tech.ydb.importer.integration.dialects.MariaDbImportDialect;
 import tech.ydb.importer.integration.dialects.PostgresImportDialect;
 import tech.ydb.table.description.TableDescription;
 
@@ -24,7 +25,8 @@ public class ImportIntegrationMatrixTest extends BaseImportIntegrationTest {
     protected List<ImportDialect> dialects() {
         return Arrays.asList(
                 new PostgresImportDialect(),
-                new ClickHouseImportDialect()
+                new ClickHouseImportDialect(),
+                new MariaDbImportDialect()
         );
     }
 
