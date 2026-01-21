@@ -210,6 +210,8 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 return new PostgresTableLister(tableMaps);
             case MYSQL:
                 return new MySqlTableLister(tableMaps);
+            case MARIADB:
+                return new MariaDbTableLister(tableMaps);
             case INFORMIX:
             case DB2:
             case MSSQL:

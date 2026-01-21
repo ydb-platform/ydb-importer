@@ -11,6 +11,7 @@ public enum SourceType {
     ORACLE,
     POSTGRESQL,
     MYSQL,
+    MARIADB,
     MSSQL,
     DB2,
     INFORMIX,
