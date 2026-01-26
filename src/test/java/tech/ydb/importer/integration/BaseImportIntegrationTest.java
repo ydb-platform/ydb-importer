@@ -227,7 +227,7 @@ public abstract class BaseImportIntegrationTest {
 
     private void configureWorkers(ImporterConfig config) {
         WorkerConfig workers = new WorkerConfig();
-        workers.setPoolSize(WORKER_POOL_SIZE);
+        workers.setReaderPoolSize(WORKER_POOL_SIZE);
         config.setWorkers(workers);
     }
 

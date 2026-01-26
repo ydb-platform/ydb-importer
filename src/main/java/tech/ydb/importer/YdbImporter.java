@@ -30,6 +30,7 @@ import tech.ydb.importer.target.LoadDataTask;
 import tech.ydb.importer.target.ProgressCounter;
 import tech.ydb.importer.target.TargetCP;
 import tech.ydb.importer.target.TargetTable;
+import tech.ydb.importer.target.WriterPool;
 import tech.ydb.importer.target.YdbTableBuilder;
 import tech.ydb.table.description.TableColumn;
 import tech.ydb.table.description.TableDescription;
@@ -84,7 +85,7 @@ public class YdbImporter {
         }
         LOG.info("Connecting to the source database {}",
                 config.getSource().getJdbcUrl());
-        sourceCP = new SourceCP(config.getSource(), config.getWorkers().getPoolSize());
+        sourceCP = new SourceCP(config.getSource(), config.getWorkers().getReaderPoolSize());
         try {
             final List<TableDecision> tables = new ArrayList<>();
             try (Connection con = sourceCP.getConnection()) {
@@ -109,7 +110,7 @@ public class YdbImporter {
                     if (config.hasTarget()) {
                         LOG.info("Connecting to the target database {}",
                                 config.getTarget().getConnectionString());
-                        targetCP = new TargetCP(config.getTarget(), config.getWorkers().getPoolSize());
+                        targetCP = new TargetCP(config.getTarget(), config.getWorkers().getReaderPoolSize());
                         // Drop/Create/Read metadata from target
                         createMissingTables(workers, tables);
                         // Load data if necessary
@@ -141,7 +142,7 @@ public class YdbImporter {
     }
 
     private ExecutorService makeWorkers() {
-        return Executors.newFixedThreadPool(config.getWorkers().getPoolSize(), new WorkerFactory());
+        return Executors.newFixedThreadPool(config.getWorkers().getReaderPoolSize(), new WorkerFactory());
     }
 
     private void retrieveSourceMetadata(List<TableDecision> tables, ExecutorService workers)
@@ -239,26 +240,39 @@ public class YdbImporter {
         if (config.getTarget() == null) {
             return;
         }
+        int writerPoolSize = config.getWorkers().getWriterPoolSize();
+        int bufferCount = config.getWorkers().getBufferCount();
+
         try (ProgressCounter progress = new ProgressCounter()) {
             progress.start();
-            final List<Future<Boolean>> results = new ArrayList<>();
-            for (TableDecision td : tables) {
-                if (td.isFailure()) {
-                    continue;
+
+            WriterPool writerPool = new WriterPool(writerPoolSize, bufferCount);
+            writerPool.start();
+
+            try {
+                final List<Future<Boolean>> results = new ArrayList<>();
+                for (TableDecision td : tables) {
+                    if (td.isFailure()) {
+                        continue;
+                    }
+                    results.add(es.submit(new LoadDataTask(this, progress, td, writerPool)));
                 }
-                results.add(es.submit(new LoadDataTask(this, progress, td)));
-            }
-            if (results.isEmpty()) {
-                LOG.info("No valid tables to be loaded, nothing to do.");
-                return;
-            }
-            int successCount = 0;
-            for (Future<Boolean> rf : results) {
-                if (rf.get() != null && rf.get()) {
-                    ++successCount;
+                if (results.isEmpty()) {
+                    LOG.info("No valid tables to be loaded, nothing to do.");
+                    return;
                 }
+                int successCount = 0;
+                for (Future<Boolean> rf : results) {
+                    if (rf.get() != null && rf.get()) {
+                        ++successCount;
+                    }
+                }
+
+                writerPool.shutdownAndWait();
+                LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
+            } finally {
+                writerPool.close();
             }
-            LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
         }
     }
 

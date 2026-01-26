@@ -2,7 +2,7 @@
 <!-- MySQL to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
-        <pool size="4"/>
+        <reader-pool size="4"/>
     </workers>
     <source type="mysql">
         <jdbc-class>com.mysql.cj.jdbc.Driver</jdbc-class>

@@ -40,8 +40,10 @@ public class LoadDataTask implements Callable<Boolean> {
 
     private final int maxBatchRows;
     private final int fetchSize;
+    private final WriterPool writerPool;
 
-    public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab) {
+    public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
+            WriterPool writerPool) {
         this.source = owner.getSourceCP();
         this.target = owner.getTargetCP();
 
@@ -55,6 +57,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
+        this.writerPool = writerPool;
     }
 
     @Override
@@ -111,24 +114,30 @@ public class LoadDataTask implements Callable<Boolean> {
 
             batch.add(read(rs, paramType, columns, synchKey));
             if (batch.size() >= maxBatchRows) {
-                ydbOp.upload(paramListType.newValue(batch));
+                sendRowBatch(paramListType, batch);
                 batch.clear();
             }
         }
 
         if (!batch.isEmpty()) {
-            ydbOp.upload(paramListType.newValue(batch));
+            sendRowBatch(paramListType, batch);
             batch.clear();
         }
 
-        // Flush all readers
+        flushReaders(columns);
+        return copied;
+    }
+
+    private void sendRowBatch(ListType paramListType, List<Value<?>> batch) throws Exception {
+        writerPool.submit(new TaggedBatch(ydbOp, paramListType.newValue(batch)));
+    }
+
+    private void flushReaders(ColumnIndex[] columns) throws Exception {
         for (ColumnIndex ci : columns) {
             if (ci != null) {
                 ci.getReader().flush();
             }
         }
-
-        return copied;
     }
 
     private ColumnIndex[] buildMainIndex(StructType paramListType, ResultSetMetaData rsmd) throws Exception {
