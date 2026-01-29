@@ -20,6 +20,7 @@ public class TableMetadata {
     private final Map<String, ColumnInfo> lookup = new HashMap<>();
     private final List<ColumnInfo> key = new ArrayList<>();
     private String basicSql = null;
+    private List<PartitionInfo> partitions = Collections.emptyList();
 
     public boolean isValid() {
         return !columns.isEmpty();
@@ -104,6 +105,14 @@ public class TableMetadata {
 
     public void setBasicSql(String basicSql) {
         this.basicSql = basicSql;
+    }
+
+    public List<PartitionInfo> getPartitions() {
+        return partitions;
+    }
+
+    public void setPartitions(List<PartitionInfo> partitions) {
+        this.partitions = partitions;
     }
 
 }

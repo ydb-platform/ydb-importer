@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.YdbImporter;
 import tech.ydb.importer.source.ColumnInfo;
+import tech.ydb.importer.source.PartitionInfo;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.table.values.ListType;
 import tech.ydb.table.values.StructType;
@@ -72,15 +73,17 @@ public class LoadDataTask implements Callable<Boolean> {
         }
         LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
         try (Connection con = source.getConnection()) {
+            List<PartitionInfo> partitions = tab.getMetadata().getPartitions();
             long copied;
-            try (PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql())) {
-                ps.setFetchSize(fetchSize);
-                try (ResultSet rs = ps.executeQuery()) {
-                    copied = copyData(rs);
+            if (partitions.isEmpty()) {
+                copied = executeQuery(con, tab.getMetadata().getBasicSql(), null);
+            } else {
+                LOG.info("Table {}.{} split into {} partitions",
+                        tab.getSchema(), tab.getTable(), partitions.size());
+                copied = 0;
+                for (PartitionInfo pi : partitions) {
+                    copied += executeQuery(con, pi.getQuerySql(), pi.getName());
                 }
-            }
-            if (!con.getAutoCommit()) {
-                con.commit();
             }
             LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
             return true;
@@ -89,6 +92,23 @@ public class LoadDataTask implements Callable<Boolean> {
             tab.setFailure(true);
             return false;
         }
+    }
+
+    private long executeQuery(Connection con, String sql, String partitionLabel) throws Exception {
+        if (partitionLabel != null) {
+            LOG.info("Reading partition {} of {}.{}", partitionLabel, tab.getSchema(), tab.getTable());
+        }
+        long copied;
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setFetchSize(fetchSize);
+            try (ResultSet rs = ps.executeQuery()) {
+                copied = copyData(rs);
+            }
+        }
+        if (!con.getAutoCommit()) {
+            con.commit();
+        }
+        return copied;
     }
 
     /**

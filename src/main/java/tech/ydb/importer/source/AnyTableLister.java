@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -113,6 +114,7 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 }
             }
         }
+        tm.setPartitions(listPartitions(con, td, tm));
         return tm;
     }
 
@@ -186,6 +188,11 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             }
             tm.addKey(ci.getName());
         }
+    }
+
+    public List<PartitionInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        return Collections.emptyList();
     }
 
     /**
