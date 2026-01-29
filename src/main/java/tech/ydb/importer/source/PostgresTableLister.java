@@ -242,6 +242,39 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     @Override
+    public List<PartitionInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        if (td.getTableRef() != null && td.getTableRef().hasQueryText()) {
+            return Collections.emptyList();
+        }
+        final List<PartitionInfo> partitions = new ArrayList<>();
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT child_ns.nspname, child_cls.relname "
+                + "FROM pg_inherits inh "
+                + "INNER JOIN pg_class parent_cls ON inh.inhparent = parent_cls.oid "
+                + "INNER JOIN pg_namespace parent_ns ON parent_cls.relnamespace = parent_ns.oid "
+                + "INNER JOIN pg_class child_cls ON inh.inhrelid = child_cls.oid "
+                + "INNER JOIN pg_namespace child_ns ON child_cls.relnamespace = child_ns.oid "
+                + "WHERE parent_ns.nspname = ? AND parent_cls.relname = ? "
+                + "ORDER BY child_cls.relname")) {
+            ps.setString(1, td.getSchema());
+            ps.setString(2, td.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String childSchema = rs.getString(1);
+                    String childTable = rs.getString(2);
+                    String sql = makeSelectSql(childSchema, childTable, tm.getColumns());
+                    partitions.add(new PartitionInfo(childSchema + "." + childTable, sql));
+                }
+            }
+        }
+        if (partitions.size() < 2) {
+            return Collections.emptyList();
+        }
+        return partitions;
+    }
+
+    @Override
     protected String safeId(String id) {
         if (id.contains("\"")) {
             throw new IllegalArgumentException("Double quotes within the identifier: " + id);
