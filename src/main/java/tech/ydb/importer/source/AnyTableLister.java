@@ -199,6 +199,12 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         return Collections.emptyList();
     }
 
+    public void beforeTableRead(Connection con, TableDecision td) throws SQLException {
+    }
+
+    public void afterTableRead(Connection con, TableDecision td) throws SQLException {
+    }
+
     /**
      * Build the instance of a customized table lister for a particular source
      * database type

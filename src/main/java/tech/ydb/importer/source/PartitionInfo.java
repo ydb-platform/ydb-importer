@@ -1,7 +1,7 @@
 package tech.ydb.importer.source;
 
 /**
- * A named SQL chunk representing a partition or granule range to read.
+ * A named SQL chunk representing a partition or offset range to read.
  */
 public class PartitionInfo {
 

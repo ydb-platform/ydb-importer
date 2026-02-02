@@ -98,6 +98,13 @@ public class YdbImporter {
                 }
             }
             LOG.info("\ttotal {} tables to be processed", tables.size());
+            // Notify the lister before metadata retrieval (e.g. stop ClickHouse merges)
+            try (Connection hookCon = sourceCP.getConnection()) {
+                hookCon.setAutoCommit(true);
+                for (TableDecision td : tables) {
+                    tableLister.beforeTableRead(hookCon, td);
+                }
+            }
             LOG.info("Starting async workers...");
             final ExecutorService workers = makeWorkers();
             try {
@@ -126,6 +133,13 @@ public class YdbImporter {
                     List<Runnable> pending = workers.shutdownNow();
                     if (pending != null && !pending.isEmpty()) {
                         LOG.warn("Workers have been shut down with {} tasks pending", pending.size());
+                    }
+                }
+                // Notify the lister after all reading is done (e.g. restart ClickHouse merges)
+                try (Connection hookCon = sourceCP.getConnection()) {
+                    hookCon.setAutoCommit(true);
+                    for (TableDecision td : tables) {
+                        tableLister.afterTableRead(hookCon, td);
                     }
                 }
             }
