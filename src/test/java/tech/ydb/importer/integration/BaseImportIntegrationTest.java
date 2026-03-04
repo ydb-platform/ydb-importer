@@ -2,7 +2,6 @@ package tech.ydb.importer.integration;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -13,9 +12,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.JdbcDatabaseContainer;
 
-import tech.ydb.core.Result;
-import tech.ydb.core.Status;
-import tech.ydb.core.grpc.GrpcTransport;
 import tech.ydb.importer.YdbImporter;
 import tech.ydb.importer.config.ImporterConfig;
 import tech.ydb.importer.config.SourceConfig;
@@ -26,11 +22,8 @@ import tech.ydb.importer.config.TargetScript;
 import tech.ydb.importer.config.TargetType;
 import tech.ydb.importer.config.WorkerConfig;
 import tech.ydb.importer.config.YdbAuthMode;
-import tech.ydb.table.SessionRetryContext;
-import tech.ydb.table.TableClient;
 import tech.ydb.table.description.TableColumn;
 import tech.ydb.table.description.TableDescription;
-import tech.ydb.table.transaction.TxControl;
 import tech.ydb.table.values.Type;
 import tech.ydb.table.values.Value;
 
@@ -45,49 +38,14 @@ public abstract class BaseImportIntegrationTest {
     private static final int WORKER_POOL_SIZE = 4;
     private static final int MAX_BATCH_ROWS = 1000;
     private static final int MAX_BLOB_ROWS = 200;
-    private static final Duration YDB_STARTUP_TIMEOUT = Duration.ofSeconds(30);
     private static final String DEFAULT_TABLE_OPTIONS_NAME = "default";
 
     private static LocalYdbTestContainer ydb;
 
     @BeforeAll
-    static void startYdb() throws Exception {
+    static void startYdb() {
         ydb = new LocalYdbTestContainer();
         ydb.start();
-        waitForYdbReady(ydb.getConnectionString(), YDB_STARTUP_TIMEOUT);
-    }
-
-    /**
-     * Poll YDB until a simple query succeeds or the timeout expires.
-     * This needs to ensure that the YDB instance has fully initialized.
-     */
-    private static void waitForYdbReady(String connectionString, Duration timeout) throws InterruptedException {
-        final long deadlineNanos = System.nanoTime() + timeout.toNanos();
-
-        while (System.nanoTime() < deadlineNanos) {
-            try (GrpcTransport transport = GrpcTransport.forConnectionString(connectionString).build();
-                    TableClient client = TableClient.newClient(transport).build()) {
-
-                SessionRetryContext retryCtx = SessionRetryContext.create(client).build();
-
-                Status status = retryCtx
-                        .supplyStatus(session -> session.executeDataQuery(
-                                "SELECT 1;",
-                                TxControl.onlineRo())
-                                .thenApply(Result::getStatus))
-                        .join();
-
-                if (status.isSuccess()) {
-                    return;
-                }
-            } catch (Exception ignore) {
-
-            }
-
-            Thread.sleep(500);
-        }
-
-        throw new IllegalStateException("YDB is not ready within " + timeout.toMillis() + " ms");
     }
 
     @AfterAll

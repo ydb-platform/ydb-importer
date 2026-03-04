@@ -4,7 +4,6 @@ import java.util.function.IntConsumer;
 
 import tech.ydb.core.Status;
 import tech.ydb.table.SessionRetryContext;
-import tech.ydb.table.settings.BulkUpsertSettings;
 import tech.ydb.table.values.ListValue;
 
 /**
@@ -19,8 +18,6 @@ public class YdbUpsertOp {
     private final String tablePath;
     private final String errorMsg;
     private final IntConsumer counter;
-    private final BulkUpsertSettings upsertSettings = new BulkUpsertSettings();
-
     public YdbUpsertOp(SessionRetryContext retryCtx, String tablePath, String errorMsg, IntConsumer counter) {
         this.retryCtx = retryCtx;
         this.errorMsg = errorMsg;
@@ -34,7 +31,7 @@ public class YdbUpsertOp {
         }
 
         Status status = retryCtx.supplyStatus(
-                session -> session.executeBulkUpsert(tablePath, values, upsertSettings)
+                session -> session.executeBulkUpsert(tablePath, values)
         ).join();
 
         if (status.isSuccess()) {
