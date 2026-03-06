@@ -4,6 +4,7 @@ import java.util.function.IntConsumer;
 
 import tech.ydb.core.Status;
 import tech.ydb.table.SessionRetryContext;
+import tech.ydb.table.query.BulkUpsertData;
 import tech.ydb.table.values.ListValue;
 
 /**
@@ -18,6 +19,7 @@ public class YdbUpsertOp {
     private final String tablePath;
     private final String errorMsg;
     private final IntConsumer counter;
+
     public YdbUpsertOp(SessionRetryContext retryCtx, String tablePath, String errorMsg, IntConsumer counter) {
         this.retryCtx = retryCtx;
         this.errorMsg = errorMsg;
@@ -43,6 +45,20 @@ public class YdbUpsertOp {
             logValues(values);
         }
 
+        status.expectSuccess(errorMsg);
+    }
+
+    public void upload(BulkUpsertData data, int rowCount) {
+        Status status = retryCtx.supplyStatus(
+                session -> session.executeBulkUpsert(tablePath, data)
+        ).join();
+
+        if (status.isSuccess()) {
+            counter.accept(rowCount);
+            return;
+        }
+
+        LOG.warn("BulkUpsert failed for {}: {}", tablePath, status);
         status.expectSuccess(errorMsg);
     }
 

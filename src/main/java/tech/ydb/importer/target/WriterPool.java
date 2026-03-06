@@ -97,7 +97,7 @@ public class WriterPool implements AutoCloseable {
                     queue.offer(TaggedBatch.POISON);
                     return;
                 }
-                batch.getOp().upload(batch.getBatch());
+                batch.execute();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

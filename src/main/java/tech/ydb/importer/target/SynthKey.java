@@ -36,8 +36,12 @@ public class SynthKey {
         digest.update(SEPARATOR);
     }
 
-    public Value<?> build() {
+    public String buildString() {
         byte[] sign = digest.digest();
-        return PrimitiveValue.newText(base64Encoder.encodeToString(sign));
+        return base64Encoder.encodeToString(sign);
+    }
+
+    public Value<?> build() {
+        return PrimitiveValue.newText(buildString());
     }
 }

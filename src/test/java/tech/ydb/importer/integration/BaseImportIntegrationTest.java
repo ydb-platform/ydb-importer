@@ -18,7 +18,6 @@ import tech.ydb.importer.config.SourceConfig;
 import tech.ydb.importer.config.TableOptions;
 import tech.ydb.importer.config.TableRef;
 import tech.ydb.importer.config.TargetConfig;
-import tech.ydb.importer.config.TargetScript;
 import tech.ydb.importer.config.TargetType;
 import tech.ydb.importer.config.WorkerConfig;
 import tech.ydb.importer.config.YdbAuthMode;
@@ -89,9 +88,17 @@ public abstract class BaseImportIntegrationTest {
             ImportDialect dialect,
             ImportCase testCase,
             JdbcDatabaseContainer<?> source) {
+        return buildImporterConfig(dialect, testCase, source, false);
+    }
+
+    protected ImporterConfig buildImporterConfig(
+            ImportDialect dialect,
+            ImportCase testCase,
+            JdbcDatabaseContainer<?> source,
+            boolean useArrow) {
         ImporterConfig config = new ImporterConfig();
 
-        configureWorkers(config);
+        configureWorkers(config, useArrow);
         configureSource(config, dialect, source);
         configureTarget(config, testCase);
         configureTableOptions(config, dialect, testCase);
@@ -183,9 +190,10 @@ public abstract class BaseImportIntegrationTest {
         assertData(expected, actualRows);
     }
 
-    private void configureWorkers(ImporterConfig config) {
+    private void configureWorkers(ImporterConfig config, boolean useArrow) {
         WorkerConfig workers = new WorkerConfig();
         workers.setReaderPoolSize(WORKER_POOL_SIZE);
+        workers.setUseArrow(useArrow);
         config.setWorkers(workers);
     }
 

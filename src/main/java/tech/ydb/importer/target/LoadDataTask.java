@@ -18,7 +18,10 @@ import tech.ydb.importer.YdbImporter;
 import tech.ydb.importer.source.ColumnInfo;
 import tech.ydb.importer.source.PartitionInfo;
 import tech.ydb.importer.source.SourceCP;
+import tech.ydb.table.query.arrow.ApacheArrowData;
+import tech.ydb.table.query.arrow.ApacheArrowWriter;
 import tech.ydb.table.values.ListType;
+import tech.ydb.table.values.ListValue;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.StructValue;
 import tech.ydb.table.values.Value;
@@ -42,6 +45,7 @@ public class LoadDataTask implements Callable<Boolean> {
     private final int maxBatchRows;
     private final int fetchSize;
     private final WriterPool writerPool;
+    private final boolean useArrow;
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
             WriterPool writerPool) {
@@ -59,6 +63,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
         this.writerPool = writerPool;
+        this.useArrow = owner.getConfig().getWorkers().isUseArrow();
     }
 
     @Override
@@ -118,6 +123,13 @@ public class LoadDataTask implements Callable<Boolean> {
      * @throws Exception
      */
     private long copyData(ResultSet rs) throws Exception {
+        if (useArrow) {
+            return copyDataArrow(rs);
+        }
+        return copyDataRows(rs);
+    }
+
+    private long copyDataRows(ResultSet rs) throws Exception {
         final StructType paramType = tab.getTarget().getFields();
         final ListType paramListType = ListType.of(paramType);
         final ResultSetMetaData rsmd = rs.getMetaData();
@@ -149,7 +161,8 @@ public class LoadDataTask implements Callable<Boolean> {
     }
 
     private void sendRowBatch(ListType paramListType, List<Value<?>> batch) throws Exception {
-        writerPool.submit(new TaggedBatch(ydbOp, paramListType.newValue(batch)));
+        ListValue values = paramListType.newValue(batch);
+        writerPool.submit(new TaggedBatch(() -> ydbOp.upload(values)));
     }
 
     private void flushReaders(ColumnIndex[] columns) throws Exception {
@@ -245,6 +258,62 @@ public class LoadDataTask implements Callable<Boolean> {
             values[tab.getTarget().getSynthKeyPos()] = synthKey.build();
         }
         return type.newValueUnsafe(values);
+    }
+
+    private long copyDataArrow(ResultSet rs) throws Exception {
+        final StructType paramType = tab.getTarget().getFields();
+        final ResultSetMetaData rsmd = rs.getMetaData();
+        final Map<String, BlobAccumulator> blobAccumulators = buildBlobAccumulators();
+
+        long copied = 0;
+
+        try (ArrowBatchBuilder arrowBuilder = new ArrowBatchBuilder(
+                paramType, rsmd, tab, maxBatchRows, blobAccumulators)) {
+            int batchRowCount = 0;
+            ApacheArrowWriter.Batch batch = arrowBuilder.createBatch();
+
+            while (rs.next()) {
+                copied++;
+                progress.countReadRows(1);
+
+                arrowBuilder.writeRow(rs, batch);
+                batchRowCount++;
+
+                if (batchRowCount >= maxBatchRows) {
+                    sendArrowBatch(arrowBuilder, batch, batchRowCount);
+                    batch = arrowBuilder.createBatch();
+                    batchRowCount = 0;
+                }
+            }
+
+            if (batchRowCount > 0) {
+                sendArrowBatch(arrowBuilder, batch, batchRowCount);
+            }
+
+            arrowBuilder.flush();
+        }
+
+        return copied;
+    }
+
+    private Map<String, BlobAccumulator> buildBlobAccumulators() {
+        Map<String, BlobAccumulator> result = new HashMap<>();
+        for (Map.Entry<String, TargetTable> entry : tab.getBlobTargets().entrySet()) {
+            String columnName = entry.getKey();
+            TargetTable tt = entry.getValue();
+            String blobPath = target.getDatabase() + "/" + tt.getFullName();
+            ColumnInfo ci = tab.getMetadata().findColumn(columnName);
+            boolean isBlob = ci != null && ci.isBlobAsObject();
+            result.put(columnName, new BlobAccumulator(
+                    blobPath, target, progress, maxBatchRows, isBlob, writerPool));
+        }
+        return result;
+    }
+
+    private void sendArrowBatch(ArrowBatchBuilder arrowBuilder, ApacheArrowWriter.Batch batch,
+                                int rowCount) throws Exception {
+        ApacheArrowData data = arrowBuilder.buildBatch(batch);
+        writerPool.submit(new TaggedBatch(() -> ydbOp.upload(data, rowCount)));
     }
 
     private static class ColumnIndex {

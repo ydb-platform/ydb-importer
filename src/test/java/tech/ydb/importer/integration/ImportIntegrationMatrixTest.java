@@ -33,20 +33,24 @@ public class ImportIntegrationMatrixTest extends BaseImportIntegrationTest {
     @TestFactory
     Stream<DynamicTest> importIntegrationMatrixTest() {
         return dialects().stream()
-                .map(dialect -> DynamicTest.dynamicTest(dialect.name(), () -> runDialect(dialect)));
+                .flatMap(dialect -> Stream.of(
+                        DynamicTest.dynamicTest(dialect.name() + " (row)", () -> runDialect(dialect, false)),
+                        DynamicTest.dynamicTest(dialect.name() + " (arrow)", () -> runDialect(dialect, true))
+                ));
     }
 
-    private void runDialect(ImportDialect dialect) throws Exception {
+    private void runDialect(ImportDialect dialect, boolean useArrow) throws Exception {
         JdbcDatabaseContainer<?> source = dialect.createContainer();
         source.start();
         try {
             for (DialectCase dialectCase : dialect.cases()) {
                 ImportCase testCase = dialectCase.getImportCase();
+                String mode = useArrow ? "arrow" : "row";
                 try {
-                    runSingleCase(dialect, dialectCase, source);
+                    runSingleCase(dialect, dialectCase, source, useArrow);
                 } catch (Exception e) {
-                    throw new AssertionError(dialect.name() + "/" + testCase.getId() + " failed: "
-                            + testCase.getDescription(), e);
+                    throw new AssertionError(dialect.name() + "/" + testCase.getId()
+                            + " (" + mode + ") failed: " + testCase.getDescription(), e);
                 }
             }
         } finally {
@@ -54,8 +58,8 @@ public class ImportIntegrationMatrixTest extends BaseImportIntegrationTest {
         }
     }
 
-    private void runSingleCase(ImportDialect dialect, DialectCase dialectCase, JdbcDatabaseContainer<?> source)
-            throws Exception {
+    private void runSingleCase(ImportDialect dialect, DialectCase dialectCase,
+                               JdbcDatabaseContainer<?> source, boolean useArrow) throws Exception {
         ImportCase testCase = dialectCase.getImportCase();
 
         try (Connection con = openSourceConnection(source)) {
@@ -63,7 +67,7 @@ public class ImportIntegrationMatrixTest extends BaseImportIntegrationTest {
         }
 
         try {
-            ImporterConfig config = buildImporterConfig(dialect, testCase, source);
+            ImporterConfig config = buildImporterConfig(dialect, testCase, source, useArrow);
             runImporter(config);
 
             try (TestYdbClient ydbClient = createYdbClient()) {

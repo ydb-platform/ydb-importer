@@ -82,6 +82,19 @@
             <artifactId>HikariCP</artifactId>
             <version>4.0.3</version>
         </dependency>
+        <!-- Apache Arrow for columnar bulk upsert format (optional) -->
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-vector</artifactId>
+            <version>17.0.0</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-memory-netty</artifactId>
+            <version>17.0.0</version>
+            <optional>true</optional>
+        </dependency>
         <!--
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
@@ -218,6 +231,9 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
                         <version>3.5.4</version>
+                        <configuration>
+                            <argLine>--add-opens=java.base/java.nio=ALL-UNNAMED</argLine>
+                        </configuration>
                     </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>

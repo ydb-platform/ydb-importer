@@ -11,6 +11,7 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
     private int readerPoolSize = 1;
     private int writerPoolSize = 0;
     private int bufferCount = 0;
+    private boolean useArrow = false;
 
     public WorkerConfig() {
     }
@@ -51,6 +52,14 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
 
     public void setBufferCount(int bufferCount) {
         this.bufferCount = bufferCount;
+    }
+
+    public boolean isUseArrow() {
+        return useArrow;
+    }
+
+    public void setUseArrow(boolean useArrow) {
+        this.useArrow = useArrow;
     }
 
 }

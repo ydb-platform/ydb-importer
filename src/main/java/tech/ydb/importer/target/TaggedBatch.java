@@ -1,27 +1,20 @@
 package tech.ydb.importer.target;
 
-import tech.ydb.table.values.ListValue;
-
 /**
- * Batch of rows paired with the target upsert operation.
+ * A unit of work for the writer pool.
+ * Wraps an upload action that the writer thread executes.
  */
 public class TaggedBatch {
 
-    static final TaggedBatch POISON = new TaggedBatch(null, null);
+    static final TaggedBatch POISON = new TaggedBatch(null);
 
-    private final YdbUpsertOp op;
-    private final ListValue batch;
+    private final Runnable uploadAction;
 
-    public TaggedBatch(YdbUpsertOp op, ListValue batch) {
-        this.op = op;
-        this.batch = batch;
+    public TaggedBatch(Runnable uploadAction) {
+        this.uploadAction = uploadAction;
     }
 
-    public YdbUpsertOp getOp() {
-        return op;
-    }
-
-    public ListValue getBatch() {
-        return batch;
+    public void execute() {
+        uploadAction.run();
     }
 }
