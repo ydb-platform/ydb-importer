@@ -14,6 +14,7 @@ import tech.ydb.importer.config.ImporterConfig;
 import tech.ydb.importer.integration.dialects.ClickHouseImportDialect;
 import tech.ydb.importer.integration.dialects.MariaDbImportDialect;
 import tech.ydb.importer.integration.dialects.PostgresImportDialect;
+import tech.ydb.importer.integration.dialects.VerticaImportDialect;
 import tech.ydb.table.description.TableDescription;
 
 /**
@@ -27,6 +28,8 @@ public class ImportIntegrationMatrixTest extends BaseImportIntegrationTest {
                 new PostgresImportDialect(),
                 new ClickHouseImportDialect(),
                 new MariaDbImportDialect()
+                // Docker image for Vertica is not publicly available, needs to be built manually
+                // new VerticaImportDialect()
         );
     }
 

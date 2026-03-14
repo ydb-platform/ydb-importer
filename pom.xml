@@ -199,6 +199,12 @@
             <classifier>all</classifier>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.vertica.jdbc</groupId>
+            <artifactId>vertica-jdbc</artifactId>
+            <version>24.1.0-0</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <build>
         <resources>
