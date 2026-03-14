@@ -229,6 +229,8 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 return new MySqlTableLister(tableMaps);
             case MARIADB:
                 return new MariaDbTableLister(tableMaps);
+            case VERTICA:
+                return new VerticaTableLister(tableMaps);
             case INFORMIX:
             case DB2:
             case MSSQL:
