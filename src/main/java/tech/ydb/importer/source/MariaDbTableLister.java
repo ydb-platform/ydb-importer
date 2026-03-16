@@ -12,12 +12,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.TableIdentity;
 
 /**
  * Source table metadata retrieval - MariaDB specifics.
  */
 public class MariaDbTableLister extends MySqlTableLister {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MariaDbTableLister.class);
 
     public static final Set<String> SKIP_SCHEMAS;
 
@@ -83,5 +89,41 @@ public class MariaDbTableLister extends MySqlTableLister {
             return;
         }
         super.grabPrimaryKey(con, ti, tm);
+    }
+
+    @Override
+    public List<PartitionInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        if (td.getTableRef() != null && td.getTableRef().hasQueryText()) {
+            return Collections.emptyList();
+        }
+        String engine = tableEngines.get(td.getSchema() + "." + td.getTable());
+        if (engine != null && engine.equalsIgnoreCase("Columnstore")) {
+            return Collections.emptyList();
+        }
+        final List<PartitionInfo> partitions = new ArrayList<>();
+        final String baseSql = makeSelectSql(td.getSchema(), td.getTable(), tm.getColumns());
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT partition_name FROM information_schema.partitions "
+                + "WHERE table_schema=? AND table_name=? "
+                + "  AND partition_name IS NOT NULL "
+                + "ORDER BY partition_ordinal_position")) {
+            ps.setString(1, td.getSchema());
+            ps.setString(2, td.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String partName = rs.getString(1);
+                    String sql = baseSql + " PARTITION (" + safeId(partName) + ")";
+                    String label = td.getSchema() + "." + td.getTable() + "#" + partName;
+                    partitions.add(new PartitionInfo(label, sql));
+                }
+            }
+        }
+        if (partitions.size() < 2) {
+            return Collections.emptyList();
+        }
+        LOG.info("Table {}.{}: found {} partitions",
+                td.getSchema(), td.getTable(), partitions.size());
+        return partitions;
     }
 }
