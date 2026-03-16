@@ -70,7 +70,8 @@ public final class ClickHouseImportDialect implements ImportDialect {
                 new NonMergeTreeEnginesCase(),
                 new DecimalCase(),
                 new SkipUnsupportedTypesCase(),
-                new NoPrimaryKeyCase()
+                new NoPrimaryKeyCase(),
+                new PartitionedTableCase()
         );
     }
 
@@ -521,6 +522,82 @@ public final class ClickHouseImportDialect implements ImportDialect {
         }
     }
 
+    private static final class PartitionedTableCase implements DialectCase {
+        private final ImportCase importCase;
+
+        PartitionedTableCase() {
+            SourceTableRef ref = new SourceTableRef(
+                    PUBLIC_SCHEMA,
+                    "partitioned_sales",
+                    Collections.singletonList("sale_id"),
+                    null,
+                    "default"
+            );
+
+            ExpectedYdbTable expectedTable = new ExpectedYdbTable(
+                    "clickhouse.public.partitioned_sales",
+                    Arrays.asList(
+                            new ExpectedYdbColumn("sale_id", PrimitiveType.Int64, false),
+                            new ExpectedYdbColumn("region_id", PrimitiveType.Int32, false),
+                            new ExpectedYdbColumn("amount", PrimitiveType.Int32, true)
+                    ),
+                    Collections.singletonList("sale_id"),
+                    Arrays.asList(
+                            ExpectedRow.of("sale_id", PrimitiveValue.newInt64(1),
+                                    "region_id", PrimitiveValue.newInt32(1),
+                                    "amount", PrimitiveValue.newInt32(100)),
+                            ExpectedRow.of("sale_id", PrimitiveValue.newInt64(2),
+                                    "region_id", PrimitiveValue.newInt32(1),
+                                    "amount", PrimitiveValue.newInt32(200)),
+                            ExpectedRow.of("sale_id", PrimitiveValue.newInt64(3),
+                                    "region_id", PrimitiveValue.newInt32(2),
+                                    "amount", PrimitiveValue.newInt32(150)),
+                            ExpectedRow.of("sale_id", PrimitiveValue.newInt64(4),
+                                    "region_id", PrimitiveValue.newInt32(3),
+                                    "amount", PrimitiveValue.newInt32(300))
+                    )
+            );
+
+            this.importCase = new ImportCase(
+                    "partitioned_table",
+                    "Partitioned MergeTree table should be read via partition-aware reading",
+                    true,
+                    Collections.singletonList(DEFAULT_OPTIONS),
+                    Collections.singletonList(ref),
+                    Collections.singletonList(expectedTable)
+            );
+        }
+
+        @Override
+        public ImportCase getImportCase() { return importCase; }
+
+        @Override
+        public List<String> prepareSourceSql() {
+            return Arrays.asList(
+                    "CREATE DATABASE IF NOT EXISTS " + PUBLIC_SCHEMA,
+                    "CREATE TABLE " + PUBLIC_SCHEMA + ".partitioned_sales (" +
+                            "sale_id Int64, " +
+                            "region_id Int32, " +
+                            "amount Nullable(Int32)" +
+                            ") ENGINE = MergeTree " +
+                            "PARTITION BY region_id " +
+                            "ORDER BY sale_id",
+                    "INSERT INTO " + PUBLIC_SCHEMA + ".partitioned_sales " +
+                            "(sale_id, region_id, amount) VALUES " +
+                            "(1, 1, 100)," +
+                            "(2, 1, 200)," +
+                            "(3, 2, 150)," +
+                            "(4, 3, 300)"
+            );
+        }
+
+        @Override
+        public List<String> cleanupSourceSql() {
+            return Collections.singletonList(
+                    "DROP TABLE IF EXISTS " + PUBLIC_SCHEMA + ".partitioned_sales"
+            );
+        }
+    }
 }
 
 
