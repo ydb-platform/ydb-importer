@@ -71,7 +71,8 @@ public final class MariaDbImportDialect implements ImportDialect {
                 new NullableColumnsCase(),
                 new NoPrimaryKeyCase(),
                 new UniqueConstraintAsKeyCase(),
-                new DecimalCase()
+                new DecimalCase(),
+                new RangePartitionedCase()
         );
     }
 
@@ -425,6 +426,86 @@ public final class MariaDbImportDialect implements ImportDialect {
         public List<String> cleanupSourceSql() {
             return Collections.singletonList(
                     "DROP TABLE IF EXISTS " + TEST_SCHEMA + ".decimal_metrics"
+            );
+        }
+    }
+
+    private static final class RangePartitionedCase implements DialectCase {
+        private final ImportCase importCase;
+
+        RangePartitionedCase() {
+            SourceTableRef ref = new SourceTableRef(
+                    TEST_SCHEMA,
+                    "range_partitioned",
+                    Collections.singletonList("sale_id"),
+                    null,
+                    "default"
+            );
+
+            ExpectedYdbTable expectedTable = new ExpectedYdbTable(
+                    "mariadb.import_test.range_partitioned",
+                    Arrays.asList(
+                            new ExpectedYdbColumn("sale_id", PrimitiveType.Int32, false),
+                            new ExpectedYdbColumn("region_id", PrimitiveType.Int32, false),
+                            new ExpectedYdbColumn("amount", PrimitiveType.Int32, true)
+                    ),
+                    Collections.singletonList("sale_id"),
+                    Arrays.asList(
+                            ExpectedRow.of("sale_id", PrimitiveValue.newInt32(1),
+                                    "region_id", PrimitiveValue.newInt32(1),
+                                    "amount", PrimitiveValue.newInt32(100)),
+                            ExpectedRow.of("sale_id", PrimitiveValue.newInt32(2),
+                                    "region_id", PrimitiveValue.newInt32(1),
+                                    "amount", PrimitiveValue.newInt32(200)),
+                            ExpectedRow.of("sale_id", PrimitiveValue.newInt32(3),
+                                    "region_id", PrimitiveValue.newInt32(50),
+                                    "amount", PrimitiveValue.newInt32(150)),
+                            ExpectedRow.of("sale_id", PrimitiveValue.newInt32(4),
+                                    "region_id", PrimitiveValue.newInt32(99),
+                                    "amount", PrimitiveValue.newInt32(300))
+                    )
+            );
+
+            this.importCase = new ImportCase(
+                    "range_partitioned",
+                    "RANGE-partitioned table should be read via partition-aware reading",
+                    true,
+                    Collections.singletonList(DEFAULT_OPTIONS),
+                    Collections.singletonList(ref),
+                    Collections.singletonList(expectedTable)
+            );
+        }
+
+        @Override
+        public ImportCase getImportCase() { return importCase; }
+
+        @Override
+        public List<String> prepareSourceSql() {
+            return Arrays.asList(
+                    "CREATE TABLE " + TEST_SCHEMA + ".range_partitioned (" +
+                            "sale_id INT NOT NULL, " +
+                            "region_id INT NOT NULL, " +
+                            "amount INT NULL, " +
+                            "PRIMARY KEY (sale_id, region_id)" +
+                            ") ENGINE=InnoDB " +
+                            "PARTITION BY RANGE (region_id) (" +
+                            "  PARTITION p_low VALUES LESS THAN (10)," +
+                            "  PARTITION p_mid VALUES LESS THAN (50)," +
+                            "  PARTITION p_high VALUES LESS THAN MAXVALUE" +
+                            ")",
+                    "INSERT INTO " + TEST_SCHEMA + ".range_partitioned " +
+                            "(sale_id, region_id, amount) VALUES " +
+                            "(1, 1, 100)," +
+                            "(2, 1, 200)," +
+                            "(3, 50, 150)," +
+                            "(4, 99, 300)"
+            );
+        }
+
+        @Override
+        public List<String> cleanupSourceSql() {
+            return Collections.singletonList(
+                    "DROP TABLE IF EXISTS " + TEST_SCHEMA + ".range_partitioned"
             );
         }
     }
