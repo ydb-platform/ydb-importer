@@ -32,6 +32,10 @@ public class MariaDbTableLister extends MySqlTableLister {
         x.add("information_schema");
         x.add("mysql");
         x.add("performance_schema");
+        x.add("sys");
+        x.add("calpontsys");
+        x.add("infinidb_querystats");
+        x.add("columnstore_info");
         SKIP_SCHEMAS = Collections.unmodifiableSet(x);
     }
 
