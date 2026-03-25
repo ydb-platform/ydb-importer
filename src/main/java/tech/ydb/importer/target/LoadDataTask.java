@@ -81,11 +81,13 @@ public class LoadDataTask implements Callable<Boolean> {
             return false;
         }
         LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
-        try (Connection con = source.getConnection()) {
+        try {
             List<PartitionInfo> partitions = tab.getMetadata().getPartitions();
             long copied;
             if (partitions.isEmpty()) {
-                copied = executeQuery(con, tab.getMetadata().getBasicSql(), null);
+                try (Connection con = source.getConnection()) {
+                    copied = executeQuery(con, tab.getMetadata().getBasicSql(), null);
+                }
             } else {
                 LOG.info("Table {}.{} split into {} partitions",
                         tab.getSchema(), tab.getTable(), partitions.size());
