@@ -20,6 +20,7 @@ public class SourceConfig extends JdomHelper {
     private String userName;
     private String password;
     private int fetchSize = 10000;
+    private int retryCount = 3;
 
     public SourceConfig() {
     }
@@ -35,6 +36,10 @@ public class SourceConfig extends JdomHelper {
             String fs = getText(c, "fetch-size", null);
             if (fs != null) {
                 this.fetchSize = Integer.parseInt(fs.trim());
+            }
+            String rc = getText(c, "retry-count", null);
+            if (rc != null) {
+                this.retryCount = Integer.parseInt(rc.trim());
             }
         }
     }
@@ -85,6 +90,14 @@ public class SourceConfig extends JdomHelper {
 
     public void setFetchSize(int fetchSize) {
         this.fetchSize = fetchSize;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
     }
 
 }

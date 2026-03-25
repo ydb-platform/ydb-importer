@@ -44,8 +44,11 @@ public class LoadDataTask implements Callable<Boolean> {
 
     private final int maxBatchRows;
     private final int fetchSize;
+    private final int retryCount;
     private final WriterPool writerPool;
     private final boolean useArrow;
+
+    private static final long INITIAL_BACKOFF_MS = 1000;
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
             WriterPool writerPool) {
@@ -62,6 +65,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
+        this.retryCount = owner.getConfig().getSource().getRetryCount();
         this.writerPool = writerPool;
         this.useArrow = owner.getConfig().getWorkers().isUseArrow();
     }
@@ -87,7 +91,7 @@ public class LoadDataTask implements Callable<Boolean> {
                         tab.getSchema(), tab.getTable(), partitions.size());
                 copied = 0;
                 for (PartitionInfo pi : partitions) {
-                    copied += executeQuery(con, pi.getQuerySql(), pi.getName());
+                    copied += executePartitionWithRetry(pi);
                 }
             }
             LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
@@ -96,6 +100,24 @@ public class LoadDataTask implements Callable<Boolean> {
             LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
             tab.setFailure(true);
             return false;
+        }
+    }
+
+    private long executePartitionWithRetry(PartitionInfo pi) throws Exception {
+        long backoffMs = INITIAL_BACKOFF_MS;
+        for (int attempt = 1; ; attempt++) {
+            try (Connection con = source.getConnection()) {
+                return executeQuery(con, pi.getQuerySql(), pi.getName());
+            } catch (Exception e) {
+                if (attempt > retryCount) {
+                    throw e;
+                }
+                LOG.warn("Partition {} of {}.{} failed (attempt {}/{}), retrying in {} ms",
+                        pi.getName(), tab.getSchema(), tab.getTable(),
+                        attempt, retryCount, backoffMs, e);
+                Thread.sleep(backoffMs);
+                backoffMs *= 2;
+            }
         }
     }
 
