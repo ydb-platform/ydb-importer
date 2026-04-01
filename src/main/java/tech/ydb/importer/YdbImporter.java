@@ -7,8 +7,11 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -24,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import tech.ydb.importer.config.ImporterConfig;
 import tech.ydb.importer.config.JdomHelper;
 import tech.ydb.importer.source.AnyTableLister;
+import tech.ydb.importer.source.PartitionInfo;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.importer.source.TableMapList;
 import tech.ydb.importer.target.LoadDataTask;
@@ -98,16 +102,16 @@ public class YdbImporter {
                 }
             }
             LOG.info("\ttotal {} tables to be processed", tables.size());
-            // Notify the lister before metadata retrieval (e.g. stop ClickHouse merges)
-            try (Connection hookCon = sourceCP.getConnection()) {
-                hookCon.setAutoCommit(true);
-                for (TableDecision td : tables) {
-                    tableLister.beforeTableRead(hookCon, td);
-                }
-            }
             LOG.info("Starting async workers...");
             final ExecutorService workers = makeWorkers();
             try {
+                // Notify the lister before metadata retrieval (e.g. stop ClickHouse merges).
+                try (Connection hookCon = sourceCP.getConnection()) {
+                    hookCon.setAutoCommit(true);
+                    for (TableDecision td : tables) {
+                        tableLister.beforeTableRead(hookCon, td);
+                    }
+                }
                 LOG.info("Retrieving table metadata...");
                 retrieveSourceMetadata(tables, workers);
                 LOG.info("\ttotal {} tables with metadata", tables.size());
@@ -135,7 +139,6 @@ public class YdbImporter {
                         LOG.warn("Workers have been shut down with {} tasks pending", pending.size());
                     }
                 }
-                // Notify the lister after all reading is done (e.g. restart ClickHouse merges)
                 try (Connection hookCon = sourceCP.getConnection()) {
                     hookCon.setAutoCommit(true);
                     for (TableDecision td : tables) {
@@ -265,12 +268,7 @@ public class YdbImporter {
 
             try {
                 final List<Future<Boolean>> results = new ArrayList<>();
-                for (TableDecision td : tables) {
-                    if (td.isFailure()) {
-                        continue;
-                    }
-                    results.add(es.submit(new LoadDataTask(this, progress, td, writerPool)));
-                }
+                submitLoadTasks(es, tables, progress, writerPool, results);
                 if (results.isEmpty()) {
                     LOG.info("No valid tables to be loaded, nothing to do.");
                     return;
@@ -287,6 +285,54 @@ public class YdbImporter {
             } finally {
                 writerPool.close();
             }
+        }
+    }
+
+    /**
+     * Submits load tasks. Tables without partitions get one task each.
+     * Tables with partitions are submitted round-robin so that partitions
+     * of different tables are interleaved in the executor queue.
+     */
+    private void submitLoadTasks(ExecutorService es, List<TableDecision> tables,
+            ProgressCounter progress, WriterPool writerPool, List<Future<Boolean>> results) {
+        ArrayDeque<TablePartitionIterator> partitionQueue = new ArrayDeque<>();
+
+        for (TableDecision td : tables) {
+            if (td.isFailure()) {
+                continue;
+            }
+            List<PartitionInfo> partitions = td.getMetadata().getPartitions();
+            if (partitions.isEmpty()) {
+                results.add(es.submit(new LoadDataTask(this, progress, td, writerPool)));
+            } else {
+                partitions.sort(Comparator.comparing(PartitionInfo::getName));
+                for (int i = 0; i < partitions.size(); i++) {
+                    partitions.get(i).setIndex(i);
+                }
+                LOG.info("Table {}.{}: {} partitions, submitting parallel tasks",
+                        td.getSchema(), td.getTable(), partitions.size());
+                partitionQueue.add(new TablePartitionIterator(td, partitions.iterator()));
+            }
+        }
+
+        while (!partitionQueue.isEmpty()) {
+            TablePartitionIterator entry = partitionQueue.poll();
+            PartitionInfo pi = entry.iterator.next();
+            results.add(es.submit(
+                    new LoadDataTask(this, progress, entry.table, pi, writerPool)));
+            if (entry.iterator.hasNext()) {
+                partitionQueue.add(entry);
+            }
+        }
+    }
+
+    private static final class TablePartitionIterator {
+        final TableDecision table;
+        final Iterator<PartitionInfo> iterator;
+
+        TablePartitionIterator(TableDecision table, Iterator<PartitionInfo> iterator) {
+            this.table = table;
+            this.iterator = iterator;
         }
     }
 

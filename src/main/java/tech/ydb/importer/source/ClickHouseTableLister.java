@@ -8,7 +8,9 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -35,7 +37,6 @@ public class ClickHouseTableLister extends AnyTableLister {
         SKIP_DATABASES = Collections.unmodifiableSet(db);
 
         final Set<String> eng = new HashSet<>();
-        // TODO: what other engines to skip?
         eng.add("View");
         SKIP_TABLE_ENGINES = Collections.unmodifiableSet(eng);
     }
@@ -137,10 +138,6 @@ public class ClickHouseTableLister extends AnyTableLister {
         tm.clearKey();
     }
 
-    /**
-     * Split table into offset-based chunks using _part and _part_offset virtual columns.
-     * Each active part is divided into chunks sized by the configured fetch size.
-     */
     @Override
     public List<PartitionInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
             throws SQLException {
@@ -151,38 +148,49 @@ public class ClickHouseTableLister extends AnyTableLister {
         String table = td.getTable();
         String baseSql = makeSelectSql(schema, table, tm.getColumns());
         int chunkRows = tableMaps.getConfig().getSource().getFetchSize();
-        final List<PartitionInfo> chunks = new ArrayList<>();
+
+        Map<String, List<ChunkInfo>> byPartition = new LinkedHashMap<>();
 
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT name, rows FROM system.parts "
+                "SELECT partition_id, name, rows FROM system.parts "
                 + "WHERE database = ? AND table = ? AND active "
-                + "ORDER BY name")) {
+                + "ORDER BY partition_id, name")) {
             ps.setString(1, schema);
             ps.setString(2, table);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String partName = rs.getString(1);
-                    long rows = rs.getLong(2);
+                    String partitionId = rs.getString(1);
+                    String partName = rs.getString(2);
+                    long rows = rs.getLong(3);
                     if (rows <= 0) {
                         continue;
                     }
+                    List<ChunkInfo> chunks = byPartition.computeIfAbsent(
+                            partitionId, k -> new ArrayList<>());
                     for (long offset = 0; offset < rows; offset += chunkRows) {
                         long end = Math.min(offset + chunkRows, rows);
                         String sql = String.format(
                                 "%s WHERE _part = '%s' AND _part_offset >= %d AND _part_offset < %d",
                                 baseSql, partName.replace("'", "''"), offset, end);
-                        String name = schema + "." + table
+                        String chunkName = schema + "." + table
                                 + "#" + partName + "[" + offset + ":" + end + "]";
-                        chunks.add(new PartitionInfo(name, sql));
+                        chunks.add(new ChunkInfo(chunkName, sql));
                     }
                 }
             }
         }
-        if (chunks.size() < 2) {
+        if (byPartition.isEmpty()) {
             return Collections.emptyList();
         }
-        LOG.info("Table {}.{}: split into {} offset chunks", schema, table, chunks.size());
-        return chunks;
+        List<PartitionInfo> partitions = new ArrayList<>();
+        for (Map.Entry<String, List<ChunkInfo>> e : byPartition.entrySet()) {
+            String partLabel = schema + "." + table + "#partition=" + e.getKey();
+            partitions.add(new PartitionInfo(partLabel, e.getValue()));
+        }
+        LOG.info("Table {}.{}: {} partitions, {} chunks",
+                schema, table, partitions.size(),
+                partitions.stream().mapToInt(p -> p.getChunks().size()).sum());
+        return partitions;
     }
 
     @Override

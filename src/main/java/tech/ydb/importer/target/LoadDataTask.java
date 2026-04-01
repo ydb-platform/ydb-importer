@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.YdbImporter;
+import tech.ydb.importer.source.ChunkInfo;
 import tech.ydb.importer.source.ColumnInfo;
 import tech.ydb.importer.source.PartitionInfo;
 import tech.ydb.importer.source.SourceCP;
@@ -40,6 +41,7 @@ public class LoadDataTask implements Callable<Boolean> {
 
     private final YdbUpsertOp ydbOp;
     private final TableDecision tab;
+    private final PartitionInfo partition;
     private final ProgressCounter progress;
 
     private final int maxBatchRows;
@@ -52,6 +54,11 @@ public class LoadDataTask implements Callable<Boolean> {
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
             WriterPool writerPool) {
+        this(owner, progress, tab, null, writerPool);
+    }
+
+    public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
+            PartitionInfo partition, WriterPool writerPool) {
         this.source = owner.getSourceCP();
         this.target = owner.getTargetCP();
 
@@ -62,6 +69,7 @@ public class LoadDataTask implements Callable<Boolean> {
                 progress::countWrittenRows
         );
         this.tab = tab;
+        this.partition = partition;
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
@@ -80,47 +88,73 @@ public class LoadDataTask implements Callable<Boolean> {
             LOG.warn("Skipping failed source table {}.{}", tab.getSchema(), tab.getTable());
             return false;
         }
-        LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
         try {
-            List<PartitionInfo> partitions = tab.getMetadata().getPartitions();
             long copied;
-            if (partitions.isEmpty()) {
+            if (partition != null) {
+                copied = executePartition();
+                LOG.info("Copied {} rows from partition {}", copied, partition.getName());
+            } else {
+                LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
                 try (Connection con = source.getConnection()) {
                     copied = executeQuery(con, tab.getMetadata().getBasicSql(), null);
                 }
-            } else {
-                LOG.info("Table {}.{} split into {} partitions",
-                        tab.getSchema(), tab.getTable(), partitions.size());
-                copied = 0;
-                for (PartitionInfo pi : partitions) {
-                    copied += executePartitionWithRetry(pi);
-                }
+                LOG.info("Copied {} rows from source table {}.{}",
+                        copied, tab.getSchema(), tab.getTable());
             }
-            LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
             return true;
         } catch (Throwable e) {
-            LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
+            LOG.error("Failed to load data from {}", getLabel(), e);
             tab.setFailure(true);
             return false;
         }
     }
 
-    private long executePartitionWithRetry(PartitionInfo pi) throws Exception {
+    private String getLabel() {
+        if (partition != null) {
+            return partition.getName();
+        }
+        return tab.getSchema() + "." + tab.getTable();
+    }
+
+    /**
+     * Reads all chunks of a partition with connection-level retry.
+     */
+    private long executePartition() throws Exception {
+        LOG.info("Loading partition {}", partition.getName());
+        List<ChunkInfo> chunks = partition.getChunks();
+        long copied = 0;
+        int nextChunk = 0;
+        int attempt = 0;
+        int failingChunk = -1;
         long backoffMs = INITIAL_BACKOFF_MS;
-        for (int attempt = 1; ; attempt++) {
+
+        while (nextChunk < chunks.size()) {
             try (Connection con = source.getConnection()) {
-                return executeQuery(con, pi.getQuerySql(), pi.getName());
+                while (nextChunk < chunks.size()) {
+                    ChunkInfo chunk = chunks.get(nextChunk);
+                    copied += executeQuery(con, chunk.getQuerySql(), chunk.getName());
+                    nextChunk++;
+                    attempt = 0;
+                    backoffMs = INITIAL_BACKOFF_MS;
+                    failingChunk = -1;
+                }
             } catch (Exception e) {
-                if (attempt > retryCount) {
+                if (nextChunk != failingChunk) {
+                    attempt = 0;
+                    backoffMs = INITIAL_BACKOFF_MS;
+                    failingChunk = nextChunk;
+                }
+                if (++attempt > retryCount) {
                     throw e;
                 }
-                LOG.warn("Partition {} of {}.{} failed (attempt {}/{}), retrying in {} ms",
-                        pi.getName(), tab.getSchema(), tab.getTable(),
-                        attempt, retryCount, backoffMs, e);
+                ChunkInfo failed = chunks.get(nextChunk);
+                LOG.warn("Chunk {} failed (attempt {}/{}), retrying in {} ms",
+                        failed.getName(), attempt, retryCount, backoffMs, e);
                 Thread.sleep(backoffMs);
                 backoffMs *= 2;
             }
         }
+        return copied;
     }
 
     private long executeQuery(Connection con, String sql, String partitionLabel) throws Exception {
