@@ -12,6 +12,7 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
     private int writerPoolSize = 0;
     private int bufferCount = 0;
     private boolean useArrow = false;
+    private boolean usePartitions = true;
 
     public WorkerConfig() {
     }
@@ -28,6 +29,9 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
         if (writerEl != null) {
             this.writerPoolSize = getInt(writerEl, "size");
         }
+        this.bufferCount = getInt(c, "buffer-count", 0);
+        this.useArrow = getBoolean(c, "use-arrow", false);
+        this.usePartitions = getBoolean(c, "use-partitions", true);
     }
 
     public int getReaderPoolSize() {
@@ -60,6 +64,14 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
 
     public void setUseArrow(boolean useArrow) {
         this.useArrow = useArrow;
+    }
+
+    public boolean isUsePartitions() {
+        return usePartitions;
+    }
+
+    public void setUsePartitions(boolean usePartitions) {
+        this.usePartitions = usePartitions;
     }
 
 }

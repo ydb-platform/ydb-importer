@@ -96,6 +96,7 @@ public class YdbImporter {
                 con.setAutoCommit(true);
                 LOG.info("Initializing the table lister...");
                 tableLister = AnyTableLister.getInstance(tableMaps, con);
+                tableLister.setUsePartitions(config.getWorkers().isUsePartitions());
                 LOG.info("Retrieving table list...");
                 for (TableDecision nd : tableLister.selectTables(con)) {
                     tables.add(nd);

@@ -25,6 +25,7 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             .getLogger(AnyTableLister.class);
 
     protected final TableMapList tableMaps;
+    private boolean usePartitions = true;
 
     public AnyTableLister(TableMapList tableMaps) {
         this.tableMaps = tableMaps;
@@ -114,7 +115,9 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 }
             }
         }
-        tm.setPartitions(listPartitions(con, td, tm));
+        if (usePartitions) {
+            tm.setPartitions(listPartitions(con, td, tm));
+        }
         return tm;
     }
 
@@ -192,6 +195,10 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             }
             tm.addKey(ci.getName());
         }
+    }
+
+    public void setUsePartitions(boolean usePartitions) {
+        this.usePartitions = usePartitions;
     }
 
     public List<PartitionInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
