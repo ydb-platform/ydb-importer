@@ -10,6 +10,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.TableIdentity;
 
 /**
@@ -18,6 +22,8 @@ import tech.ydb.importer.config.TableIdentity;
  * @author zinal
  */
 public class MySqlTableLister extends AnyTableLister {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MySqlTableLister.class);
 
     public static final Set<String> SKIP_SCHEMAS;
 
@@ -181,5 +187,38 @@ public class MySqlTableLister extends AnyTableLister {
             throw new IllegalArgumentException("Backticks within the identifier: " + id);
         }
         return "`" + id + "`";
+    }
+
+    @Override
+    public List<PartitionInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        if (td.getTableRef() != null && td.getTableRef().hasQueryText()) {
+            return Collections.emptyList();
+        }
+        final List<PartitionInfo> partitions = new ArrayList<>();
+        final String baseSql = makeSelectSql(td.getSchema(), td.getTable(), tm.getColumns());
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT DISTINCT partition_name, partition_ordinal_position "
+                + "FROM information_schema.partitions "
+                + "WHERE table_schema=? AND table_name=? "
+                + "  AND partition_name IS NOT NULL "
+                + "ORDER BY partition_ordinal_position")) {
+            ps.setString(1, td.getSchema());
+            ps.setString(2, td.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String partName = rs.getString(1);
+                    String sql = baseSql + " PARTITION (" + safeId(partName) + ")";
+                    String label = td.getSchema() + "." + td.getTable() + "#" + partName;
+                    partitions.add(new PartitionInfo(label, sql));
+                }
+            }
+        }
+        if (partitions.size() < 2) {
+            return Collections.emptyList();
+        }
+        LOG.info("Table {}.{}: found {} partitions",
+                td.getSchema(), td.getTable(), partitions.size());
+        return partitions;
     }
 }
