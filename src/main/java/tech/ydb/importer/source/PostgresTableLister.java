@@ -10,6 +10,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.TableIdentity;
 
@@ -19,6 +22,8 @@ import tech.ydb.importer.config.TableIdentity;
  * @author zinal
  */
 public class PostgresTableLister extends AnyTableLister {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PostgresTableLister.class);
 
     public static final Set<String> SKIP_SCHEMAS;
 
@@ -256,6 +261,7 @@ public class PostgresTableLister extends AnyTableLister {
                 + "INNER JOIN pg_class child_cls ON inh.inhrelid = child_cls.oid "
                 + "INNER JOIN pg_namespace child_ns ON child_cls.relnamespace = child_ns.oid "
                 + "WHERE parent_ns.nspname = ? AND parent_cls.relname = ? "
+                + "  AND parent_cls.relkind = 'p' "
                 + "ORDER BY child_cls.relname")) {
             ps.setString(1, td.getSchema());
             ps.setString(2, td.getTable());
@@ -271,6 +277,8 @@ public class PostgresTableLister extends AnyTableLister {
         if (partitions.size() < 2) {
             return Collections.emptyList();
         }
+        LOG.info("Table {}.{}: found {} partitions",
+                td.getSchema(), td.getTable(), partitions.size());
         return partitions;
     }
 
@@ -285,7 +293,6 @@ public class PostgresTableLister extends AnyTableLister {
     @Override
     protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm)
             throws SQLException {
-        // Basic implementation comes from the parent.
         super.grabColumnTypes(con, td, tm);
         // Grab the BLOB columns, which are a magic in PostgreSQL.
         final String sqlBlob = ""
@@ -296,7 +303,7 @@ public class PostgresTableLister extends AnyTableLister {
                 + "  AND a.atttypid = t.oid "
                 + "  AND c.relnamespace = s.oid"
                 + "  AND t.typname in ('oid', 'lo') "
-                + "  AND c.relkind='r' "
+                + "  AND c.relkind IN ('r', 'p') "
                 + "  AND s.nspname=? AND c.relname=?";
         try (PreparedStatement ps = con.prepareStatement(sqlBlob)) {
             ps.setString(1, td.getSchema());
