@@ -171,10 +171,10 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     /**
-     * Choose the best UNIQUE or UNIQUE index when there is no PRIMARY KEY.
+     * Choose the best UNIQUE index when there is no PRIMARY KEY.
      * <p>
      * (a) Prefer an index with the smallest number of columns.
-     * (b) For equal-length indexes, compare sorted column-name lists.
+     * (b) For equal-length indexes, order by index name alphabetically.
      */
     private void chooseBestUniqueIndexAsKey(Connection con, TableIdentity ti, TableMetadata tm)
             throws SQLException {
@@ -182,30 +182,22 @@ public class PostgresTableLister extends AnyTableLister {
         int bestKeyCount = 0;
 
         try (PreparedStatement ps = con.prepareStatement(
-                "WITH unique_indexes AS ("
-                        + "  SELECT ix.indexrelid, "
-                        + "         ix.indnkeyatts AS key_count, "
-                        + "         array_agg(ia.attname ORDER BY ia.attname) AS sorted_columns "
-                        + "  FROM pg_catalog.pg_index ix "
-                        + "  INNER JOIN pg_catalog.pg_class c "
-                        + "    ON c.\"oid\" = ix.indrelid "
-                        + "  INNER JOIN pg_catalog.pg_namespace n "
-                        + "    ON n.\"oid\" = c.relnamespace "
-                        + "  INNER JOIN pg_catalog.pg_attribute ia "
-                        + "    ON ia.attrelid = ix.indexrelid "
-                        + "   AND ia.attnum > 0 "
-                        + "   AND NOT ia.attisdropped "
-                        + "   AND ia.attnum <= ix.indnkeyatts "
-                        + "  LEFT JOIN pg_catalog.pg_constraint x "
-                        + "    ON x.conindid = ix.indexrelid AND x.contype = 'p' "
-                        + "  WHERE n.nspname = ? AND c.relname = ? "
-                        + "    AND ix.indisvalid AND ix.indisunique "
-                        + "    AND x.conindid IS NULL "
-                        + "  GROUP BY ix.indexrelid, ix.indnkeyatts"
-                        + ") "
-                        + "SELECT indexrelid, key_count "
-                        + "FROM unique_indexes "
-                        + "ORDER BY key_count, sorted_columns, indexrelid "
+                "SELECT ix.indexrelid, ix.indnkeyatts AS key_count "
+                        + "FROM pg_catalog.pg_index ix "
+                        + "INNER JOIN pg_catalog.pg_class ic "
+                        + "  ON ic.\"oid\" = ix.indexrelid "
+                        + "INNER JOIN pg_catalog.pg_class c "
+                        + "  ON c.\"oid\" = ix.indrelid "
+                        + "INNER JOIN pg_catalog.pg_namespace n "
+                        + "  ON n.\"oid\" = c.relnamespace "
+                        + "LEFT JOIN pg_catalog.pg_constraint x "
+                        + "  ON x.conindid = ix.indexrelid AND x.contype = 'p' "
+                        + "WHERE n.nspname = ? AND c.relname = ? "
+                        + "  AND ix.indisvalid AND ix.indisunique "
+                        + "  AND x.conindid IS NULL "
+                        + "  AND ix.indpred IS NULL "
+                        + "  AND ix.indexprs IS NULL "
+                        + "ORDER BY ix.indnkeyatts, ic.relname, ix.indexrelid "
                         + "LIMIT 1")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());

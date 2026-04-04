@@ -147,8 +147,8 @@ public class VerticaTableLister extends AnyTableLister {
                 + "WHERE cc.table_schema=? AND cc.table_name=? "
                 + "  AND cc.constraint_type='u' "
                 + "  AND cc.is_enabled "
-                + "GROUP BY cc.constraint_id "
-                + "ORDER BY col_count, cc.constraint_id "
+                + "GROUP BY cc.constraint_id, cc.constraint_name "
+                + "ORDER BY col_count, cc.constraint_name, cc.constraint_id "
                 + "LIMIT 1")) {
             ps.setString(1, ti.getSchema());
             ps.setString(2, ti.getTable());
