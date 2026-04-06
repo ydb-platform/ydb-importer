@@ -2,91 +2,97 @@ package tech.ydb.importer.target;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.sql.Date;
 import java.sql.ResultSet;
-import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.UUID;
-import java.util.function.Function;
 
 import tech.ydb.table.values.DecimalType;
 import tech.ydb.table.values.PrimitiveType;
-import tech.ydb.table.values.PrimitiveValue;
 import tech.ydb.table.values.Type;
-import tech.ydb.table.values.Value;
-import tech.ydb.table.values.VoidValue;
 
 /**
  * Adapter for converting values of different SQL types to YDB values.
+ * Each subclass reads from a JDBC ResultSet and writes the converted value
+ * via a {@link ValueWriter}, ensuring identical semantics for both
+ * row-based and Arrow-based import paths.
  *
  * @author zinal
  */
 public abstract class ValueReader {
 
-    private static final ValueReader BOOL = new BoolReader(PrimitiveValue::newBool);
-    private static final ValueReader INT_BOOL = new IntReader(i -> PrimitiveValue.newBool(i != 0));
-    private static final ValueReader STR_BOOL = new StringReader(s -> PrimitiveValue.newBool(str2bool(s)));
+    private static final ValueReader BOOL = new BoolReader();
+    private static final ValueReader INT_BOOL = new IntReader(
+            (w, i, v) -> w.writeBool(i, v != 0),
+            SynthKey::hashInt
+    );
+    private static final ValueReader STR_BOOL = new StringReader(
+            (w, i, v) -> w.writeBool(i, str2bool(v))
+    );
 
-    private static final ValueReader TEXT = new StringReader(PrimitiveValue::newText);
-    private static final ValueReader BYTES = new BytesReader(PrimitiveValue::newBytes);
+    private static final ValueReader TEXT = new StringReader(ValueWriter::writeText);
+    private static final ValueReader BYTES = new BytesReader();
 
-    private static final ValueReader FLOAT = new FloatReader(PrimitiveValue::newFloat);
-    private static final ValueReader DOUBLE = new DoubleReader(PrimitiveValue::newDouble);
+    private static final ValueReader FLOAT = new FloatReader();
+    private static final ValueReader DOUBLE = new DoubleReader();
 
-    private static final ValueReader INT32 = new IntReader(PrimitiveValue::newInt32);
-    private static final ValueReader UINT32 = new LongReader(PrimitiveValue::newUint32);
-    private static final ValueReader INT64 = new LongReader(PrimitiveValue::newInt64);
-    private static final ValueReader UINT64 = new LongReader(PrimitiveValue::newUint64);
+    private static final ValueReader INT32 = new IntReader(
+            ValueWriter::writeInt32, SynthKey::hashInt);
+    private static final ValueReader UINT32 = new LongReader(ValueWriter::writeUint32);
+    private static final ValueReader INT64 = new LongReader(ValueWriter::writeInt64);
+    private static final ValueReader UINT64 = new LongReader(ValueWriter::writeUint64);
 
-    private static final ValueReader DATE = new DateReader(date -> PrimitiveValue.newDate(date.toLocalDate()));
-    private static final ValueReader DATE32 = new DateReader(date -> PrimitiveValue.newDate32(date.toLocalDate()));
-    private static final ValueReader DATE_INT32 = new DateReader(date -> PrimitiveValue.newInt32(date2int(date)));
-    private static final ValueReader DATE_UINT32 = new DateReader(date -> PrimitiveValue.newUint32(date2int(date)));
-    private static final ValueReader DATE_INT64 = new DateReader(date -> PrimitiveValue.newInt64(date2int(date)));
-    private static final ValueReader DATE_UINT64 = new DateReader(date -> PrimitiveValue.newUint64(date2int(date)));
-    private static final ValueReader DATE_STR = new DateReader(date -> PrimitiveValue.newText(date2str(date)));
+    private static final ValueReader DATE = new DateReader(
+            (w, i, v) -> w.writeDate(i, v.toLocalDate()));
+    private static final ValueReader DATE32 = new DateReader(
+            (w, i, v) -> w.writeDate32(i, v.toLocalDate()));
+    private static final ValueReader DATE_INT32 = new DateReader(
+            (w, i, v) -> w.writeInt32(i, date2int(v)));
+    private static final ValueReader DATE_UINT32 = new DateReader(
+            (w, i, v) -> w.writeUint32(i, date2int(v)));
+    private static final ValueReader DATE_INT64 = new DateReader(
+            (w, i, v) -> w.writeInt64(i, date2int(v)));
+    private static final ValueReader DATE_UINT64 = new DateReader(
+            (w, i, v) -> w.writeUint64(i, date2int(v)));
+    private static final ValueReader DATE_STR = new DateReader(
+            (w, i, v) -> w.writeText(i, date2str(v)));
 
-    private static final ValueReader TIME_INT32 = new TimeReader(time -> PrimitiveValue.newInt32(time2int(time)));
+    private static final ValueReader TIME_INT32 = new TimeReader();
 
     private static final ValueReader DATETIME = new TimestampReader(
-            ts -> PrimitiveValue.newDatetime(ts.toInstant()));
+            (w, i, v) -> w.writeDatetime(i, v.toInstant()));
     private static final ValueReader TIMESTAMP = new TimestampReader(
-            ts -> PrimitiveValue.newTimestamp(ts.toInstant()));
-    private static final ValueReader TS_DATE = new TimestampReader(
-            ts -> PrimitiveValue.newDate(ts.toLocalDateTime().toLocalDate())
-    );
-
-    private static final ValueReader TS_DATE32 = new TimestampReader(
-            ts -> PrimitiveValue.newDate32(ts.toLocalDateTime().toLocalDate())
-    );
+            (w, i, v) -> w.writeTimestamp(i, v.toInstant()));
     private static final ValueReader DATETIME64 = new TimestampReader(
-            ts -> PrimitiveValue.newDatetime64(ts.toInstant()));
+            (w, i, v) -> w.writeDatetime64(i, v.toInstant()));
     private static final ValueReader TIMESTAMP64 = new TimestampReader(
-            ts -> PrimitiveValue.newTimestamp64(ts.toInstant()));
+            (w, i, v) -> w.writeTimestamp64(i, v.toInstant()));
 
-    private static final ValueReader TS_INT64 = new TimestampReader(ts -> PrimitiveValue.newInt64(ts.getTime()));
-    private static final ValueReader TS_UINT64 = new TimestampReader(ts -> PrimitiveValue.newUint64(ts.getTime()));
-    private static final ValueReader TS_STR = new TimestampReader(ts -> PrimitiveValue.newText(ts.toString()));
+    private static final ValueReader TS_DATE = new TimestampReader(
+            (w, i, v) -> w.writeDate(i, v.toLocalDateTime().toLocalDate()));
+    private static final ValueReader TS_DATE32 = new TimestampReader(
+            (w, i, v) -> w.writeDate32(i, v.toLocalDateTime().toLocalDate()));
 
-    private static final ValueReader UUID_BINARY = new UuidReaderBinary();
-    private static final ValueReader UUID_TEXT = new UuidReaderText();
+    private static final ValueReader TS_INT64 = new TimestampReader(
+            (w, i, v) -> w.writeInt64(i, v.getTime()));
+    private static final ValueReader TS_UINT64 = new TimestampReader(
+            (w, i, v) -> w.writeUint64(i, v.getTime()));
+    private static final ValueReader TS_STR = new TimestampReader(
+            (w, i, v) -> w.writeText(i, v.toString()));
+
+    private static final ValueReader UUID_BINARY = new UuidBinaryReader();
+    private static final ValueReader UUID_TEXT = new UuidTextReader();
 
     /**
-     * Converts a single source ResultSet column value to YDB format.
-     *
-     * @param synthKey synthetic key of row
-     * @param rs Input source result set
-     * @param index Index of column
-     * @return YDB-formatted value
-     * @throws Exception
+     * Reads a single column from the JDBC ResultSet, converts and writes it
+     * to the target via the supplied {@link ValueWriter}, and updates the
+     * synthetic key hash when present.
      */
-    public abstract Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception;
+    public abstract void read(ResultSet rs, int rsIndex, int targetIndex,
+                              ValueWriter writer, SynthKey synthKey) throws Exception;
 
     public void flush() {
-        // Nothing
     }
 
     public static ValueReader getReader(Type ydbType, int sqlType) throws Exception {
@@ -97,7 +103,7 @@ public abstract class ValueReader {
 
         if (paramType.getKind() == Type.Kind.DECIMAL) {
             final DecimalType theType = (DecimalType) paramType;
-            return new BigDecimalReader(theType::newValue);
+            return new BigDecimalReader(theType);
         }
 
         if (paramType.getKind() == Type.Kind.PRIMITIVE) {
@@ -190,7 +196,7 @@ public abstract class ValueReader {
                         default:
                             return TEXT;
                     }
-                case Bytes: // SQL BINARY, VARBINARY
+                case Bytes:
                     return BYTES;
                 case Uuid:
                     switch (sqlType) {
@@ -207,370 +213,319 @@ public abstract class ValueReader {
         throw new IllegalArgumentException("chooseMode(): " + paramType + " - unsupported kind");
     }
 
-    private static class StringReader extends ValueReader {
-
-        private final Function<String, Value<?>> func;
-
-        StringReader(Function<String, Value<?>> func) {
-            this.func = func;
-        }
-
+    private static class BoolReader extends ValueReader {
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            String value = rs.getString(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            boolean val = rs.getBoolean(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                synthKey.update(value.getBytes());
-                synthKey.updateSeparator();
+            w.writeBool(targetIdx, val);
+            if (sk != null) {
+                sk.hashBool(val);
             }
-
-            return func.apply(value);
-        }
-    }
-
-    private static class BytesReader extends ValueReader {
-
-        private final Function<byte[], Value<?>> func;
-
-        BytesReader(Function<byte[], Value<?>> func) {
-            this.func = func;
-        }
-
-        @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            byte[] value = rs.getBytes(index);
-            if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
-                }
-                return VoidValue.of();
-            }
-
-            if (synthKey != null) {
-                synthKey.update(value);
-                synthKey.updateSeparator();
-            }
-
-            return func.apply(value);
         }
     }
 
     private static class IntReader extends ValueReader {
+        @FunctionalInterface
+        interface IntWrite {
+            void write(ValueWriter w, int index, int val);
+        }
 
-        private final Function<Integer, Value<?>> func;
+        @FunctionalInterface
+        interface IntHash {
+            void hash(SynthKey sk, int val);
+        }
 
-        IntReader(Function<Integer, Value<?>> func) {
-            this.func = func;
+        private final IntWrite writeAction;
+        private final IntHash hashAction;
+
+        IntReader(IntWrite writeAction, IntHash hashAction) {
+            this.writeAction = writeAction;
+            this.hashAction = hashAction;
         }
 
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            int value = rs.getInt(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            int val = rs.getInt(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
-                buffer.putInt(value);
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+            writeAction.write(w, targetIdx, val);
+            if (sk != null) {
+                hashAction.hash(sk, val);
             }
-
-            return func.apply(value);
         }
     }
 
     private static class LongReader extends ValueReader {
+        @FunctionalInterface
+        interface LongWrite {
+            void write(ValueWriter w, int index, long val);
+        }
 
-        private final Function<Long, Value<?>> func;
+        private final LongWrite writeAction;
 
-        LongReader(Function<Long, Value<?>> func) {
-            this.func = func;
+        LongReader(LongWrite writeAction) {
+            this.writeAction = writeAction;
         }
 
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            long value = rs.getLong(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            long val = rs.getLong(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
-                buffer.putLong(value);
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+            writeAction.write(w, targetIdx, val);
+            if (sk != null) {
+                sk.hashLong(val);
             }
-
-            return func.apply(value);
         }
     }
 
     private static class FloatReader extends ValueReader {
-
-        private final Function<Float, Value<?>> func;
-
-        FloatReader(Function<Float, Value<?>> func) {
-            this.func = func;
-        }
-
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            float value = rs.getFloat(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            float val = rs.getFloat(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                ByteBuffer buffer = ByteBuffer.allocate(Float.BYTES);
-                buffer.putFloat(value);
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+            w.writeFloat(targetIdx, val);
+            if (sk != null) {
+                sk.hashFloat(val);
             }
-
-            return func.apply(value);
         }
     }
 
     private static class DoubleReader extends ValueReader {
-
-        private final Function<Double, Value<?>> func;
-
-        DoubleReader(Function<Double, Value<?>> func) {
-            this.func = func;
-        }
-
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            double value = rs.getDouble(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            double val = rs.getDouble(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                ByteBuffer buffer = ByteBuffer.allocate(Double.BYTES);
-                buffer.putDouble(value);
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+            w.writeDouble(targetIdx, val);
+            if (sk != null) {
+                sk.hashDouble(val);
             }
-
-            return func.apply(value);
         }
     }
 
-    private static class BoolReader extends ValueReader {
+    private static class StringReader extends ValueReader {
+        @FunctionalInterface
+        interface StrWrite {
+            void write(ValueWriter w, int index, String val);
+        }
 
-        private final Function<Boolean, Value<?>> func;
+        private final StrWrite writeAction;
 
-        BoolReader(Function<Boolean, Value<?>> func) {
-            this.func = func;
+        StringReader(StrWrite writeAction) {
+            this.writeAction = writeAction;
         }
 
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            boolean value = rs.getBoolean(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            String val = rs.getString(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                ByteBuffer buffer = ByteBuffer.allocate(1);
-                buffer.put((byte) (value ? 1 : 0));
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+            writeAction.write(w, targetIdx, val);
+            if (sk != null) {
+                sk.hashString(val);
             }
-
-            return func.apply(value);
         }
     }
 
-    private static class BigDecimalReader extends ValueReader {
-
-        private final Function<BigDecimal, Value<?>> func;
-
-        BigDecimalReader(Function<BigDecimal, Value<?>> func) {
-            this.func = func;
-        }
-
+    private static class BytesReader extends ValueReader {
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            BigDecimal value = rs.getBigDecimal(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            byte[] val = rs.getBytes(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                byte[] bytes = value.toBigInteger().toByteArray();
-                ByteBuffer buffer = ByteBuffer.allocate(bytes.length + Integer.BYTES);
-                buffer.putInt(value.scale());
-                buffer.put(bytes);
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+            w.writeBytes(targetIdx, val);
+            if (sk != null) {
+                sk.hashBytes(val);
             }
-
-            return func.apply(value);
         }
     }
 
     private static class DateReader extends ValueReader {
+        @FunctionalInterface
+        interface DateWrite {
+            void write(ValueWriter w, int index, java.sql.Date val);
+        }
 
-        private final Function<Date, Value<?>> func;
+        private final DateWrite writeAction;
 
-        DateReader(Function<Date, Value<?>> func) {
-            this.func = func;
+        DateReader(DateWrite writeAction) {
+            this.writeAction = writeAction;
         }
 
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            Date value = rs.getDate(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            java.sql.Date val = rs.getDate(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
-                buffer.putLong(value.getTime());
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+            writeAction.write(w, targetIdx, val);
+            if (sk != null) {
+                sk.hashDate(val);
             }
-
-            return func.apply(value);
         }
     }
 
     private static class TimeReader extends ValueReader {
-
-        private final Function<Time, Value<?>> func;
-
-        TimeReader(Function<Time, Value<?>> func) {
-            this.func = func;
-        }
-
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            Time value = rs.getTime(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            java.sql.Time val = rs.getTime(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                LocalTime time = value.toLocalTime();
-                ByteBuffer buffer = ByteBuffer.allocate(4 * Integer.BYTES);
-                buffer.putInt(time.getHour());
-                buffer.putInt(time.getMinute());
-                buffer.putInt(time.getSecond());
-                buffer.putInt(time.getNano());
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+            w.writeInt32(targetIdx, time2int(val));
+            if (sk != null) {
+                sk.hashTime(val);
             }
-
-            return func.apply(value);
         }
     }
 
     private static class TimestampReader extends ValueReader {
+        @FunctionalInterface
+        interface TsWrite {
+            void write(ValueWriter w, int index, Timestamp val);
+        }
 
-        private final Function<Timestamp, Value<?>> func;
+        private final TsWrite writeAction;
 
-        TimestampReader(Function<Timestamp, Value<?>> func) {
-            this.func = func;
+        TimestampReader(TsWrite writeAction) {
+            this.writeAction = writeAction;
         }
 
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            Timestamp value = rs.getTimestamp(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            Timestamp val = rs.getTimestamp(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES + Integer.BYTES);
-                buffer.putLong(value.getTime());
-                buffer.putInt(value.getNanos());
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+            writeAction.write(w, targetIdx, val);
+            if (sk != null) {
+                sk.hashTimestamp(val);
             }
-
-            return func.apply(value);
-        }
-    }
-
-    private static class UuidReaderText extends ValueReader {
-
-        @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            String value = rs.getString(index);
-            if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
-                }
-                return VoidValue.of();
-            }
-
-            if (synthKey != null) {
-                synthKey.update(value.getBytes(StandardCharsets.UTF_8));
-                synthKey.updateSeparator();
-            }
-
-            return PrimitiveValue.newUuid(value);
         }
     }
 
-    private static class UuidReaderBinary extends ValueReader {
+    private static class BigDecimalReader extends ValueReader {
+        private final DecimalType decimalType;
+
+        BigDecimalReader(DecimalType decimalType) {
+            this.decimalType = decimalType;
+        }
 
         @Override
-        public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-            byte[] value = rs.getBytes(index);
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            BigDecimal val = rs.getBigDecimal(rsIdx);
             if (rs.wasNull()) {
-                if (synthKey != null) {
-                    synthKey.updateSeparator();
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
-
-            if (synthKey != null) {
-                synthKey.update(value);
-                synthKey.updateSeparator();
+            w.writeDecimal(targetIdx, decimalType, val);
+            if (sk != null) {
+                sk.hashBigDecimal(val);
             }
+        }
+    }
 
-            ByteBuffer byteBuffer = ByteBuffer.wrap(value);
-            long high = byteBuffer.getLong();
-            long low = byteBuffer.getLong();
-            return PrimitiveValue.newUuid(new UUID(high, low));
+    private static class UuidTextReader extends ValueReader {
+        @Override
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            String val = rs.getString(rsIdx);
+            if (rs.wasNull()) {
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
+                }
+                return;
+            }
+            w.writeUuidFromString(targetIdx, val);
+            if (sk != null) {
+                sk.hashUuidText(val);
+            }
+        }
+    }
+
+    private static class UuidBinaryReader extends ValueReader {
+        @Override
+        public void read(ResultSet rs, int rsIdx, int targetIdx,
+                         ValueWriter w, SynthKey sk) throws Exception {
+            byte[] val = rs.getBytes(rsIdx);
+            if (rs.wasNull()) {
+                w.writeNull(targetIdx);
+                if (sk != null) {
+                    sk.hashNull();
+                }
+                return;
+            }
+            ByteBuffer bb = ByteBuffer.wrap(val);
+            w.writeUuid(targetIdx, new UUID(bb.getLong(), bb.getLong()));
+            if (sk != null) {
+                sk.hashBytes(val);
+            }
         }
     }
 
@@ -586,8 +541,8 @@ public abstract class ValueReader {
         return !("N".equalsIgnoreCase(value)
                 || "0".equalsIgnoreCase(value)
                 || "F".equalsIgnoreCase(value)
-                || "Н".equalsIgnoreCase(value)
-                || "Л".equalsIgnoreCase(value));
+                || "\u041D".equalsIgnoreCase(value)
+                || "\u041B".equalsIgnoreCase(value));
     }
 
     private static int date2int(java.sql.Date date) {

@@ -24,9 +24,7 @@ import tech.ydb.table.query.arrow.ApacheArrowWriter;
 import tech.ydb.table.values.ListType;
 import tech.ydb.table.values.ListValue;
 import tech.ydb.table.values.StructType;
-import tech.ydb.table.values.StructValue;
 import tech.ydb.table.values.Value;
-import tech.ydb.table.values.VoidValue;
 
 /**
  *
@@ -49,6 +47,8 @@ public class LoadDataTask implements Callable<Boolean> {
     private final int retryCount;
     private final WriterPool writerPool;
     private final boolean useArrow;
+    private final int partitionIdx;
+    private long rowIndex;
 
     private static final long INITIAL_BACKOFF_MS = 1000;
 
@@ -76,6 +76,8 @@ public class LoadDataTask implements Callable<Boolean> {
         this.retryCount = owner.getConfig().getSource().getRetryCount();
         this.writerPool = writerPool;
         this.useArrow = owner.getConfig().getWorkers().isUseArrow();
+        this.partitionIdx = (partition != null) ? partition.getIndex() : 0;
+        this.rowIndex = 0;
     }
 
     @Override
@@ -109,6 +111,11 @@ public class LoadDataTask implements Callable<Boolean> {
         }
     }
 
+    private long nextBlobId() {
+        rowIndex++;
+        return BlobReader.packBlobId(partitionIdx, rowIndex);
+    }
+
     private String getLabel() {
         if (partition != null) {
             return partition.getName();
@@ -127,10 +134,12 @@ public class LoadDataTask implements Callable<Boolean> {
         int attempt = 0;
         int failingChunk = -1;
         long backoffMs = INITIAL_BACKOFF_MS;
+        long savedRowIndex = rowIndex;
 
         while (nextChunk < chunks.size()) {
             try (Connection con = source.getConnection()) {
                 while (nextChunk < chunks.size()) {
+                    savedRowIndex = rowIndex;
                     ChunkInfo chunk = chunks.get(nextChunk);
                     copied += executeQuery(con, chunk.getQuerySql(), chunk.getName());
                     nextChunk++;
@@ -139,6 +148,7 @@ public class LoadDataTask implements Callable<Boolean> {
                     failingChunk = -1;
                 }
             } catch (Exception e) {
+                rowIndex = savedRowIndex;
                 if (nextChunk != failingChunk) {
                     attempt = 0;
                     backoffMs = INITIAL_BACKOFF_MS;
@@ -174,35 +184,41 @@ public class LoadDataTask implements Callable<Boolean> {
         return copied;
     }
 
-    /**
-     * Reads the source ResultSet rows and upserts the data to YDB tables.
-     *
-     * @param rs Input result set
-     * @throws Exception
-     */
     private long copyData(ResultSet rs) throws Exception {
-        if (useArrow) {
-            return copyDataArrow(rs);
-        }
-        return copyDataRows(rs);
-    }
-
-    private long copyDataRows(ResultSet rs) throws Exception {
         final StructType paramType = tab.getTarget().getFields();
-        final ListType paramListType = ListType.of(paramType);
         final ResultSetMetaData rsmd = rs.getMetaData();
         final ColumnIndex[] columns = buildMainIndex(paramType, rsmd);
+        final SynthKey synthKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
+        final int synthKeyPos = tab.getTarget().getSynthKeyPos();
 
+        long copied;
+        if (useArrow) {
+            copied = copyDataArrow(rs, paramType, columns, synthKey, synthKeyPos);
+        } else {
+            copied = copyDataRows(rs, paramType, columns, synthKey, synthKeyPos);
+        }
+
+        flushReaders(columns);
+        return copied;
+    }
+
+    private long copyDataRows(ResultSet rs, StructType paramType, ColumnIndex[] columns,
+                              SynthKey synthKey, int synthKeyPos) throws Exception {
+        final ListType paramListType = ListType.of(paramType);
         final List<Value<?>> batch = new ArrayList<>(maxBatchRows);
-        final SynthKey synchKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
-
         long copied = 0;
 
         while (rs.next()) {
             copied++;
             progress.countReadRows(1);
 
-            batch.add(read(rs, paramType, columns, synchKey));
+            RowValueWriter writer = new RowValueWriter(paramType.getMembersCount());
+            writeRow(rs, columns, writer, synthKey);
+            if (synthKey != null) {
+                writer.writeText(synthKeyPos, synthKey.buildString());
+            }
+            batch.add(writer.toStructValue(paramType));
+
             if (batch.size() >= maxBatchRows) {
                 sendRowBatch(paramListType, batch);
                 batch.clear();
@@ -214,13 +230,82 @@ public class LoadDataTask implements Callable<Boolean> {
             batch.clear();
         }
 
-        flushReaders(columns);
         return copied;
+    }
+
+    private long copyDataArrow(ResultSet rs, StructType paramType, ColumnIndex[] columns,
+                               SynthKey synthKey, int synthKeyPos) throws Exception {
+        long copied = 0;
+
+        try (ArrowBatchBuilder arrowBuilder = new ArrowBatchBuilder(paramType, maxBatchRows)) {
+            ApacheArrowWriter.Batch batch = arrowBuilder.createBatch();
+            int batchRowCount = 0;
+
+            while (rs.next()) {
+                copied++;
+                progress.countReadRows(1);
+
+                ApacheArrowWriter.Row row = batch.writeNextRow();
+                ArrowValueWriter writer = new ArrowValueWriter(row, paramType);
+                writeRow(rs, columns, writer, synthKey);
+                if (synthKey != null) {
+                    writer.writeText(synthKeyPos, synthKey.buildString());
+                }
+                batchRowCount++;
+
+                if (batchRowCount >= maxBatchRows) {
+                    sendArrowBatch(arrowBuilder, batch, batchRowCount);
+                    batch = arrowBuilder.createBatch();
+                    batchRowCount = 0;
+                }
+            }
+
+            if (batchRowCount > 0) {
+                sendArrowBatch(arrowBuilder, batch, batchRowCount);
+            }
+        }
+
+        return copied;
+    }
+
+    /**
+     * Writes a single source row through the given ValueWriter.
+     * Shared between row-based and Arrow-based paths.
+     */
+    private void writeRow(ResultSet rs, ColumnIndex[] columns,
+                          ValueWriter writer, SynthKey synthKey) throws Exception {
+        long blobId = nextBlobId();
+
+        for (int rsIdx = 1; rsIdx <= columns.length; rsIdx++) {
+            ColumnIndex column = columns[rsIdx - 1];
+            if (column == null) {
+                continue;
+            }
+
+            ValueReader reader = column.getReader();
+            if (reader instanceof BlobReader) {
+                ((BlobReader) reader).setNextBlobId(blobId);
+            }
+
+            try {
+                reader.read(rs, rsIdx, column.getStructIndex(), writer, synthKey);
+            } catch (Exception ex) {
+                StructType paramType = tab.getTarget().getFields();
+                throw new Exception("Failed conversion for column " + rsIdx
+                        + " " + paramType.getMemberName(column.getStructIndex()), ex);
+            }
+        }
     }
 
     private void sendRowBatch(ListType paramListType, List<Value<?>> batch) throws Exception {
         ListValue values = paramListType.newValue(batch);
         writerPool.submit(new TaggedBatch(() -> ydbOp.upload(values)));
+    }
+
+    private void sendArrowBatch(ArrowBatchBuilder arrowBuilder, ApacheArrowWriter.Batch batch,
+                                int rowCount) throws Exception {
+        ApacheArrowData data = arrowBuilder.buildBatch(batch);
+        writerPool.submit(new TaggedBatch(() -> ydbOp.upload(data, rowCount)));
     }
 
     private void flushReaders(ColumnIndex[] columns) throws Exception {
@@ -266,12 +351,14 @@ public class LoadDataTask implements Callable<Boolean> {
                             + "of source {}.{}", columnName, tab.getSchema(), tab.getTable());
                 } else {
                     String blobPath = target.getDatabase() + "/" + tt.getFullName();
-                    boolean isBlob = ci.isBlobAsObject();
-                    ValueReader reader = new BlobReader(blobPath, target.getRetryCtx(), progress, maxBatchRows, isBlob);
+                    boolean isBlobObj = ci.isBlobAsObject();
+                    ValueReader reader = new BlobReader(blobPath, target.getRetryCtx(),
+                            progress, maxBatchRows, isBlobObj);
                     index[i] = new ColumnIndex(ixTarget, reader);
                 }
             } else {
-                ValueReader reader = ValueReader.getReader(paramListType.getMemberType(ixTarget), ci.getSqlType());
+                ValueReader reader = ValueReader.getReader(
+                        paramListType.getMemberType(ixTarget), ci.getSqlType());
                 if (reader == null) {
                     LOG.warn("Missing aux target table for BLOB column {} "
                             + "of source {}.{}", columnName, tab.getSchema(), tab.getTable());
@@ -281,97 +368,6 @@ public class LoadDataTask implements Callable<Boolean> {
             }
         }
         return index;
-    }
-
-    /**
-     * Converts the current row from the source ResultSet to the StructValue
-     * representation.
-     *
-     * @param type StructValue type definition
-     * @param rs Input result set
-     * @return StructValue with the converted copies of fields
-     * @throws Exception
-     */
-    private StructValue read(ResultSet rs, StructType type, ColumnIndex[] columns, SynthKey synthKey) throws Exception {
-        Value<?>[] values = new Value[type.getMembersCount()];
-        for (int idx = 0; idx < values.length; idx += 1) {
-            values[idx] = VoidValue.of();
-        }
-
-        for (int rsIdx = 1; rsIdx <= columns.length; rsIdx += 1) {
-            ColumnIndex column = columns[rsIdx - 1];
-            if (column == null) {
-                continue;
-            }
-
-            int valuesIdx = column.getStructIndex();
-            try {
-                values[valuesIdx] = column.getReader().readValue(synthKey, rs, rsIdx);
-            } catch (Exception ex) {
-                throw new Exception("Failed conversion for column " + rsIdx + " " + type.getMemberName(valuesIdx), ex);
-            }
-        }
-
-        if (synthKey != null) {
-            values[tab.getTarget().getSynthKeyPos()] = synthKey.build();
-        }
-        return type.newValueUnsafe(values);
-    }
-
-    private long copyDataArrow(ResultSet rs) throws Exception {
-        final StructType paramType = tab.getTarget().getFields();
-        final ResultSetMetaData rsmd = rs.getMetaData();
-        final Map<String, BlobAccumulator> blobAccumulators = buildBlobAccumulators();
-
-        long copied = 0;
-
-        try (ArrowBatchBuilder arrowBuilder = new ArrowBatchBuilder(
-                paramType, rsmd, tab, maxBatchRows, blobAccumulators)) {
-            int batchRowCount = 0;
-            ApacheArrowWriter.Batch batch = arrowBuilder.createBatch();
-
-            while (rs.next()) {
-                copied++;
-                progress.countReadRows(1);
-
-                arrowBuilder.writeRow(rs, batch);
-                batchRowCount++;
-
-                if (batchRowCount >= maxBatchRows) {
-                    sendArrowBatch(arrowBuilder, batch, batchRowCount);
-                    batch = arrowBuilder.createBatch();
-                    batchRowCount = 0;
-                }
-            }
-
-            if (batchRowCount > 0) {
-                sendArrowBatch(arrowBuilder, batch, batchRowCount);
-            }
-
-            arrowBuilder.flush();
-        }
-
-        return copied;
-    }
-
-    private Map<String, BlobAccumulator> buildBlobAccumulators() {
-        Map<String, BlobAccumulator> result = new HashMap<>();
-        for (Map.Entry<String, TargetTable> entry : tab.getBlobTargets().entrySet()) {
-            String columnName = entry.getKey();
-            TargetTable tt = entry.getValue();
-            String blobPath = target.getDatabase() + "/" + tt.getFullName();
-            ColumnInfo ci = tab.getMetadata().findColumn(columnName);
-            boolean isBlob = ci != null && ci.isBlobAsObject();
-            result.put(columnName, new BlobAccumulator(
-                    blobPath, target, progress, maxBatchRows, isBlob, writerPool));
-        }
-        return result;
-    }
-
-    private void sendArrowBatch(ArrowBatchBuilder arrowBuilder, ApacheArrowWriter.Batch batch,
-                                int rowCount) throws Exception {
-        ApacheArrowData data = arrowBuilder.buildBatch(batch);
-        writerPool.submit(new TaggedBatch(() -> ydbOp.upload(data, rowCount)));
     }
 
     private static class ColumnIndex {

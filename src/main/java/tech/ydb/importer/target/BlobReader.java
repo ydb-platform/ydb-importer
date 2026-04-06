@@ -1,11 +1,9 @@
 package tech.ydb.importer.target;
 
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.protobuf.ByteString;
 
@@ -15,7 +13,6 @@ import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.PrimitiveValue;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.Value;
-import tech.ydb.table.values.VoidValue;
 
 /**
  * JDBC to YDB BLOB copying logic. Each BLOB value is converted to a sequence of records in an
@@ -34,8 +31,13 @@ public class BlobReader extends ValueReader {
 
     public static final ListType BLOB_LIST = ListType.of(BLOB_ROW);
 
+    private static final int ROW_BITS = 40;
+    private static final int PARTITION_BITS = 23;
+    private static final long MAX_ROW_INDEX = 1L << ROW_BITS;
+    private static final int MAX_PARTITION_IDX = 1 << PARTITION_BITS;
+
     private final YdbUpsertOp upsertOp;
-    private final AtomicLong nextIdGen = new AtomicLong(0);
+    private long nextBlobId;
 
     // max number of records before flush
     private final int maxBlobRecords;
@@ -65,31 +67,48 @@ public class BlobReader extends ValueReader {
         this.isBlob = isBlob;
     }
 
+    /** Sets the blob id to use for the next call to {@link #read}. */
+    public void setNextBlobId(long id) {
+        this.nextBlobId = id;
+    }
+
+    /** Packs (partitionIdx, rowIndex) into a single Int64 blob id. */
+    public static long packBlobId(int partitionIdx, long rowIndex) {
+        if (partitionIdx < 0 || partitionIdx >= MAX_PARTITION_IDX) {
+            throw new IllegalArgumentException("partitionIdx out of range: " + partitionIdx);
+        }
+        if (rowIndex < 0 || rowIndex >= MAX_ROW_INDEX) {
+            throw new IllegalArgumentException("rowIndex out of range: " + rowIndex);
+        }
+        return ((long) partitionIdx << ROW_BITS) | rowIndex;
+    }
+
     @Override
-    public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-        try (InputStream is = openStream(rs, index)) {
+    public void read(ResultSet rs, int rsIndex, int targetIndex,
+                     ValueWriter writer, SynthKey synthKey) throws Exception {
+        try (InputStream is = openStream(rs, rsIndex)) {
             if (rs.wasNull()) {
+                writer.writeNull(targetIndex);
                 if (synthKey != null) {
-                    synthKey.updateSeparator();
+                    synthKey.hashNull();
                 }
-                return VoidValue.of();
+                return;
             }
 
-            long id = nextIdGen.incrementAndGet();
+            long id = nextBlobId;
             PrimitiveValue ydbId = PrimitiveValue.newInt64(id);
             saveBlob(ydbId, is);
+            writer.writeInt64(targetIndex, id);
             if (synthKey != null) {
-                ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
-                buffer.putLong(id);
-                synthKey.update(buffer);
+                synthKey.hashLong(id);
             }
-            return ydbId;
         }
     }
 
     private InputStream openStream(ResultSet rs, int index) throws Exception {
         if (isBlob) {
-            return rs.getBlob(index).getBinaryStream();
+            java.sql.Blob blob = rs.getBlob(index);
+            return blob == null ? null : blob.getBinaryStream();
         }
         return rs.getBinaryStream(index);
     }
@@ -99,13 +118,11 @@ public class BlobReader extends ValueReader {
         int position = 0;
 
         while (true) {
-            // Read next BLOB block
             final int bytesRead = is.read(block);
             if (bytesRead < 1) {
                 break;
             }
 
-            // Create and append the block to the values list
             final Value<?>[] members = new Value<?>[3];
             members[posId] = id;
             members[posPos] = PrimitiveValue.newInt32(position);
@@ -113,7 +130,6 @@ public class BlobReader extends ValueReader {
             currentBulk.add(BLOB_ROW.newValueUnsafe(members));
             position += 1;
 
-            // Send the values list to YDB if it's time
             if (currentBulk.size() >= maxBlobRecords) {
                 upsertOp.upload(BLOB_LIST.newValue(currentBulk));
                 currentBulk.clear();

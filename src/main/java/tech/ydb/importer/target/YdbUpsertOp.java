@@ -49,6 +49,9 @@ public class YdbUpsertOp {
     }
 
     public void upload(BulkUpsertData data, int rowCount) {
+        if (rowCount <= 0) {
+            return;
+        }
         Status status = retryCtx.supplyStatus(
                 session -> session.executeBulkUpsert(tablePath, data)
         ).join();
