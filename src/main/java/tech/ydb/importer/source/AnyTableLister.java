@@ -232,6 +232,8 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 return new OracleTableLister(tableMaps);
             case POSTGRESQL:
                 return new PostgresTableLister(tableMaps);
+            case GREENPLUM:
+                return new GreenplumTableLister(tableMaps);
             case MYSQL:
                 return new MySqlTableLister(tableMaps);
             case MARIADB:

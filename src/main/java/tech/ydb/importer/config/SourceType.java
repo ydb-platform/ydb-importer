@@ -10,6 +10,7 @@ public enum SourceType {
     CLICKHOUSE,
     ORACLE,
     POSTGRESQL,
+    GREENPLUM,
     MYSQL,
     MARIADB,
     VERTICA,
