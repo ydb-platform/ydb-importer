@@ -14,6 +14,7 @@ public enum SourceType {
     MYSQL,
     MARIADB,
     VERTICA,
+    HANA,
     MSSQL,
     DB2,
     INFORMIX,
