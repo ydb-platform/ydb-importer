@@ -206,6 +206,7 @@ public class YdbTableBuilder {
             case java.sql.Types.DOUBLE:
                 return PrimitiveType.Double;
             case java.sql.Types.FLOAT:
+            case java.sql.Types.REAL:
                 return PrimitiveType.Float;
             case java.sql.Types.VARCHAR:
             case java.sql.Types.CHAR:

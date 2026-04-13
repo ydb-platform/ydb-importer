@@ -98,8 +98,8 @@
         <!--
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc10</artifactId>
-            <version>19.22.0.0</version>
+            <artifactId>ojdbc8</artifactId>
+            <version>23.7.0.25.01</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
