@@ -43,6 +43,7 @@ public class LoadDataTask implements Callable<Boolean> {
     private final ProgressCounter progress;
 
     private final int maxBatchRows;
+    private final int maxBlobRows;
     private final int fetchSize;
     private final int retryCount;
     private final WriterPool writerPool;
@@ -72,6 +73,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.partition = partition;
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
+        this.maxBlobRows = owner.getConfig().getTarget().getMaxBlobRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
         this.retryCount = owner.getConfig().getSource().getRetryCount();
         this.writerPool = writerPool;
@@ -355,7 +357,7 @@ public class LoadDataTask implements Callable<Boolean> {
                     String blobPath = target.getDatabase() + "/" + tt.getFullName();
                     boolean isBlobObj = ci.isBlobAsObject();
                     ValueReader reader = new BlobReader(blobPath, target.getRetryCtx(),
-                            progress, maxBatchRows, isBlobObj);
+                            progress, maxBlobRows, isBlobObj);
                     index[i] = new ColumnIndex(ixTarget, reader);
                 }
             } else if (ColumnInfo.isClob(ci.getSqlType())) {
@@ -366,7 +368,7 @@ public class LoadDataTask implements Callable<Boolean> {
                 } else {
                     String clobPath = target.getDatabase() + "/" + tt.getFullName();
                     ValueReader reader = new ClobReader(clobPath, target.getRetryCtx(),
-                            progress, maxBatchRows);
+                            progress, maxBlobRows);
                     index[i] = new ColumnIndex(ixTarget, reader);
                 }
             } else {
