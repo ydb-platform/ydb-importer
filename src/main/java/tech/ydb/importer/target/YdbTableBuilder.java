@@ -39,6 +39,9 @@ public class YdbTableBuilder {
                 if (ci.isBlob()) {
                     tab.getBlobTargets().put(ci.getName(),
                             buildBlobTable(tab.getTarget(), ci));
+                } else if (ci.isClob() || isClobOverride(ci.getName())) {
+                    tab.getBlobTargets().put(ci.getName(),
+                            buildClobTable(tab.getTarget(), ci));
                 }
             }
         }
@@ -52,7 +55,7 @@ public class YdbTableBuilder {
         sb.append("`").append(fullName).append("`");
         sb.append(" (").append(EOL);
         for (ColumnInfo ci : tab.getMetadata().getColumns()) {
-            final Type type;
+            Type type;
             try {
                 type = convertType(ci);
             } catch (Exception ex) {
@@ -60,10 +63,17 @@ public class YdbTableBuilder {
                         + "] of table [" + fullName + "]", ex);
             }
             if (type == null) {
-                // unknown type, and skip mode is enabled
                 LOG.warn("Skipped column {} in table {}.{} due to unknown type {}",
                         ci.getName(), tab.getSchema(), tab.getTable(), ci.getSqlType());
                 continue;
+            }
+            if (isClobOverride(ci.getName()) && !ci.isClob()) {
+                if (!PrimitiveType.Text.equals(type)) {
+                    throw new RuntimeException("clob-column " + ci.getName()
+                            + " in table " + fullName + " maps to " + type + ", not Text");
+                }
+                type = PrimitiveType.Int64;
+                ci.setSqlType(java.sql.Types.CLOB);
             }
             sb.append("  `").append(ci.getDestinationName()).append("` ");
             sb.append(type.toString());
@@ -108,6 +118,17 @@ public class YdbTableBuilder {
         sb.append("  `val` String,").append(EOL);
         sb.append("  PRIMARY KEY(`id`, `pos`));").append(EOL);
         return new TargetTable(tab, fullName, sb.toString(), BlobReader.BLOB_ROW);
+    }
+
+    private TargetTable buildClobTable(TargetTable main, ColumnInfo ci) {
+        final StringBuilder sb = new StringBuilder();
+        final String fullName = makeBlobName(ci.getDestinationName());
+        sb.append("CREATE TABLE `").append(fullName).append("` (").append(EOL);
+        sb.append("  `id` Int64,").append(EOL);
+        sb.append("  `pos` Int32,").append(EOL);
+        sb.append("  `val` Utf8,").append(EOL);
+        sb.append("  PRIMARY KEY(`id`, `pos`));").append(EOL);
+        return new TargetTable(tab, fullName, sb.toString(), ClobReader.CLOB_ROW);
     }
 
     private String makeTableName() {
@@ -214,7 +235,6 @@ public class YdbTableBuilder {
             case java.sql.Types.NCHAR:
             case java.sql.Types.LONGNVARCHAR:
             case java.sql.Types.LONGVARCHAR:
-            case java.sql.Types.CLOB: // MAYBE: store in a separate table, like BLOBS
                 return PrimitiveType.Text;
             case java.sql.Types.BINARY:
             case java.sql.Types.VARBINARY:
@@ -222,6 +242,8 @@ public class YdbTableBuilder {
             case java.sql.Types.BLOB:
             case java.sql.Types.LONGVARBINARY:
             case java.sql.Types.SQLXML:
+            case java.sql.Types.CLOB:
+            case java.sql.Types.NCLOB:
                 return PrimitiveType.Int64; // Id of record sequence in the separate table.
             case java.sql.Types.DATE:
                 switch (tab.getOptions().getDateConv()) {
@@ -272,6 +294,13 @@ public class YdbTableBuilder {
             return null;
         }
         throw new IllegalArgumentException("Unsupported type code: " + ci.getSqlType());
+    }
+
+    private boolean isClobOverride(String columnName) {
+        if (tab.getTableRef() == null) {
+            return false;
+        }
+        return tab.getTableRef().getClobColumns().contains(columnName);
     }
 
     private void addSyntheticKey(StringBuilder sb, Map<String, Type> types) {

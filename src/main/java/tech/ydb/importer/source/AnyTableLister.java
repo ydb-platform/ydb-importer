@@ -107,6 +107,7 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             grabColumnTypes(con, td, tm);
             // If the key is declared in the table reference, use it.
             declaredPrimaryKey(td, tm);
+            validateClobColumns(td, tm);
             if (tm.getKey().isEmpty()) {
                 // If the key is not declared, and the table does not have an associated query,
                 // try to grab the key columns from the source database.
@@ -194,6 +195,19 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                         + " in referenced table " + td.getSchema() + "." + td.getTable());
             }
             tm.addKey(ci.getName());
+        }
+    }
+
+    private void validateClobColumns(TableDecision td, TableMetadata tm) {
+        if (td.getTableRef() == null) {
+            return;
+        }
+        for (String clobField : td.getTableRef().getClobColumns()) {
+            ColumnInfo ci = tm.findColumn(clobField);
+            if (ci == null) {
+                throw new RuntimeException("Missing clob-column " + clobField
+                        + " in referenced table " + td.getSchema() + "." + td.getTable());
+            }
         }
     }
 

@@ -19,6 +19,7 @@ public class TableRef extends JdomHelper implements TableIdentity {
     private String tableName;
     private String queryText;
     private final List<String> keyNames = new ArrayList<>();
+    private final List<String> clobColumns = new ArrayList<>();
 
     public TableRef() {
     }
@@ -33,6 +34,9 @@ public class TableRef extends JdomHelper implements TableIdentity {
         this.queryText = getText(getOneChild(c, "query-text"), true);
         for (Element elKey : getChildren(c, "key-column")) {
             this.keyNames.add(getText(elKey));
+        }
+        for (Element elClob : getChildren(c, "clob-column")) {
+            this.clobColumns.add(getText(elClob));
         }
     }
 
@@ -76,6 +80,10 @@ public class TableRef extends JdomHelper implements TableIdentity {
 
     public List<String> getKeyNames() {
         return keyNames;
+    }
+
+    public List<String> getClobColumns() {
+        return clobColumns;
     }
 
 }

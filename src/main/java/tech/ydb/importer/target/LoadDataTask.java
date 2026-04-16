@@ -285,6 +285,8 @@ public class LoadDataTask implements Callable<Boolean> {
             ValueReader reader = column.getReader();
             if (reader instanceof BlobReader) {
                 ((BlobReader) reader).setNextBlobId(blobId);
+            } else if (reader instanceof ClobReader) {
+                ((ClobReader) reader).setNextClobId(blobId);
             }
 
             try {
@@ -356,12 +358,24 @@ public class LoadDataTask implements Callable<Boolean> {
                             progress, maxBatchRows, isBlobObj);
                     index[i] = new ColumnIndex(ixTarget, reader);
                 }
+            } else if (ColumnInfo.isClob(ci.getSqlType())) {
+                TargetTable tt = tab.getBlobTargets().get(columnName);
+                if (tt == null) {
+                    LOG.warn("Missing aux target table for CLOB column {} "
+                            + "of source {}.{}", columnName, tab.getSchema(), tab.getTable());
+                } else {
+                    String clobPath = target.getDatabase() + "/" + tt.getFullName();
+                    ValueReader reader = new ClobReader(clobPath, target.getRetryCtx(),
+                            progress, maxBatchRows);
+                    index[i] = new ColumnIndex(ixTarget, reader);
+                }
             } else {
                 ValueReader reader = ValueReader.getReader(
                         paramListType.getMemberType(ixTarget), ci.getSqlType());
                 if (reader == null) {
-                    LOG.warn("Missing aux target table for BLOB column {} "
-                            + "of source {}.{}", columnName, tab.getSchema(), tab.getTable());
+                    LOG.warn("Unsupported BLOB/CLOB type for column {} (SQL type {}) "
+                            + "of source {}.{} - column SKIPPED",
+                            columnName, ci.getSqlType(), tab.getSchema(), tab.getTable());
                 } else {
                     index[i] = new ColumnIndex(ixTarget, reader);
                 }
