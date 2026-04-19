@@ -6,10 +6,15 @@
 
 * [PostgreSQL](https://www.postgresql.org/),
 * [MySQL](https://www.mysql.com/),
+* [MariaDB](https://mariadb.org/) (включая [ColumnStore](https://mariadb.com/docs/analytics/mariadb-columnstore)),
 * [Oracle Database](https://www.oracle.com/database/),
 * [Microsoft SQL Server](https://www.microsoft.com/sql-server/),
 * [IBM Db2](https://www.ibm.com/products/db2),
-* [IBM Informix](https://www.ibm.com/products/informix).
+* [IBM Informix](https://www.ibm.com/products/informix),
+* [ClickHouse](https://clickhouse.com/),
+* [SAP HANA](https://www.sap.com/products/technology-platform/hana.html),
+* [Vertica](https://www.vertica.com/),
+* [Greenplum](https://techdocs.broadcom.com/us/en/vmware-tanzu/data-solutions/tanzu-greenplum/7.html).
 
 Непротестированные источники данных JDBC с определенной вероятностью также могут оказаться поддержаны утилитой, поскольку в ней используются стандартные API для доступа к данным и метаданным.
 
@@ -29,15 +34,15 @@
 * правила отбора таблиц для импорта из БД-источника;
 * перечень явно указанных SQL запросов на выборку данных из БД-источника (может использоваться для импорта результата запроса вместо конкретных таблиц);
 * правила формирования имён импортируемых таблиц в БД-получателе;
-* степень параллелизма операций (размер пула рабочих потоков, количество соединений с источником и получателем).
+* степень параллелизма операций (размеры пулов потоков чтения и записи, количество соединений с источником и получателем).
 
 Импорт данных осуществляется в следующем порядке:
 1. Утилита подключается к БД-источнику, и определяет состав таблиц и SQL-запросов для импорта.
 2. Производится формирование структуры целевых таблиц YDB, которые опционально могут быть сохранены в виде YQL-скрипта.
 3. Над БД-получателем производится проверка наличия там целевых таблиц, с созданием недостающих таблиц и с опциональным их пересозданием уже существующих таблиц.
-4. Осуществляется импорт данных путём чтения из БД-источника с помощью SQL-запроса и вставки в БД-получатель YDB с помощью механизма Bulk Upsert.
+4. Осуществляется импорт данных путём чтения из БД-источника с помощью SQL-запроса и вставки в БД-получатель YDB с помощью механизма Bulk Upsert. Для источников, поддерживающих партицирование, чтение одной таблицы может выполняться параллельно несколькими потоками. Запись в YDB ведётся построчно либо, при включённой опции `use-arrow`, в колоночном формате Apache Arrow.
 
-Извлечение метаданных из БД-источника, создание таблиц в БД-получателе и импорт данных производится в параллельном режиме, с использованием нескольких конкурентных потоков и одновременно открытых соединений к БД-источнику и БД-получателю. Максимальная степень параллелизма регулируется настройкой, при этом фактическое количество конкурентных операций не может превышать количества импортируемых таблиц.
+Извлечение метаданных из БД-источника, создание таблиц в БД-получателе и импорт данных производится в параллельном режиме, с использованием нескольких конкурентных потоков и одновременно открытых соединений к БД-источнику и БД-получателю. Для источников, поддерживающих партицирование, чтение одной таблицы также распараллеливается между её партициями. Максимальная степень параллелизма регулируется настройкой, при этом фактическое количество конкурентных операций не может превышать количества импортируемых таблиц или партиций.
 
 ## 2. Запуск утилиты
 
@@ -65,7 +70,7 @@
 
 При наличии в исходной таблице нескольких строк с полностью одинаковыми значениями, в целевую таблицу для каждого набора дубликатов будет в итоге записана одна строка. Это также означает, что утилита импорта не позволяет корректно загрузить данные из исходной таблицы, все колонки которой имеют тип BLOB.
 
-## 4. Импорт данных BLOB
+## 4. Импорт данных BLOB и CLOB
 
 Для каждого поля BLOB на источнике создаётся дополнительная таблица YDB следующей структуры:
 ```sql
@@ -91,15 +96,22 @@ CREATE TABLE `blob_table`(
 ALTER DATABASE dbname SET lo_compat_privileges TO on;
 ```
 
+Для CLOB-полей источника применяется аналогичный механизм. Структура дополнительной таблицы такая же, но поле `val` имеет тип `Utf8`. Колонку текстового типа можно принудительно вынести в такую таблицу с помощью настройки `table-ref` / `clob-column`.
+
 ## 5. Формат файла настроек
 
 Примеры файлов настроек с комментариями:
-* [для PostgreSQL](scripts/sample-postgres.xml);
-* [для MySQL](scripts/sample-mysql.xml);
-* [для Oracle Database](scripts/sample-oracle.xml);
-* [для Microsoft SQL Server](scripts/sample-mssql.xml);
-* [для IBM Db2](scripts/sample-db2.xml);
-* [для IBM Informix](scripts/sample-informix.xml).
+* [для PostgreSQL](scripts/sample-postgres.xml),
+* [для MySQL](scripts/sample-mysql.xml),
+* [для MariaDB](scripts/sample-mariadb.xml),
+* [для Oracle Database](scripts/sample-oracle.xml),
+* [для Microsoft SQL Server](scripts/sample-mssql.xml),
+* [для IBM Db2](scripts/sample-db2.xml),
+* [для IBM Informix](scripts/sample-informix.xml),
+* [для ClickHouse](scripts/sample-clickhouse.xml),
+* [для SAP HANA](scripts/sample-hana.xml),
+* [для Vertica](scripts/sample-vertica.xml),
+* [для Greenplum](scripts/sample-greenplum.xml).
 
 Описание формата файла настроек:
 
@@ -107,16 +119,26 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
 <?xml version="1.0" encoding="UTF-8"?>
 <ydb-importer>
     <workers>
-        <!-- Количество рабочих потоков (целое число от 1 и выше).
-             Также соответствует максимальному устанавливаемому количеству соединений с источником,
-             и максимальному количеству сессий с получателем.
+        <!-- Количество потоков чтения (целое число от 1 и выше) из источника и соединений с ним.
          -->
-        <pool size="4"/>
+        <reader-pool size="4"/>
+        <!-- Количество потоков записи в YDB. Если не указано, используется
+             значение reader-pool size. -->
+        <writer-pool size="4"/>
+        <!-- Количество буферов с данными между потоками чтения и записи.
+             Если не указано, используется значение reader-pool size. -->
+        <buffer-count>4</buffer-count>
+        <!-- Использовать ли колоночный (Apache Arrow) формат для bulk upsert
+             в YDB. Требует YDB 26.1 или новее. -->
+        <use-arrow>false</use-arrow>
+        <!-- Параллельное чтение исходной таблицы по партициям, если источник
+             это поддерживает. -->
+        <use-partitions>true</use-partitions>
     </workers>
     <!-- Параметры подключения к БД-источнику.
          type - обязательный атрибут, влияющий на логику взаимодействия с источником
       -->
-    <source type="generic|postgresql|mysql|oracle|mssql|db2|informix">
+    <source type="generic|postgresql|greenplum|mysql|mariadb|oracle|mssql|db2|informix|clickhouse|hana|vertica">
         <!-- Имя основного класса драйвера JDBC. Типичные значения:
               org.postgresql.Driver
               com.mysql.cj.jdbc.Driver
@@ -125,6 +147,10 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
               com.microsoft.sqlserver.jdbc.SQLServerDriver
               com.ibm.db2.jcc.DB2Driver
               com.informix.jdbc.IfxDriver
+              com.clickhouse.jdbc.ClickHouseDriver
+              com.sap.db.jdbc.Driver
+              com.vertica.jdbc.Driver
+              (для greenplum, как для PostgreSQL: org.postgresql.Driver)
         -->
         <jdbc-class>driver-class-name</jdbc-class>
         <!-- URL JDBC для подключения к источнику. Примеры значений:
@@ -135,10 +161,20 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
               jdbc:sqlserver://localhost;encrypt=true;trustServerCertificate=true;database=AdventureWorks2022;
               jdbc:db2://localhost:50000/SAMPLE
               jdbc:informix-sqli://localhost:9088/stores_demo:INFORMIXSERVER=informix
+              jdbc:clickhouse://hostname:8123/default
+              jdbc:sap://hostname:39041
+              jdbc:vertica://hostname:5433/VMart
+              (для greenplum, как для PostgreSQL: jdbc:postgresql://hostname:5432/dbname)
         -->
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
         <password>password</password>
+        <!-- Количество строк, которое драйвер JDBC за один раз читает
+             из БД-источника. Для ClickHouse также задаёт размер блока
+             при разбиении партиций на части для параллельного чтения. -->
+        <fetch-size>10000</fetch-size>
+        <!-- Количество повторов при ошибках чтения порции данных из источника. -->
+        <retry-count>3</retry-count>
     </source>
     <!-- Параметры подключения к БД-получателю. -->
     <target type="ydb">
@@ -197,11 +233,21 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
              соответствующие схеме, имени копируемой исходной таблицы и имени
              поля типа BLOB. -->
         <blob-name-format>oraimp1/${schema}/${table}_${field}</blob-name-format>
-        <!-- Возможные значения: DATE_NEW (по умолчанию), DATE, INT, STR.
-             Вариант DATE_NEW требует YDB версии 25.1 или более поздней.
-             Вариант DATE не позволяет сохранить даты ранее 1 января 1970 года.
-             Вариант INT хранит дату как 32-битное целое в формате ГГГГММДД.
-             Вариант STR хранит дату как строку в формате ГГГГ-ММ-ДД.
+        <!-- Режим преобразования значений типов DATE и TIMESTAMP.
+             Возможные значения: DATE_NEW (по умолчанию), DATE, INT, STR.
+             Вариант DATE_NEW сохраняет значения DATE как YDB Date32, а значения
+                 TIMESTAMP как Datetime64, если у источника нет долей секунд,
+                 иначе как Timestamp64. Требует YDB 25.1 или новее.
+             Вариант DATE сохраняет значения DATE как YDB Date, а значения TIMESTAMP
+                 как Datetime, если у источника нет долей секунд, иначе как Timestamp.
+                 Не поддерживает значения ранее 1 января 1970 года.
+             Вариант INT сохраняет значения DATE как 32-битное целое в формате ГГГГММДД,
+                 а значения TIMESTAMP как 64-битное беззнаковое число миллисекунд
+                 от эпохи Unix.
+             Вариант STR сохраняет значения DATE как строку Utf8 в формате "ГГГГ/ММ/ДД",
+                 а значения TIMESTAMP как строку Utf8 в формате
+                 "ГГГГ-ММ-ДД ЧЧ:ММ:СС.x" с переменной точностью долей секунд
+                 (от 1 до 9 знаков).
          -->
         <conv-date>DATE_NEW</conv-date>
         <conv-timestamp>DATE_NEW</conv-timestamp>
@@ -232,6 +278,10 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
         <!-- Для запроса желательно явно определить ключевые колонки.  -->
         <key-column>OWNER</key-column>
         <key-column>TABLE_NAME</key-column>
+        <!-- Сохранять указанные текстовые колонки в отдельной вспомогательной
+             таблице, даже если их тип JDBC не CLOB/NCLOB. В основной таблице
+             вместо текста хранится ссылка Int64. -->
+        <clob-column>DESCRIPTION</clob-column>
     </table-ref>
 </ydb-importer>
 ```

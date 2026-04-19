@@ -1,21 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- IBM Informix to YDB importer job configuration example -->
+<!-- SAP HANA to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
         <reader-pool size="4"/>
     </workers>
-    <source type="informix">
-        <jdbc-class>com.informix.jdbc.IfxDriver</jdbc-class>
-        <jdbc-url>jdbc:informix-sqli://localhost:9088/stores_demo:INFORMIXSERVER=informix</jdbc-url>
-        <!--
-             Typical demo databases: sales_demo, stores_demo, superstores_demo.
-             To enable transactional logging: ontape -s -B sales_demo
-        -->
-        <username>informix</username>
-        <password>in4mix</password>
+    <source type="hana">
+        <jdbc-class>com.sap.db.jdbc.Driver</jdbc-class>
+        <!-- For tenant DB connect directly to its port (typically 3{instance}41).
+             For SystemDB use 3{instance}13 or add ?databaseName=TENANT_NAME -->
+        <jdbc-url>jdbc:sap://hostname:39041</jdbc-url>
+        <username>SYSTEM</username>
+        <password>Password1</password>
     </source>
     <target type="ydb">
-        <script-file>sample-informix.yql.tmp</script-file>
+        <script-file>sample-hana.yql.tmp</script-file>
         <connection-string>grpc://localhost:2136?database=/Root/test</connection-string>
         <!-- Custom TLS certificate file, if needed
         <tls-certificate-file>ca.crt</tls-certificate-file>
@@ -38,9 +36,9 @@
         <!--  ASIS, LOWER, UPPER -->
         <case-mode>ASIS</case-mode>
         <!-- Substitution values: ${schema}, ${table} -->
-        <table-name-format>ifx1/${schema}/${table}</table-name-format>
+        <table-name-format>hana1/${schema}/${table}</table-name-format>
         <!-- Substitution values: ${schema}, ${table}, ${field} -->
-        <blob-name-format>ifx1/${schema}/${table}_${field}</blob-name-format>
+        <blob-name-format>hana1/${schema}/${table}_${field}</blob-name-format>
         <!-- DATE_NEW, DATE, INT, STR -->
         <conv-date>DATE_NEW</conv-date>
         <conv-timestamp>DATE_NEW</conv-timestamp>
@@ -49,7 +47,12 @@
     </table-options>
     <table-map options="default">
         <include-schemas regexp="true">.*</include-schemas>
-        <exclude-schemas>INFORMATION_SCHEMA</exclude-schemas>
-        <!-- Possible extra tags: include-tables, exclude-tables, exclude-schemas -->
+        <!-- HANA system schemas -->
+        <exclude-schemas regexp="true">_SYS_.*</exclude-schemas>
+        <exclude-schemas>SYS</exclude-schemas>
+        <exclude-schemas>SYSTEM</exclude-schemas>
+        <exclude-schemas>PUBLIC</exclude-schemas>
+        <exclude-schemas>HANA_XS_BASE</exclude-schemas>
+        <!-- Possible extra tags: include-tables, exclude-tables -->
     </table-map>
 </ydb-importer>

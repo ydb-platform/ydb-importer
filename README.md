@@ -11,10 +11,15 @@ Right now the tested data sources include the following:
 
 * [PostgreSQL](https://www.postgresql.org/),
 * [MySQL](https://www.mysql.com/),
+* [MariaDB](https://mariadb.org/) (including [ColumnStore](https://mariadb.com/docs/analytics/mariadb-columnstore)),
 * [Oracle Database](https://www.oracle.com/database/),
 * [Microsoft SQL Server](https://www.microsoft.com/sql-server/),
 * [IBM Db2](https://www.ibm.com/products/db2),
-* [IBM Informix](https://www.ibm.com/products/informix).
+* [IBM Informix](https://www.ibm.com/products/informix),
+* [ClickHouse](https://clickhouse.com/),
+* [SAP HANA](https://www.sap.com/products/technology-platform/hana.html),
+* [Vertica](https://www.vertica.com/),
+* [Greenplum](https://techdocs.broadcom.com/us/en/vmware-tanzu/data-solutions/tanzu-greenplum/7.html).
 
 Other data sources will probably work, too, as the tool uses the generic JDBC APIs to retrieve data and metadata.
 
@@ -34,15 +39,15 @@ Settings in the configuration file define:
 * file name to save the generated YQL script with YDB target tables structure;
 * the rules to filter source tables' names;
 * the rules to generate target tables' names based on the names of the source tables;
-* the degree of parallelism (which determines the worker pool size, plus the connection pool sizes for both source and target databases).
+* the degree of parallelism (which determines the reader and writer pool sizes, plus the connection pool sizes for both source and target databases).
 
 Data import is performed as the following sequence of actions:
 1. The tool connects to the source database, and determines the list of tables and custom SQL queries to be imported.
 2. The structure of target YDB tables is generated, and optionally saved as YQL script.
 3. Target database is checked for existence of the target tables. Missing tables are created, already existing ones may be left as is, or re-created.
-4. Row data is imported by reading from the source database using the SELECT statements, and written into the target YDB database using the Bulk Upsert mechanizm.
+4. Row data is imported by reading from the source database using the SELECT statements, and written into the target YDB database using the Bulk Upsert mechanizm. For sources that support partitioning, a single table can be read in parallel by multiple threads. Writes to YDB are row-based by default, or in the columnar Apache Arrow format when the `use-arrow` option is enabled.
 
-All operations, including metadata extraction from the source database, table creation (and re-creation) in the target database, and row data import, are performed in parallel mode (thread-per-table), using multiple concurrent threads and multiple open connections to both source and target databases. The maximum degree of parallelizm is configurable, although the actual number of concurrent operations cannot exceed the number of tables being imported.
+All operations, including metadata extraction from the source database, table creation (and re-creation) in the target database, and row data import, are performed in parallel mode (thread-per-table), using multiple concurrent threads and multiple open connections to both source and target databases. For sources that support partitioning, reads from a single table are also parallelized across its partitions. The maximum degree of parallelizm is configurable, although the actual number of concurrent operations cannot exceed the number of tables or partitions being imported.
 
 ## 2. Running the tool
 
@@ -70,7 +75,7 @@ When there is no primary key defined anywhere, the tool automatically adds the c
 
 If the input table contains several rows with completely identical values, the destination table will have only one row per each set of duplicate input rows. This also means that there the tool cannot import the table in which all columns are of BLOB type.
 
-## 4. BLOB data import
+## 4. BLOB and CLOB data import
 
 For each BLOB field in the source database the import tool creates an additional YDB target table (BLOB supplemental table), having the following structure:
 ```sql
@@ -91,15 +96,22 @@ The order of blocks stored is defined by the values of the `pos` column, contain
 A unique value of type `Int64` is generated for each source BLOB value, and stored in the `id` field of the BLOB supplemental table.
 This identifier is also stored in the "main" target table in the field having the same name as the BLOB field in the source table.
 
+For source CLOB fields, the same mechanism applies. The supplemental table has the same structure, but the `val` field is of type `Utf8`. A textual column can be forced into such a supplemental table using the `table-ref` / `clob-column` setting.
+
 ## 5. Configuration file format
 
 Sample configuration files:
-* [for PostgreSQL](scripts/sample-postgres.xml);
-* [for MySQL](scripts/sample-mysql.xml);
-* [for Oracle Database](scripts/sample-oracle.xml);
-* [for Microsoft SQL Server](scripts/sample-mssql.xml);
-* [for IBM Db2](scripts/sample-db2.xml);
-* [for IBM Informix](scripts/sample-informix.xml).
+* [for PostgreSQL](scripts/sample-postgres.xml),
+* [for MySQL](scripts/sample-mysql.xml),
+* [for MariaDB](scripts/sample-mariadb.xml),
+* [for Oracle Database](scripts/sample-oracle.xml),
+* [for Microsoft SQL Server](scripts/sample-mssql.xml),
+* [for IBM Db2](scripts/sample-db2.xml),
+* [for IBM Informix](scripts/sample-informix.xml),
+* [for ClickHouse](scripts/sample-clickhouse.xml),
+* [for SAP HANA](scripts/sample-hana.xml),
+* [for Vertica](scripts/sample-vertica.xml),
+* [for Greenplum](scripts/sample-greenplum.xml).
 
 Below is the definition of the configuration file structure:
 
@@ -107,15 +119,26 @@ Below is the definition of the configuration file structure:
 <?xml version="1.0" encoding="UTF-8"?>
 <ydb-importer>
     <workers>
-        <!-- Number of worker threads (integer starting with 1).
-             This setting defines the maximum number of source and target database sessions, too.
+        <!-- Number of source reader threads (integer starting with 1) and source database sessions.
          -->
-        <pool size="4"/>
+        <reader-pool size="4"/>
+        <!-- Number of writer threads for YDB. If not set, reader-pool size
+             is used. -->
+        <writer-pool size="4"/>
+        <!-- Number of data buffers between reader and writer threads.
+             If not set, reader-pool size is used. -->
+        <buffer-count>4</buffer-count>
+        <!-- Whether to use the columnar (Apache Arrow) format for bulk
+             upsert into YDB. Requires YDB 26.1 or newer. -->
+        <use-arrow>false</use-arrow>
+        <!-- Parallel reading of a source table by partitions, when the
+             source supports it. -->
+        <use-partitions>true</use-partitions>
     </workers>
     <!-- Source database connection parameters.
          type - the required attribute defining the type of the data source
       -->
-    <source type="generic|postgresql|mysql|oracle|mssql|db2|informix">
+    <source type="generic|postgresql|greenplum|mysql|mariadb|oracle|mssql|db2|informix|clickhouse|hana|vertica">
         <!-- JDBC driver class name to be used. Typical values:
               org.postgresql.Driver
               com.mysql.cj.jdbc.Driver
@@ -124,6 +147,10 @@ Below is the definition of the configuration file structure:
               com.microsoft.sqlserver.jdbc.SQLServerDriver
               com.ibm.db2.jcc.DB2Driver
               com.informix.jdbc.IfxDriver
+              com.clickhouse.jdbc.ClickHouseDriver
+              com.sap.db.jdbc.Driver
+              com.vertica.jdbc.Driver
+              (for greenplum, same as PostgreSQL: org.postgresql.Driver)
         -->
         <jdbc-class>driver-class-name</jdbc-class>
         <!-- JDBC driver URL. Value templates:
@@ -134,10 +161,20 @@ Below is the definition of the configuration file structure:
               jdbc:sqlserver://localhost;encrypt=true;trustServerCertificate=true;database=AdventureWorks2022;
               jdbc:db2://localhost:50000/SAMPLE
               jdbc:informix-sqli://localhost:9088/stores_demo:INFORMIXSERVER=informix
+              jdbc:clickhouse://hostname:8123/default
+              jdbc:sap://hostname:39041
+              jdbc:vertica://hostname:5433/VMart
+              (for greenplum, same as PostgreSQL: jdbc:postgresql://hostname:5432/dbname)
         -->
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
         <password>password</password>
+        <!-- Number of rows the JDBC driver fetches from the source database
+             at once. For ClickHouse, also defines the chunk size used when
+             splitting partitions for parallel reading. -->
+        <fetch-size>10000</fetch-size>
+        <!-- Number of retries on source read errors. -->
+        <retry-count>3</retry-count>
     </source>
     <!-- Target YDB database connection parameters. -->
     <target type="ydb">
@@ -203,12 +240,18 @@ Below is the definition of the configuration file structure:
              are used for source schema, table and BLOB field names. -->
         <blob-name-format>oraimp1/${schema}/${table}_${field}</blob-name-format>
         <!-- Date and timestamp data type values conversion mode.
-             Possible values: DATE_NEW (YDB Date32/Timestamp64, default), DATE (YDB Date/Timestamp), INT, STR.
-             DATE does not support input values before January, 1, 1970.
-             INT saves date as 32-bit integer YYYYMMDD for dates,
-                 and as a 64-bit milliseconds since epoch for timestamps.
-             STR saves dates as character strings (Utf8) in format "YYYY-MM-DD",
-                 and in "YYYY-MM-DD hh:mm:ss.xxx" for timestamps.
+             Possible values: DATE_NEW (default), DATE, INT, STR.
+             DATE_NEW saves dates as YDB Date32, and timestamps as Datetime64
+                 when the source has no fractional seconds, otherwise as Timestamp64.
+                 Requires YDB 25.1 or newer.
+             DATE saves dates as YDB Date, and timestamps as Datetime when the source
+                 has no fractional seconds, otherwise as Timestamp. Does not support
+                 input values before January 1, 1970.
+             INT saves dates as 32-bit integer YYYYMMDD,
+                 and timestamps as 64-bit unsigned milliseconds since the Unix epoch.
+             STR saves dates as Utf8 strings in format "YYYY/MM/DD",
+                 and timestamps as Utf8 strings in format "YYYY-MM-DD hh:mm:ss.x"
+                 with 1 to 9 fractional-second digits.
          -->
         <conv-date>DATE_NEW</conv-date>
         <conv-timestamp>DATE_NEW</conv-timestamp>
@@ -240,6 +283,10 @@ Below is the definition of the configuration file structure:
         <!-- Primary key columns should be defined for the query.  -->
         <key-column>OWNER</key-column>
         <key-column>TABLE_NAME</key-column>
+        <!-- Store the listed textual columns in a separate supplemental
+             table, even when their JDBC type is not CLOB/NCLOB. The main
+             table holds an Int64 reference instead of the text. -->
+        <clob-column>DESCRIPTION</clob-column>
     </table-ref>
 </ydb-importer>
 ```
