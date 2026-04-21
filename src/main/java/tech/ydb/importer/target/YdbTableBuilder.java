@@ -276,7 +276,7 @@ public class YdbTableBuilder {
     private void addSyntheticKey(StringBuilder sb, Map<String, Type> types) {
         String field = TargetTable.SYNTH_KEY_FIELD;
         types.put(field, PrimitiveType.Text);
-        sb.append("  ").append(field).append(" Text,").append(EOL)
+        sb.append("  ").append(field).append(" Text NOT NULL,").append(EOL)
                 .append("  PRIMARY KEY (").append(field).append(")").append(EOL);
     }
 
