@@ -258,7 +258,7 @@ public class PostgresTableLister extends AnyTableLister {
                 + "  AND a.atttypid = t.oid "
                 + "  AND c.relnamespace = s.oid"
                 + "  AND t.typname in ('oid', 'lo') "
-                + "  AND c.relkind='r' "
+                + "  AND c.relkind IN ('r', 'p') "
                 + "  AND s.nspname=? AND c.relname=?";
         try (PreparedStatement ps = con.prepareStatement(sqlBlob)) {
             ps.setString(1, td.getSchema());
