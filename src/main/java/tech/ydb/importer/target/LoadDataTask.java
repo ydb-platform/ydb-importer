@@ -69,14 +69,18 @@ public class LoadDataTask implements Callable<Boolean> {
         }
         LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
         try (Connection con = source.getConnection()) {
+            long copied;
             try (PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql())) {
                 ps.setFetchSize(fetchSize);
                 try (ResultSet rs = ps.executeQuery()) {
-                    long copied = copyData(rs);
-                    LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
-                    return true;
+                    copied = copyData(rs);
                 }
             }
+            if (!con.getAutoCommit()) {
+                con.commit();
+            }
+            LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
+            return true;
         } catch (Throwable e) {
             LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
             tab.setFailure(true);
