@@ -39,6 +39,7 @@ public class LoadDataTask implements Callable<Boolean> {
     private final ProgressCounter progress;
 
     private final int maxBatchRows;
+    private final int maxBlobRows;
     private final int fetchSize;
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab) {
@@ -54,6 +55,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.tab = tab;
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
+        this.maxBlobRows = owner.getConfig().getTarget().getMaxBlobRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
     }
 
@@ -167,7 +169,7 @@ public class LoadDataTask implements Callable<Boolean> {
                 } else {
                     String blobPath = target.getDatabase() + "/" + tt.getFullName();
                     boolean isBlob = ci.isBlobAsObject();
-                    ValueReader reader = new BlobReader(blobPath, target.getRetryCtx(), progress, maxBatchRows, isBlob);
+                    ValueReader reader = new BlobReader(blobPath, target.getRetryCtx(), progress, maxBlobRows, isBlob);
                     index[i] = new ColumnIndex(ixTarget, reader);
                 }
             } else {
