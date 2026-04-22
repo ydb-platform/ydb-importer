@@ -2,6 +2,7 @@ package tech.ydb.importer.target;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.sql.Blob;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,7 +90,8 @@ public class BlobReader extends ValueReader {
 
     private InputStream openStream(ResultSet rs, int index) throws Exception {
         if (isBlob) {
-            return rs.getBlob(index).getBinaryStream();
+            Blob blob = rs.getBlob(index);
+            return blob == null ? null : blob.getBinaryStream();
         }
         return rs.getBinaryStream(index);
     }
