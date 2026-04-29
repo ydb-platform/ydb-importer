@@ -32,9 +32,13 @@ public class SourceConfig extends JdomHelper {
             this.jdbcUrl = getText(c, "jdbc-url");
             this.userName = getText(c, "username");
             this.password = getText(c, "password");
-            String fs = getText(c, "fetch-size", null);
-            if (fs != null) {
-                this.fetchSize = Integer.parseInt(fs.trim());
+            Element fetchSizeEl = getOneChild(c, "fetch-size");
+            if (fetchSizeEl != null) {
+                int fs = getInt(fetchSizeEl);
+                if (fs < 0) {
+                    throw raiseIllegal(fetchSizeEl, null, String.valueOf(fs));
+                }
+                this.fetchSize = fs;
             }
         }
     }
