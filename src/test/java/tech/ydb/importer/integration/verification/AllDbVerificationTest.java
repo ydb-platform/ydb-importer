@@ -40,7 +40,8 @@ public class AllDbVerificationTest
 
     @Override
     public SourceDb sourceDb() {
-        return null;
+        throw new UnsupportedOperationException(
+                "AllDbVerificationTest manages sources via ScenarioRunner");
     }
 
     static Stream<SourceDbProfile> databases() {
