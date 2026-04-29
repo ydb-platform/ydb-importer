@@ -63,7 +63,7 @@ public final class SourceDbProfile {
                 MySqlTestContainer.create(dbName),
                 SourceType.MYSQL, dbName,
                 MySqlLoader.INSTANCE,
-                EnumSet.of(Feature.BLOB));
+                EnumSet.of(Feature.BLOB, Feature.PARTITIONED));
     }
 
     public static SourceDbProfile postgres(String dbName) {
@@ -71,7 +71,7 @@ public final class SourceDbProfile {
                 PostgresTestContainer.create(dbName),
                 SourceType.POSTGRESQL, "public",
                 PostgresLoader.INSTANCE,
-                EnumSet.of(Feature.BLOB));
+                EnumSet.of(Feature.BLOB, Feature.PARTITIONED));
     }
 
     public static SourceDbProfile oracle() {
@@ -79,7 +79,7 @@ public final class SourceDbProfile {
                 OracleTestContainer.create(),
                 SourceType.ORACLE, "TEST",
                 OracleLoader.INSTANCE,
-                EnumSet.of(Feature.BLOB));
+                EnumSet.of(Feature.BLOB, Feature.PARTITIONED));
     }
 
     public static List<SourceDbProfile> all(String defaultDbName) {

@@ -26,10 +26,9 @@ public final class ScenarioVerifier {
             List<TableScenario> all, Set<Feature> supported) {
         List<TableScenario> result = new ArrayList<>();
         for (TableScenario s : all) {
-            if (s.requires(Feature.BLOB) && !supported.contains(Feature.BLOB)) {
-                continue;
+            if (supported.containsAll(s.features())) {
+                result.add(s);
             }
-            result.add(s);
         }
         return result;
     }
