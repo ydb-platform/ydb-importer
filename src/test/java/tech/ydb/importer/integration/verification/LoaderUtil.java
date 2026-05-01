@@ -198,8 +198,8 @@ public final class LoaderUtil {
                     pending = 0;
                 }
             }
-            ps.executeBatch();
             if (pending > 0) {
+                ps.executeBatch();
                 onBatchFlush.accept(pending);
             }
         }
