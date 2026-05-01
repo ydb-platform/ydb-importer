@@ -30,6 +30,9 @@ public final class ScenarioRunner implements AutoCloseable {
     private final long totalRows;
 
     public ScenarioRunner(SourceDbProfile profile, List<TableScenario> scenarios) {
+        if (scenarios.isEmpty()) {
+            throw new IllegalArgumentException("ScenarioRunner requires at least one scenario");
+        }
         this.profile = profile;
         this.scenarios = scenarios;
         long total = 0;
