@@ -87,7 +87,7 @@ public class TargetConfig extends tech.ydb.importer.config.JdomHelper {
             elx = getOneChild(c, "max-blob-rows");
             if (elx != null) {
                 this.maxBlobRows = getInt(elx);
-                if (this.maxBlobRows < 0 || this.maxBlobRows > 100000) {
+                if (this.maxBlobRows < 0 || this.maxBlobRows > 1000) {
                     throw raiseIllegal(elx, null, String.valueOf(this.maxBlobRows));
                 }
             }

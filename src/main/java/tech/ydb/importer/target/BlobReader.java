@@ -54,11 +54,6 @@ public class BlobReader extends ValueReader {
                 ctx, tablePath, "blob rows upsert issue for " + tablePath, progress::countBlobRows
         );
 
-        if (maxBlobRecords < 1) {
-            maxBlobRecords = 1;
-        } else if (maxBlobRecords > 1000) {
-            maxBlobRecords = 1000;
-        }
         this.maxBlobRecords = maxBlobRecords;
         this.posId = BLOB_ROW.getMemberIndex("id");
         this.posPos = BLOB_ROW.getMemberIndex("pos");
