@@ -1,5 +1,6 @@
 package tech.ydb.importer.integration.verification;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -38,7 +39,7 @@ public final class TableScenario {
                          String partitionColumn) {
         this.tableName = tableName;
         this.keyColumn = keyColumn;
-        this.columns = Collections.unmodifiableList(columns);
+        this.columns = Collections.unmodifiableList(new ArrayList<>(columns));
         this.oracle = oracle;
         this.blobColumn = blobColumn;
         this.partitionStyle = partitionStyle;
