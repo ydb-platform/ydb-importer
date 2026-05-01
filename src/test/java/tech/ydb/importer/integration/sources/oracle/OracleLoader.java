@@ -22,7 +22,6 @@ public final class OracleLoader extends DialectLoader {
             case BOOL:            return "BOOLEAN";
             case DATE:            return "DATE";
             case DATETIME:        return "TIMESTAMP";
-            case NULLABLE_STRING: return "VARCHAR2(255)";
             default:
                 throw new IllegalArgumentException("Unsupported: " + type);
         }

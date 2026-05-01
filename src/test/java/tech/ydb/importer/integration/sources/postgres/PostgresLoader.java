@@ -33,7 +33,6 @@ public class PostgresLoader extends DialectLoader {
             case BOOL:            return "boolean";
             case DATE:            return "date";
             case DATETIME:        return "timestamp";
-            case NULLABLE_STRING: return "varchar(255)";
             default:
                 throw new IllegalArgumentException("Unsupported: " + type);
         }

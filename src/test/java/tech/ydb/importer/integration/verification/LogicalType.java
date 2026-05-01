@@ -9,19 +9,24 @@ import java.time.LocalDateTime;
 /** Column types used by scenarios */
 public enum LogicalType {
 
-    INT32,
-    INT64,
-    DECIMAL_18_4,
-    STRING,
-    BOOL,
-    DATE,
-    DATETIME,
-    NULLABLE_STRING;
+    INT32(java.sql.Types.INTEGER),
+    INT64(java.sql.Types.BIGINT),
+    DECIMAL_18_4(java.sql.Types.DECIMAL),
+    STRING(java.sql.Types.VARCHAR),
+    BOOL(java.sql.Types.BOOLEAN),
+    DATE(java.sql.Types.DATE),
+    DATETIME(java.sql.Types.TIMESTAMP);
+
+    private final int sqlType;
+
+    LogicalType(int sqlType) {
+        this.sqlType = sqlType;
+    }
 
     public void set(PreparedStatement ps, int idx, Object value)
             throws SQLException {
         if (value == null) {
-            ps.setNull(idx, java.sql.Types.VARCHAR);
+            ps.setNull(idx, sqlType);
             return;
         }
         switch (this) {
@@ -35,7 +40,6 @@ public enum LogicalType {
                 ps.setBigDecimal(idx, (BigDecimal) value);
                 break;
             case STRING:
-            case NULLABLE_STRING:
                 ps.setString(idx, (String) value);
                 break;
             case BOOL:

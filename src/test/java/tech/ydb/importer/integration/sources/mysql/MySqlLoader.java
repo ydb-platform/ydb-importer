@@ -22,7 +22,6 @@ public class MySqlLoader extends DialectLoader {
             case BOOL:            return "BOOLEAN";
             case DATE:            return "DATE";
             case DATETIME:        return "DATETIME";
-            case NULLABLE_STRING: return "VARCHAR(255)";
             default:
                 throw new IllegalArgumentException("Unsupported: " + type);
         }
