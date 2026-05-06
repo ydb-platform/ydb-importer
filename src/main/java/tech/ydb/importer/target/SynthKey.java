@@ -28,6 +28,7 @@ public class SynthKey {
     }
 
     public void update(ByteBuffer buffer) {
+        buffer.flip();
         digest.update(buffer);
     }
 

@@ -19,6 +19,7 @@ public class SourceConfig extends JdomHelper {
     private String jdbcUrl;
     private String userName;
     private String password;
+    private int fetchSize = 10000;
 
     public SourceConfig() {
     }
@@ -31,6 +32,14 @@ public class SourceConfig extends JdomHelper {
             this.jdbcUrl = getText(c, "jdbc-url");
             this.userName = getText(c, "username");
             this.password = getText(c, "password");
+            Element fetchSizeEl = getOneChild(c, "fetch-size");
+            if (fetchSizeEl != null) {
+                int fs = getInt(fetchSizeEl);
+                if (fs < 0) {
+                    throw raiseIllegal(fetchSizeEl, null, String.valueOf(fs));
+                }
+                this.fetchSize = fs;
+            }
         }
     }
 
@@ -72,6 +81,14 @@ public class SourceConfig extends JdomHelper {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public int getFetchSize() {
+        return fetchSize;
+    }
+
+    public void setFetchSize(int fetchSize) {
+        this.fetchSize = fetchSize;
     }
 
 }

@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.TableIdentity;
 
 /**
@@ -126,6 +127,37 @@ public class OracleTableLister extends AnyTableLister {
                         String ixSchema = rs.getString(1);
                         String ixName = rs.getString(2);
                         grabIndexColumns(con, ixSchema, ixName, tm);
+                    }
+                }
+            }
+        }
+    }
+
+    /*
+     * Oracle JDBC driver reports BINARY_FLOAT and BINARY_DOUBLE as vendor-specific JDBC
+     * type codes. Ask Oracle's catalog for the authoritative type name and normalize
+     * so YdbTableBuilder picks Float/Double.
+     */
+    @Override
+    protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        super.grabColumnTypes(con, td, tm);
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT column_name, data_type FROM all_tab_columns "
+                + "WHERE owner=? AND table_name=?")) {
+            ps.setString(1, td.getSchema());
+            ps.setString(2, td.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    ColumnInfo ci = tm.findColumn(rs.getString(1));
+                    if (ci == null) {
+                        continue;
+                    }
+                    String dataType = rs.getString(2);
+                    if ("BINARY_FLOAT".equals(dataType)) {
+                        ci.setSqlType(java.sql.Types.REAL);
+                    } else if ("BINARY_DOUBLE".equals(dataType)) {
+                        ci.setSqlType(java.sql.Types.DOUBLE);
                     }
                 }
             }

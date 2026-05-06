@@ -2,6 +2,7 @@ package tech.ydb.importer.target;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.sql.Blob;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,11 +54,6 @@ public class BlobReader extends ValueReader {
                 ctx, tablePath, "blob rows upsert issue for " + tablePath, progress::countBlobRows
         );
 
-        if (maxBlobRecords < 1) {
-            maxBlobRecords = 1;
-        } else if (maxBlobRecords > 1000) {
-            maxBlobRecords = 1000;
-        }
         this.maxBlobRecords = maxBlobRecords;
         this.posId = BLOB_ROW.getMemberIndex("id");
         this.posPos = BLOB_ROW.getMemberIndex("pos");
@@ -89,7 +85,8 @@ public class BlobReader extends ValueReader {
 
     private InputStream openStream(ResultSet rs, int index) throws Exception {
         if (isBlob) {
-            return rs.getBlob(index).getBinaryStream();
+            Blob blob = rs.getBlob(index);
+            return blob == null ? null : blob.getBinaryStream();
         }
         return rs.getBinaryStream(index);
     }
