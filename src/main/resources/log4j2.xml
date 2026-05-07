@@ -6,9 +6,9 @@
     </Console>
   </Appenders>
   <Loggers>
-    <Logger name="tech.ydb.importer" level="info"/>
+    <Logger name="tech.ydb.importer" level="${sys:importer.log.level:-info}"/>
     <Logger name="com.zaxxer.hikari" level="warn"/>
-    <Root level="info">
+    <Root level="${sys:importer.log.level:-info}">
       <AppenderRef ref="STDOUT"/>
     </Root>
   </Loggers>

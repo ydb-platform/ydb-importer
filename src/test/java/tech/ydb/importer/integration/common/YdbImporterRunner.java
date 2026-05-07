@@ -1,0 +1,173 @@
+package tech.ydb.importer.integration.common;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+
+import org.testcontainers.containers.JdbcDatabaseContainer;
+
+import tech.ydb.importer.YdbImporter;
+import tech.ydb.importer.config.ImporterConfig;
+import tech.ydb.importer.config.SourceConfig;
+import tech.ydb.importer.config.SourceType;
+import tech.ydb.importer.config.TableOptions;
+import tech.ydb.importer.config.TableRef;
+import tech.ydb.importer.config.TargetConfig;
+import tech.ydb.importer.config.TargetType;
+import tech.ydb.importer.config.WorkerConfig;
+import tech.ydb.importer.config.YdbAuthMode;
+
+/** Sets up config and runs YdbImporter for integration tests */
+public final class YdbImporterRunner {
+
+    public static final String DEFAULT_TABLE_OPTIONS_NAME = "default";
+    public static final String DEFAULT_TARGET_PREFIX = "test";
+
+    private YdbImporterRunner() {
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static final class Builder {
+
+        private JdbcDatabaseContainer<?> sourceContainer;
+        private SourceType sourceType;
+        private LocalYdbTestContainer ydbContainer;
+        private String schema;
+        private String table;
+        private final List<String[]> additionalTables = new ArrayList<>();
+        private String targetPrefix = DEFAULT_TARGET_PREFIX;
+        private Consumer<TableOptions> optionsCustomizer = opts -> { };
+        private int maxBatchRows = 1000;
+        private int poolSize = 2;
+        private int fetchSize = 10_000;
+        private String queryText;
+
+        private Builder() {
+        }
+
+        public Builder source(JdbcDatabaseContainer<?> container, SourceType type) {
+            this.sourceContainer = container;
+            this.sourceType = type;
+            return this;
+        }
+
+        public Builder ydb(LocalYdbTestContainer container) {
+            this.ydbContainer = container;
+            return this;
+        }
+
+        public Builder table(String schemaName, String tableName) {
+            this.schema = schemaName;
+            this.table = tableName;
+            return this;
+        }
+
+        public Builder addTable(String schemaName, String tableName) {
+            this.additionalTables.add(
+                    new String[] {schemaName, tableName});
+            return this;
+        }
+
+        public Builder targetPrefix(String prefix) {
+            this.targetPrefix = prefix;
+            return this;
+        }
+
+        public Builder customizeOptions(Consumer<TableOptions> customizer) {
+            this.optionsCustomizer = customizer == null ? opts -> { } : customizer;
+            return this;
+        }
+
+        public Builder maxBatchRows(int value) {
+            this.maxBatchRows = value;
+            return this;
+        }
+
+        public Builder poolSize(int value) {
+            this.poolSize = value;
+            return this;
+        }
+
+        public Builder fetchSize(int value) {
+            this.fetchSize = value;
+            return this;
+        }
+
+        public Builder queryText(String sql) {
+            this.queryText = sql;
+            return this;
+        }
+
+        public void run() throws Exception {
+            ImporterConfig config = buildConfig();
+            new YdbImporter(config).run();
+        }
+
+        public ImporterConfig buildConfig() {
+            requireNonNull(sourceContainer, "source container");
+            requireNonNull(sourceType, "source type");
+            requireNonNull(ydbContainer, "ydb container");
+            requireNonNull(schema, "schema");
+            requireNonNull(table, "table");
+
+            ImporterConfig config = new ImporterConfig();
+
+            WorkerConfig workers = new WorkerConfig();
+            workers.setPoolSize(poolSize);
+            config.setWorkers(workers);
+
+            SourceConfig src = new SourceConfig();
+            src.setType(sourceType);
+            src.setClassName(sourceContainer.getDriverClassName());
+            src.setJdbcUrl(sourceContainer.getJdbcUrl());
+            src.setUserName(sourceContainer.getUsername());
+            src.setPassword(sourceContainer.getPassword());
+            src.setFetchSize(fetchSize);
+            config.setSource(src);
+
+            TargetConfig tgt = new TargetConfig();
+            tgt.setType(TargetType.YDB);
+            tgt.setAuthMode(YdbAuthMode.NONE);
+            tgt.setConnectionString(ydbContainer.getConnectionString());
+            tgt.setReplaceExisting(true);
+            tgt.setLoadData(true);
+            tgt.setMaxBatchRows(maxBatchRows);
+            config.setTarget(tgt);
+
+            TableOptions options = new TableOptions(
+                    DEFAULT_TABLE_OPTIONS_NAME,
+                    targetPrefix + ".${schema}.${table}");
+            options.setBlobTemplate(targetPrefix + ".${schema}.${table}_${field}");
+            optionsCustomizer.accept(options);
+            config.getOptionsMap().put(options.getName(), options);
+
+            TableRef ref = new TableRef();
+            ref.setOptions(options);
+            ref.setSchema(schema);
+            ref.setTable(table);
+            if (queryText != null) {
+                ref.setQueryText(queryText);
+            }
+            config.getTableRefs().add(ref);
+
+            for (String[] extra : additionalTables) {
+                TableRef extraRef = new TableRef();
+                extraRef.setOptions(options);
+                extraRef.setSchema(extra[0]);
+                extraRef.setTable(extra[1]);
+                config.getTableRefs().add(extraRef);
+            }
+
+            return config;
+        }
+
+        private static void requireNonNull(Object value, String name) {
+            if (value == null) {
+                throw new IllegalStateException(name + " must be set before run()");
+            }
+        }
+    }
+}
