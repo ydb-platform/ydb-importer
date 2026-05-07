@@ -85,7 +85,7 @@ public class YdbImporter {
         }
         LOG.info("Connecting to the source database {}",
                 config.getSource().getJdbcUrl());
-        sourceCP = new SourceCP(config.getSource(), config.getWorkers().getPoolSize());
+        sourceCP = new SourceCP(config.getSource(), config.getWorkers().getReaderPoolSize());
         try {
             final List<TableDecision> tables = new ArrayList<>();
             try (Connection con = sourceCP.getConnection()) {
@@ -110,7 +110,7 @@ public class YdbImporter {
                     if (config.hasTarget()) {
                         LOG.info("Connecting to the target database {}",
                                 config.getTarget().getConnectionString());
-                        targetCP = new TargetCP(config.getTarget(), config.getWorkers().getPoolSize());
+                        targetCP = new TargetCP(config.getTarget(), config.getWorkers().getWriterPoolSize());
                         // Drop/Create/Read metadata from target
                         createMissingTables(workers, tables);
                         // Load data if necessary
@@ -142,7 +142,7 @@ public class YdbImporter {
     }
 
     private ExecutorService makeWorkers() {
-        return Executors.newFixedThreadPool(config.getWorkers().getPoolSize(), new WorkerFactory());
+        return Executors.newFixedThreadPool(config.getWorkers().getReaderPoolSize(), new WorkerFactory());
     }
 
     private void retrieveSourceMetadata(List<TableDecision> tables, ExecutorService workers)
@@ -240,11 +240,12 @@ public class YdbImporter {
         if (config.getTarget() == null) {
             return;
         }
-        int poolSize = config.getWorkers().getPoolSize();
+        int writerPoolSize = config.getWorkers().getWriterPoolSize();
+        int bufferCount = config.getWorkers().getBufferCount();
         try (ProgressCounter progress = new ProgressCounter()) {
             progress.start();
 
-            WriterPool writerPool = new WriterPool(poolSize, poolSize);
+            WriterPool writerPool = new WriterPool(writerPoolSize, bufferCount);
             try {
                 final List<Future<Boolean>> results = new ArrayList<>();
                 for (TableDecision td : tables) {

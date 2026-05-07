@@ -8,27 +8,57 @@ import org.jdom2.Element;
  */
 public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
 
-    private int poolSize = 1;
+    private static final int MAX_SIZE = 1000;
+
+    private int readerPoolSize = 1;
+    private int writerPoolSize = 1;
+    private int bufferCount = 1;
 
     public WorkerConfig() {
     }
 
     public WorkerConfig(Element c) {
-        this.poolSize = getInt(getSingleChild(c, "pool"), "size");
-        if (this.poolSize < 1) {
-            this.poolSize = 1;
-        }
-        if (this.poolSize > 1000) {
-            this.poolSize = 1000;
-        }
+        this.readerPoolSize = validatedSize(getInt(getSingleChild(c, "reader-pool"), "size"));
+
+        Element writerEl = getOneChild(c, "writer-pool");
+        this.writerPoolSize = (writerEl != null) ? validatedSize(getInt(writerEl, "size")) : this.readerPoolSize;
+
+        Element bufEl = getOneChild(c, "buffer-count");
+        this.bufferCount = (bufEl != null) ? validatedSize(getInt(bufEl)) : this.readerPoolSize;
     }
 
-    public int getPoolSize() {
-        return poolSize;
+    private static int validatedSize(int v) {
+        if (v < 1) {
+            return 1;
+        }
+        if (v > MAX_SIZE) {
+            return MAX_SIZE;
+        }
+        return v;
     }
 
-    public void setPoolSize(int poolSize) {
-        this.poolSize = poolSize;
+    public int getReaderPoolSize() {
+        return readerPoolSize;
+    }
+
+    public void setReaderPoolSize(int readerPoolSize) {
+        this.readerPoolSize = readerPoolSize;
+    }
+
+    public int getWriterPoolSize() {
+        return writerPoolSize;
+    }
+
+    public void setWriterPoolSize(int writerPoolSize) {
+        this.writerPoolSize = writerPoolSize;
+    }
+
+    public int getBufferCount() {
+        return bufferCount;
+    }
+
+    public void setBufferCount(int bufferCount) {
+        this.bufferCount = bufferCount;
     }
 
 }
