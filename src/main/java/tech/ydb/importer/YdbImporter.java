@@ -30,6 +30,7 @@ import tech.ydb.importer.target.LoadDataTask;
 import tech.ydb.importer.target.ProgressCounter;
 import tech.ydb.importer.target.TargetCP;
 import tech.ydb.importer.target.TargetTable;
+import tech.ydb.importer.target.WriterPool;
 import tech.ydb.importer.target.YdbTableBuilder;
 import tech.ydb.table.description.TableColumn;
 import tech.ydb.table.description.TableDescription;
@@ -239,26 +240,35 @@ public class YdbImporter {
         if (config.getTarget() == null) {
             return;
         }
+        int poolSize = config.getWorkers().getPoolSize();
         try (ProgressCounter progress = new ProgressCounter()) {
             progress.start();
-            final List<Future<Boolean>> results = new ArrayList<>();
-            for (TableDecision td : tables) {
-                if (td.isFailure()) {
-                    continue;
+
+            WriterPool writerPool = new WriterPool(poolSize, poolSize);
+            try {
+                final List<Future<Boolean>> results = new ArrayList<>();
+                for (TableDecision td : tables) {
+                    if (td.isFailure()) {
+                        continue;
+                    }
+                    results.add(es.submit(new LoadDataTask(this, progress, td, writerPool)));
                 }
-                results.add(es.submit(new LoadDataTask(this, progress, td)));
-            }
-            if (results.isEmpty()) {
-                LOG.info("No valid tables to be loaded, nothing to do.");
-                return;
-            }
-            int successCount = 0;
-            for (Future<Boolean> rf : results) {
-                if (rf.get() != null && rf.get()) {
-                    ++successCount;
+                if (results.isEmpty()) {
+                    LOG.info("No valid tables to be loaded, nothing to do.");
+                    return;
                 }
+                int successCount = 0;
+                for (Future<Boolean> rf : results) {
+                    if (rf.get() != null && rf.get()) {
+                        ++successCount;
+                    }
+                }
+
+                writerPool.shutdownAndWait();
+                LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
+            } finally {
+                writerPool.close();
             }
-            LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
         }
     }
 
