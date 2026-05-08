@@ -32,7 +32,7 @@ public class WriterPool implements AutoCloseable {
         final AtomicInteger threadId = new AtomicInteger();
         this.executor = Executors.newFixedThreadPool(writerCount, r -> {
             Thread t = new Thread(r, "ydb-writer-" + threadId.getAndIncrement());
-            t.setDaemon(true);
+            t.setDaemon(false);
             return t;
         });
 
