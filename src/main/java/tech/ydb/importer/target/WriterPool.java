@@ -18,6 +18,7 @@ public class WriterPool implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(WriterPool.class);
     private static final long SHUTDOWN_TIMEOUT_MS = 60_000;
+    private static final long FORCE_SHUTDOWN_TIMEOUT_MS = 10_000;
 
     private final ExecutorService executor;
     private final BlockingQueue<UploadBatch> queue;
@@ -63,6 +64,10 @@ public class WriterPool implements AutoCloseable {
             LOG.error("Writer pool did not terminate within {} ms, forcing shutdown",
                     SHUTDOWN_TIMEOUT_MS);
             executor.shutdownNow();
+            if (!executor.awaitTermination(FORCE_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                throw new IllegalStateException("Writer pool did not terminate after forced shutdown ("
+                        + (SHUTDOWN_TIMEOUT_MS + FORCE_SHUTDOWN_TIMEOUT_MS) + " ms)");
+            }
         }
 
         Exception err = firstError.get();
