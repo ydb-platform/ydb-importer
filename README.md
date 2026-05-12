@@ -34,7 +34,7 @@ Settings in the configuration file define:
 * file name to save the generated YQL script with YDB target tables structure;
 * the rules to filter source tables' names;
 * the rules to generate target tables' names based on the names of the source tables;
-* the degree of parallelism (which determines the worker pool size, plus the connection pool sizes for both source and target databases).
+* the degree of parallelism (which determines the reader and writer pool sizes, plus the connection pool sizes for both source and target databases).
 
 Data import is performed as the following sequence of actions:
 1. The tool connects to the source database, and determines the list of tables and custom SQL queries to be imported.
@@ -107,10 +107,19 @@ Below is the definition of the configuration file structure:
 <?xml version="1.0" encoding="UTF-8"?>
 <ydb-importer>
     <workers>
-        <!-- Number of worker threads (integer starting with 1).
-             This setting defines the maximum number of source and target database sessions, too.
+        <!-- Number of reader threads (integer starting with 1).
+             This setting defines the maximum number of source database sessions, too.
          -->
-        <pool size="4"/>
+        <reader-pool size="4"/>
+        <!-- Number of writer threads (integer starting with 1).
+             This setting defines the maximum number of target database sessions, too.
+             If not set, reader-pool size is used.
+         -->
+        <writer-pool size="4"/>
+        <!-- Maximum number of pending batches between reader and writer threads.
+             If not set, reader-pool size is used.
+         -->
+        <buffer-count>4</buffer-count>
     </workers>
     <!-- Source database connection parameters.
          type - the required attribute defining the type of the data source

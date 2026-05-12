@@ -116,7 +116,9 @@ public final class YdbImporterRunner {
             ImporterConfig config = new ImporterConfig();
 
             WorkerConfig workers = new WorkerConfig();
-            workers.setPoolSize(poolSize);
+            workers.setReaderPoolSize(poolSize);
+            workers.setWriterPoolSize(poolSize);
+            workers.setBufferCount(poolSize);
             config.setWorkers(workers);
 
             SourceConfig src = new SourceConfig();

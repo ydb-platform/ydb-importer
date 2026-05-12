@@ -41,8 +41,10 @@ public class LoadDataTask implements Callable<Boolean> {
     private final int maxBatchRows;
     private final int maxBlobRows;
     private final int fetchSize;
+    private final WriterPool writerPool;
 
-    public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab) {
+    public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
+            WriterPool writerPool) {
         this.source = owner.getSourceCP();
         this.target = owner.getTargetCP();
 
@@ -57,6 +59,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.maxBlobRows = owner.getConfig().getTarget().getMaxBlobRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
+        this.writerPool = writerPool;
     }
 
     @Override
@@ -113,13 +116,13 @@ public class LoadDataTask implements Callable<Boolean> {
 
             batch.add(read(rs, paramType, columns, synchKey));
             if (batch.size() >= maxBatchRows) {
-                ydbOp.upload(paramListType.newValue(batch));
+                writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
                 batch.clear();
             }
         }
 
         if (!batch.isEmpty()) {
-            ydbOp.upload(paramListType.newValue(batch));
+            writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
             batch.clear();
         }
 

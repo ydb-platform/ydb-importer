@@ -2,7 +2,7 @@
 <!-- Oracle Database to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
-        <pool size="4"/>
+        <reader-pool size="4"/>
     </workers>
     <source type="oracle">
         <jdbc-class>oracle.jdbc.driver.OracleDriver</jdbc-class>
