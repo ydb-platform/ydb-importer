@@ -7,8 +7,10 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -269,21 +271,35 @@ public class YdbImporter {
         }
     }
 
+    /**
+     * Submits one task for each partition, or one task for a table without partitions.
+     * Tasks are picked from each table in round-robin order.
+     */
     private void submitLoadTasks(ExecutorService es, List<TableDecision> tables,
             ProgressCounter progress, WriterPool writerPool, List<Future<Boolean>> results) {
+        ArrayDeque<Iterator<LoadDataTask>> queue = new ArrayDeque<>();
         for (TableDecision td : tables) {
             if (td.isFailure()) {
                 continue;
             }
-            List<TaskInfo> tasks = td.getMetadata().getTasks();
-            for (int i = 0; i < tasks.size(); i++) {
-                tasks.get(i).setIndex(i);
+            List<TaskInfo> taskInfos = td.getMetadata().getTasks();
+            for (int i = 0; i < taskInfos.size(); i++) {
+                taskInfos.get(i).setIndex(i);
             }
             LOG.info("Table {}.{}: submitting {} task{}",
-                    td.getSchema(), td.getTable(), tasks.size(),
-                    tasks.size() == 1 ? "" : "s");
-            for (TaskInfo ti : tasks) {
-                results.add(es.submit(new LoadDataTask(this, progress, td, ti, writerPool)));
+                    td.getSchema(), td.getTable(), taskInfos.size(),
+                    taskInfos.size() == 1 ? "" : "s");
+            List<LoadDataTask> tasks = new ArrayList<>(taskInfos.size());
+            for (TaskInfo ti : taskInfos) {
+                tasks.add(new LoadDataTask(this, progress, td, ti, writerPool));
+            }
+            queue.add(tasks.iterator());
+        }
+        while (!queue.isEmpty()) {
+            Iterator<LoadDataTask> it = queue.poll();
+            results.add(es.submit(it.next()));
+            if (it.hasNext()) {
+                queue.add(it);
             }
         }
     }
