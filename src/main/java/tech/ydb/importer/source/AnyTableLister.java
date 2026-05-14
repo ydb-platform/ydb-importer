@@ -119,9 +119,16 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 }
             }
         }
-        List<TaskInfo> tasks = tableMaps.getConfig().getWorkers().isUsePartitions()
-                ? listPartitions(con, td, tm)
-                : Collections.emptyList();
+        List<TaskInfo> tasks;
+        if (tableMaps.getConfig().getWorkers().isUsePartitions()) {
+            tasks = listPartitions(con, td, tm);
+            if (!tasks.isEmpty()) {
+                LOG.info("Table {}.{}: found {} partitions",
+                        td.getSchema(), td.getTable(), tasks.size());
+            }
+        } else {
+            tasks = Collections.emptyList();
+        }
         if (tasks.isEmpty()) {
             String label = td.getSchema() + "." + td.getTable();
             tasks = Collections.singletonList(
@@ -158,10 +165,14 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         }
     }
 
-    private String makeSelectSql(TableDecision td, List<ColumnInfo> columns) {
+    protected String makeSelectSql(TableDecision td, List<ColumnInfo> columns) {
         if (td.getTableRef() != null && td.getTableRef().hasQueryText()) {
             return td.getTableRef().getQueryText();
         }
+        return makeSelectSql(td.getSchema(), td.getTable(), columns);
+    }
+
+    protected String makeSelectSql(String schema, String table, List<ColumnInfo> columns) {
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT ");
         if (columns == null || columns.isEmpty()) {
@@ -178,9 +189,9 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             }
         }
         sql.append(" FROM ");
-        sql.append(safeId(td.getSchema()));
+        sql.append(safeId(schema));
         sql.append(".");
-        sql.append(safeId(td.getTable()));
+        sql.append(safeId(table));
         return sql.toString();
     }
 
