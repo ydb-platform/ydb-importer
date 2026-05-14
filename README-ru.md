@@ -120,6 +120,10 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
              Если не указано, используется значение reader-pool size.
          -->
         <buffer-count>4</buffer-count>
+        <!-- Параллельное чтение партиций исходных таблиц. Работает для
+             БД-источников, поддерживающих партиционирование.
+         -->
+        <use-partitions>true</use-partitions>
     </workers>
     <!-- Параметры подключения к БД-источнику.
          type - обязательный атрибут, влияющий на логику взаимодействия с источником
@@ -147,6 +151,11 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
         <password>password</password>
+        <!-- Количество повторных попыток чтения партиции при ошибке источника,
+             с экспоненциальной задержкой (1s, 2s, 4s, ..., максимум 30s).
+             Применяется к партиционированным таблицам без BLOB-колонок.
+         -->
+        <retry-count>7</retry-count>
     </source>
     <!-- Параметры подключения к БД-получателю. -->
     <target type="ydb">

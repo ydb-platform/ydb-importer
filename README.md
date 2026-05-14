@@ -120,6 +120,10 @@ Below is the definition of the configuration file structure:
              If not set, reader-pool size is used.
          -->
         <buffer-count>4</buffer-count>
+        <!-- Read source table partitions in parallel. Works for source
+             databases that support partitioning.
+         -->
+        <use-partitions>true</use-partitions>
     </workers>
     <!-- Source database connection parameters.
          type - the required attribute defining the type of the data source
@@ -147,6 +151,11 @@ Below is the definition of the configuration file structure:
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
         <password>password</password>
+        <!-- Number of retries per partition query on source read errors,
+             with exponential backoff (1s, 2s, 4s, ..., capped at 30s).
+             Applies to partitioned tables without BLOB columns.
+         -->
+        <retry-count>7</retry-count>
     </source>
     <!-- Target YDB database connection parameters. -->
     <target type="ydb">
