@@ -46,6 +46,8 @@ public class LoadDataTask implements Callable<Boolean> {
     private final int maxBlobRows;
     private final int fetchSize;
     private final int retryCount;
+    private final int taskIdx;
+    private final int taskBits;
     private final WriterPool writerPool;
     private long rowIndex;
 
@@ -69,9 +71,12 @@ public class LoadDataTask implements Callable<Boolean> {
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.maxBlobRows = owner.getConfig().getTarget().getMaxBlobRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
-        this.retryCount = (tab.getMetadata().getTasks().size() > 1)
+        this.retryCount = (tab.getMetadata().getTasks().size() > 1
+                        && tab.getBlobTargets().isEmpty())
                 ? owner.getConfig().getSource().getRetryCount()
                 : 0;
+        this.taskIdx = task.getIndex();
+        this.taskBits = BlobReader.bitsRequired(tab.getMetadata().getTasks().size());
         this.writerPool = writerPool;
         this.rowIndex = 0;
     }
@@ -178,6 +183,7 @@ public class LoadDataTask implements Callable<Boolean> {
         final ListType paramListType = ListType.of(paramType);
         final ResultSetMetaData rsmd = rs.getMetaData();
         final ColumnIndex[] columns = buildMainIndex(paramType, rsmd);
+        final List<BlobReader> blobReaders = collectBlobReaders(columns);
 
         final List<Value<?>> batch = new ArrayList<>(maxBatchRows);
         final SynthKey synchKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
@@ -189,6 +195,12 @@ public class LoadDataTask implements Callable<Boolean> {
             copied++;
             progress.countReadRows(1);
 
+            if (!blobReaders.isEmpty()) {
+                long blobId = BlobReader.packBlobId(taskIdx, rowIndex, taskBits);
+                for (BlobReader br : blobReaders) {
+                    br.setNextBlobId(blobId);
+                }
+            }
             batch.add(read(rs, paramType, columns, synchKey));
             if (batch.size() >= maxBatchRows) {
                 checkCancelled();
@@ -211,6 +223,16 @@ public class LoadDataTask implements Callable<Boolean> {
         }
 
         return copied;
+    }
+
+    private static List<BlobReader> collectBlobReaders(ColumnIndex[] columns) {
+        List<BlobReader> readers = new ArrayList<>();
+        for (ColumnIndex ci : columns) {
+            if (ci != null && ci.getReader() instanceof BlobReader) {
+                readers.add((BlobReader) ci.getReader());
+            }
+        }
+        return readers;
     }
 
     private ColumnIndex[] buildMainIndex(StructType paramListType, ResultSetMetaData rsmd) throws Exception {
