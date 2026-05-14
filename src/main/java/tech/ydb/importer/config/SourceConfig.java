@@ -20,6 +20,7 @@ public class SourceConfig extends JdomHelper {
     private String userName;
     private String password;
     private int fetchSize = 10000;
+    private int retryCount = 7;
 
     public SourceConfig() {
     }
@@ -39,6 +40,14 @@ public class SourceConfig extends JdomHelper {
                     throw raiseIllegal(fetchSizeEl, null, String.valueOf(fs));
                 }
                 this.fetchSize = fs;
+            }
+            Element retryCountEl = getOneChild(c, "retry-count");
+            if (retryCountEl != null) {
+                int rc = getInt(retryCountEl);
+                if (rc < 0) {
+                    throw raiseIllegal(retryCountEl, null, String.valueOf(rc));
+                }
+                this.retryCount = rc;
             }
         }
     }
@@ -89,6 +98,14 @@ public class SourceConfig extends JdomHelper {
 
     public void setFetchSize(int fetchSize) {
         this.fetchSize = fetchSize;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
     }
 
 }

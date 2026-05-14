@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -44,7 +45,12 @@ public class LoadDataTask implements Callable<Boolean> {
     private final int maxBatchRows;
     private final int maxBlobRows;
     private final int fetchSize;
+    private final int retryCount;
     private final WriterPool writerPool;
+    private long rowIndex;
+
+    private static final long INITIAL_BACKOFF_MS = 1000;
+    private static final long MAX_BACKOFF_MS = 30_000;
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
             TaskInfo task, WriterPool writerPool) {
@@ -63,7 +69,11 @@ public class LoadDataTask implements Callable<Boolean> {
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.maxBlobRows = owner.getConfig().getTarget().getMaxBlobRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
+        this.retryCount = (tab.getMetadata().getTasks().size() > 1)
+                ? owner.getConfig().getSource().getRetryCount()
+                : 0;
         this.writerPool = writerPool;
+        this.rowIndex = 0;
     }
 
     @Override
@@ -82,8 +92,12 @@ public class LoadDataTask implements Callable<Boolean> {
             LOG.info("Copied {} rows from {}", copied, task.getName());
             return true;
         } catch (Throwable e) {
+            if (e instanceof InterruptedException) {
+                LOG.warn("Interrupted {}", task.getName());
+                return false;
+            }
             if (tab.isFailure()) {
-                LOG.warn("Cancelled {} because the table has failed", task.getName());
+                LOG.warn("Cancelled {} because the table has already failed", task.getName());
             } else {
                 LOG.error("Failed to load data from {}", task.getName(), e);
                 tab.setFailure(true);
@@ -99,12 +113,41 @@ public class LoadDataTask implements Callable<Boolean> {
         }
     }
 
+    /**
+     * Reads all queries of a task, retrying each one on failure.
+     */
     private long executeTask() throws Exception {
+        List<TaskQuery> queries = task.getQueries();
         long copied = 0;
-        try (Connection con = source.getConnection()) {
-            for (TaskQuery query : task.getQueries()) {
-                checkCancelled();
-                copied += executeQuery(con, query.getSql());
+        int nextQuery = 0;
+        int attempt = 0;
+        long backoffMs = INITIAL_BACKOFF_MS;
+        long savedRowIndex = rowIndex;
+
+        while (nextQuery < queries.size()) {
+            try (Connection con = source.getConnection()) {
+                while (nextQuery < queries.size()) {
+                    checkCancelled();
+                    savedRowIndex = rowIndex;
+                    TaskQuery query = queries.get(nextQuery);
+                    copied += executeQuery(con, query.getSql());
+                    nextQuery++;
+                    attempt = 0;
+                    backoffMs = INITIAL_BACKOFF_MS;
+                }
+            } catch (SQLException e) {
+                if (tab.isFailure()) {
+                    throw e;
+                }
+                rowIndex = savedRowIndex;
+                if (++attempt > retryCount) {
+                    throw e;
+                }
+                TaskQuery failed = queries.get(nextQuery);
+                LOG.warn("Query {} failed (attempt {}/{}), retrying in {} ms",
+                        failed.getName(), attempt, retryCount, backoffMs, e);
+                Thread.sleep(backoffMs);
+                backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
             }
         }
         return copied;
@@ -142,6 +185,7 @@ public class LoadDataTask implements Callable<Boolean> {
         long copied = 0;
 
         while (rs.next()) {
+            rowIndex++;
             copied++;
             progress.countReadRows(1);
 
