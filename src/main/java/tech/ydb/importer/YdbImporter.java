@@ -26,6 +26,7 @@ import tech.ydb.importer.config.JdomHelper;
 import tech.ydb.importer.source.AnyTableLister;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.importer.source.TableMapList;
+import tech.ydb.importer.source.TaskInfo;
 import tech.ydb.importer.target.LoadDataTask;
 import tech.ydb.importer.target.ProgressCounter;
 import tech.ydb.importer.target.TargetCP;
@@ -248,12 +249,7 @@ public class YdbImporter {
             WriterPool writerPool = new WriterPool(writerPoolSize, bufferCount);
             try {
                 final List<Future<Boolean>> results = new ArrayList<>();
-                for (TableDecision td : tables) {
-                    if (td.isFailure()) {
-                        continue;
-                    }
-                    results.add(es.submit(new LoadDataTask(this, progress, td, writerPool)));
-                }
+                submitLoadTasks(es, tables, progress, writerPool, results);
                 if (results.isEmpty()) {
                     LOG.info("No valid tables to be loaded, nothing to do.");
                     return;
@@ -269,6 +265,25 @@ public class YdbImporter {
                 LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
             } finally {
                 writerPool.close();
+            }
+        }
+    }
+
+    private void submitLoadTasks(ExecutorService es, List<TableDecision> tables,
+            ProgressCounter progress, WriterPool writerPool, List<Future<Boolean>> results) {
+        for (TableDecision td : tables) {
+            if (td.isFailure()) {
+                continue;
+            }
+            List<TaskInfo> tasks = td.getMetadata().getTasks();
+            for (int i = 0; i < tasks.size(); i++) {
+                tasks.get(i).setIndex(i);
+            }
+            LOG.info("Table {}.{}: submitting {} task{}",
+                    td.getSchema(), td.getTable(), tasks.size(),
+                    tasks.size() == 1 ? "" : "s");
+            for (TaskInfo ti : tasks) {
+                results.add(es.submit(new LoadDataTask(this, progress, td, ti, writerPool)));
             }
         }
     }

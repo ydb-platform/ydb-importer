@@ -17,6 +17,8 @@ import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.YdbImporter;
 import tech.ydb.importer.source.ColumnInfo;
 import tech.ydb.importer.source.SourceCP;
+import tech.ydb.importer.source.TaskInfo;
+import tech.ydb.importer.source.TaskQuery;
 import tech.ydb.table.values.ListType;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.StructValue;
@@ -36,6 +38,7 @@ public class LoadDataTask implements Callable<Boolean> {
 
     private final YdbUpsertOp ydbOp;
     private final TableDecision tab;
+    private final TaskInfo task;
     private final ProgressCounter progress;
 
     private final int maxBatchRows;
@@ -44,7 +47,7 @@ public class LoadDataTask implements Callable<Boolean> {
     private final WriterPool writerPool;
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
-            WriterPool writerPool) {
+            TaskInfo task, WriterPool writerPool) {
         this.source = owner.getSourceCP();
         this.target = owner.getTargetCP();
 
@@ -55,6 +58,7 @@ public class LoadDataTask implements Callable<Boolean> {
                 progress::countWrittenRows
         );
         this.tab = tab;
+        this.task = task;
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.maxBlobRows = owner.getConfig().getTarget().getMaxBlobRows();
@@ -69,28 +73,55 @@ public class LoadDataTask implements Callable<Boolean> {
             return false;
         }
         if (tab.isFailure()) {
-            LOG.warn("Skipping failed source table {}.{}", tab.getSchema(), tab.getTable());
+            LOG.warn("Skipping {} because the table has already failed", task.getName());
             return false;
         }
-        LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
-        try (Connection con = source.getConnection()) {
-            long copied;
-            try (PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql())) {
-                ps.setFetchSize(fetchSize);
-                try (ResultSet rs = ps.executeQuery()) {
-                    copied = copyData(rs);
-                }
-            }
-            if (!con.getAutoCommit()) {
-                con.commit();
-            }
-            LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
+        LOG.info("Loading data from {}", task.getName());
+        try {
+            long copied = executeTask();
+            LOG.info("Copied {} rows from {}", copied, task.getName());
             return true;
         } catch (Throwable e) {
-            LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
-            tab.setFailure(true);
+            if (tab.isFailure()) {
+                LOG.warn("Cancelled {} because the table has failed", task.getName());
+            } else {
+                LOG.error("Failed to load data from {}", task.getName(), e);
+                tab.setFailure(true);
+            }
             return false;
         }
+    }
+
+    private void checkCancelled() {
+        if (tab.isFailure()) {
+            throw new RuntimeException("Cancelled: table " + tab.getSchema() + "."
+                    + tab.getTable() + " marked as failed by another task");
+        }
+    }
+
+    private long executeTask() throws Exception {
+        long copied = 0;
+        try (Connection con = source.getConnection()) {
+            for (TaskQuery query : task.getQueries()) {
+                checkCancelled();
+                copied += executeQuery(con, query.getSql());
+            }
+        }
+        return copied;
+    }
+
+    private long executeQuery(Connection con, String sql) throws Exception {
+        long copied;
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setFetchSize(fetchSize);
+            try (ResultSet rs = ps.executeQuery()) {
+                copied = copyData(rs);
+            }
+        }
+        if (!con.getAutoCommit()) {
+            con.commit();
+        }
+        return copied;
     }
 
     /**
@@ -116,12 +147,14 @@ public class LoadDataTask implements Callable<Boolean> {
 
             batch.add(read(rs, paramType, columns, synchKey));
             if (batch.size() >= maxBatchRows) {
+                checkCancelled();
                 writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
                 batch.clear();
             }
         }
 
         if (!batch.isEmpty()) {
+            checkCancelled();
             writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
             batch.clear();
         }

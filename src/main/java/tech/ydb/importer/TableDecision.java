@@ -22,7 +22,7 @@ public class TableDecision implements TableIdentity {
     private final TableOptions options;
     private final TableRef tableRef; // for table-ref defined only
     private TableMetadata metadata; // fetched from the source database
-    private boolean failure;
+    private volatile boolean failure;
     private TargetTable target;
     // blob column name -> blob table definition
     private final Map<String, TargetTable> blobTargets = new HashMap<>();
@@ -62,7 +62,7 @@ public class TableDecision implements TableIdentity {
         if (metadata == null || target == null) {
             return false;
         }
-        if (isBlank(metadata.getBasicSql())) {
+        if (metadata.getTasks().isEmpty()) {
             return false;
         }
         return metadata.isValid() && target.isValid();

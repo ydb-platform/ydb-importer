@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -32,6 +33,11 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
     protected abstract List<String> listSchemas(Connection con) throws SQLException;
 
     protected abstract List<String> listTables(Connection con, String schema) throws SQLException;
+
+    public List<TaskInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        return Collections.emptyList();
+    }
 
     // Safely quote the identifier
     protected abstract String safeId(String id);
@@ -113,17 +119,20 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 }
             }
         }
+        List<TaskInfo> tasks = listPartitions(con, td, tm);
+        if (tasks.isEmpty()) {
+            String label = td.getSchema() + "." + td.getTable();
+            tasks = Collections.singletonList(
+                    new TaskInfo(label, makeSelectSql(td, tm.getColumns())));
+        }
+        tm.setTasks(tasks);
         return tm;
     }
 
     protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm)
             throws SQLException {
-        String sql = tm.getBasicSql();
-        if (isBlank(sql)) {
-            sql = makeSelectSql(td, tm.getColumns());
-            tm.setBasicSql(sql);
-        }
-        sql = "SELECT q.* FROM (" + sql + ") q WHERE 0=1"; // retrieve zero rows
+        String sql = "SELECT q.* FROM (" + makeSelectSql(td, tm.getColumns())
+                + ") q WHERE 0=1"; // retrieve zero rows
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             try (ResultSet rs = ps.executeQuery()) {
                 final ResultSetMetaData rsmd = rs.getMetaData();
