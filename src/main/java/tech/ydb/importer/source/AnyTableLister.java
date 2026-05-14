@@ -119,7 +119,9 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 }
             }
         }
-        List<TaskInfo> tasks = listPartitions(con, td, tm);
+        List<TaskInfo> tasks = tableMaps.getConfig().getWorkers().isUsePartitions()
+                ? listPartitions(con, td, tm)
+                : Collections.emptyList();
         if (tasks.isEmpty()) {
             String label = td.getSchema() + "." + td.getTable();
             tasks = Collections.singletonList(
