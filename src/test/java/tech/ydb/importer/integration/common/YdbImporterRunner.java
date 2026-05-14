@@ -43,6 +43,7 @@ public final class YdbImporterRunner {
         private int maxBatchRows = 1000;
         private int poolSize = 2;
         private int fetchSize = 10_000;
+        private boolean usePartitions = true;
         private String queryText;
 
         private Builder() {
@@ -96,6 +97,11 @@ public final class YdbImporterRunner {
             return this;
         }
 
+        public Builder usePartitions(boolean value) {
+            this.usePartitions = value;
+            return this;
+        }
+
         public Builder queryText(String sql) {
             this.queryText = sql;
             return this;
@@ -119,6 +125,7 @@ public final class YdbImporterRunner {
             workers.setReaderPoolSize(poolSize);
             workers.setWriterPoolSize(poolSize);
             workers.setBufferCount(poolSize);
+            workers.setUsePartitions(usePartitions);
             config.setWorkers(workers);
 
             SourceConfig src = new SourceConfig();
