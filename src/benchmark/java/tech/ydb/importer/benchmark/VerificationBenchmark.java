@@ -83,8 +83,9 @@ public class VerificationBenchmark {
 
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
-        String[] allLabels = {"ROW", "ROW+PART"};
-        boolean[] allParts = {false, true};
+        String[] allLabels = {"ROW", "ROW+PART", "ARROW", "ARROW+PART"};
+        boolean[] allParts = {false, true, false, true};
+        boolean[] allArrow = {false, false, true, true};
         List<Integer> selectedModes = parseModes(modesArg, allLabels);
         List<String> sources = parseSources(sourcesArg);
 
@@ -103,7 +104,7 @@ public class VerificationBenchmark {
 
         List<SourceRun> runs = new ArrayList<>();
         for (String name : sources) {
-            runs.add(runSource(name, selectedModes, allLabels, allParts, rows,
+            runs.add(runSource(name, selectedModes, allLabels, allParts, allArrow, rows,
                     batchSize, genBatchSize, poolSize, genPoolSize, fetchSize,
                     verify));
         }
@@ -119,9 +120,9 @@ public class VerificationBenchmark {
     }
 
     private static SourceRun runSource(String name, List<Integer> selectedModes,
-            String[] allLabels, boolean[] allParts, int rows, int batchSize,
-            int genBatchSize, int poolSize, int genPoolSize, int fetchSize,
-            boolean verify) {
+            String[] allLabels, boolean[] allParts, boolean[] allArrow,
+            int rows, int batchSize, int genBatchSize, int poolSize,
+            int genPoolSize, int fetchSize, boolean verify) {
         System.out.printf("=== Source: %s ===%n", name);
         SourceRun run = new SourceRun(name);
 
@@ -150,7 +151,7 @@ public class VerificationBenchmark {
                 LocalYdbTestContainer ydb = new LocalYdbTestContainer();
                 ydb.start();
                 try {
-                    run.modes.add(runMode(allLabels[idx], allParts[idx], runner,
+                    run.modes.add(runMode(allLabels[idx], allParts[idx], allArrow[idx], runner,
                             ydb, batchSize, poolSize, fetchSize, verify));
                 } finally {
                     ydb.stop();
@@ -189,14 +190,14 @@ public class VerificationBenchmark {
         return loadMs;
     }
 
-    private static ModeResult runMode(String label, boolean usePartitions,
+    private static ModeResult runMode(String label, boolean usePartitions, boolean useArrow,
             ScenarioRunner runner, LocalYdbTestContainer ydb, int batchSize,
             int poolSize, int fetchSize, boolean verify) throws Exception {
 
         System.out.printf("=== Import [%s] ===%n", label);
 
         long importStart = System.currentTimeMillis();
-        runner.runImport(ydb, batchSize, poolSize, fetchSize, usePartitions,
+        runner.runImport(ydb, batchSize, poolSize, fetchSize, usePartitions, useArrow,
                 TARGET_PREFIX);
         long importMs = System.currentTimeMillis() - importStart;
 
@@ -251,7 +252,7 @@ public class VerificationBenchmark {
                 "  --fetch-size N        JDBC fetchSize (default 10000)",
                 "  --sources LIST        comma-separated from: postgres, mysql, oracle",
                 "                        (default postgres)",
-                "  --modes LIST          comma-separated from: ROW, ROW+PART",
+                "  --modes LIST          comma-separated from: ROW, ROW+PART, ARROW, ARROW+PART",
                 "                        (default ROW+PART)",
                 "  --no-verify           skip verification step",
                 "  --help, -h            show this help"));
@@ -287,7 +288,7 @@ public class VerificationBenchmark {
         }
         if (selected.isEmpty()) {
             System.err.println("Unknown modes: " + modes
-                    + ". Use: ROW, ROW+PART");
+                    + ". Use: ROW, ROW+PART, ARROW, ARROW+PART");
             System.exit(1);
         }
         return selected;

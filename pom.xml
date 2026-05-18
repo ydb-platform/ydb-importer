@@ -359,7 +359,7 @@
                         <version>3.5.0</version>
                         <configuration>
                             <executable>java</executable>
-                            <commandlineArgs>-classpath %classpath ${bench.mainClass} ${exec.args}</commandlineArgs>
+                            <commandlineArgs>--add-opens=java.base/java.nio=ALL-UNNAMED -classpath %classpath ${bench.mainClass} ${exec.args}</commandlineArgs>
                         </configuration>
                     </plugin>
                     <plugin>
