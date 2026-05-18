@@ -3,6 +3,8 @@ package tech.ydb.importer.integration.verification;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -129,6 +131,20 @@ public abstract class DialectLoader {
         long chunk = n / p;
         for (int i = 0; i < p - 1; i++) {
             b[i] = (i + 1) * chunk;
+        }
+        return b;
+    }
+
+    protected static final DateTimeFormatter DATE_LITERAL_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    protected LocalDateTime[] rangeDateBoundaries(TableScenario scenario) {
+        long n = scenario.oracle().rowCount();
+        int p = partitionCount(scenario);
+        LocalDateTime[] b = new LocalDateTime[p - 1];
+        long chunkSeconds = Math.max(1L, n / p);
+        for (int i = 0; i < p - 1; i++) {
+            b[i] = ShopScenarios.BASE_DT.plusSeconds((i + 1) * chunkSeconds);
         }
         return b;
     }

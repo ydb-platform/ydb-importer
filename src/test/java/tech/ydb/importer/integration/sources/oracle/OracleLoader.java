@@ -1,5 +1,7 @@
 package tech.ydb.importer.integration.sources.oracle;
 
+import java.time.LocalDateTime;
+
 import tech.ydb.importer.integration.verification.DialectLoader;
 import tech.ydb.importer.integration.verification.LogicalType;
 import tech.ydb.importer.integration.verification.TableScenario;
@@ -52,16 +54,18 @@ public final class OracleLoader extends DialectLoader {
                 ddl.append("PARTITION pmax VALUES LESS THAN (MAXVALUE))");
                 break;
             }
-            case RANGE_DATE:
-                ddl.append(" PARTITION BY RANGE(").append(column).append(") (")
-                        .append("PARTITION p2024 VALUES LESS THAN ")
-                        .append("(TIMESTAMP '2025-01-01 00:00:00'),")
-                        .append("PARTITION p2025 VALUES LESS THAN ")
-                        .append("(TIMESTAMP '2026-01-01 00:00:00'),")
-                        .append("PARTITION p2026 VALUES LESS THAN ")
-                        .append("(TIMESTAMP '2027-01-01 00:00:00'),")
-                        .append("PARTITION pmax VALUES LESS THAN (MAXVALUE))");
+            case RANGE_DATE: {
+                LocalDateTime[] db = rangeDateBoundaries(scenario);
+                ddl.append(" PARTITION BY RANGE(").append(column).append(") (");
+                for (int i = 0; i < db.length; i++) {
+                    ddl.append("PARTITION p").append(i)
+                            .append(" VALUES LESS THAN (TIMESTAMP '")
+                            .append(db[i].format(DATE_LITERAL_FMT))
+                            .append("'),");
+                }
+                ddl.append("PARTITION pmax VALUES LESS THAN (MAXVALUE))");
                 break;
+            }
             case LIST_STRING:
                 ddl.append(" PARTITION BY LIST(").append(column).append(") (")
                         .append("PARTITION p_card VALUES ('card'),")
