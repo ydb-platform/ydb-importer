@@ -213,4 +213,13 @@ public class OracleTableLister extends AnyTableLister {
         return tasks;
     }
 
+    @Override
+    protected String formatLiteral(SplitColumnType type, String value) {
+        switch (type) {
+            case DATE:      return "DATE '" + value + "'";
+            case TIMESTAMP: return "TIMESTAMP '" + value + "'";
+            default:        return super.formatLiteral(type, value);
+        }
+    }
+
 }
