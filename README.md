@@ -258,6 +258,19 @@ Below is the definition of the configuration file structure:
         <!-- Primary key columns should be defined for the query.  -->
         <key-column>OWNER</key-column>
         <key-column>TABLE_NAME</key-column>
+        <!-- Splits the table into split-count value ranges along the
+             split-by column for parallel reads. All four elements are
+             required, split-count must be at least 2. Column types:
+             integers (Tinyint/Smallint/Integer/Bigint), Decimal/Numeric,
+             Real/Float/Double, Date, Timestamp. Bounds are written as
+             yyyy-MM-dd for Date or yyyy-MM-dd [HH:mm:ss[.fraction]] for
+             Timestamp. Values below split-from or NULL go to the first
+             split, values above split-to go to the last.
+         -->
+        <split-by>created_at</split-by>
+        <split-from>2020-01-01 00:00:00</split-from>
+        <split-to>2026-01-01 00:00:00</split-to>
+        <split-count>12</split-count>
     </table-ref>
 </ydb-importer>
 ```

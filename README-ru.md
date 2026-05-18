@@ -249,6 +249,19 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
         <!-- Для запроса желательно явно определить ключевые колонки.  -->
         <key-column>OWNER</key-column>
         <key-column>TABLE_NAME</key-column>
+        <!-- Делит таблицу на split-count интервалов по колонке split-by,
+             чтобы читать параллельно. Все четыре элемента обязательны,
+             split-count не меньше 2. Допустимые типы колонки: целочисленные
+             (Tinyint/Smallint/Integer/Bigint), Decimal/Numeric,
+             Real/Float/Double, Date, Timestamp. Границы пишутся как
+             yyyy-MM-dd для Date или yyyy-MM-dd [HH:mm:ss[.fraction]] для
+             Timestamp. Всё что меньше split-from или равно NULL уходит
+             в первый split, всё что больше split-to идет в последний.
+         -->
+        <split-by>created_at</split-by>
+        <split-from>2020-01-01 00:00:00</split-from>
+        <split-to>2026-01-01 00:00:00</split-to>
+        <split-count>12</split-count>
     </table-ref>
 </ydb-importer>
 ```
