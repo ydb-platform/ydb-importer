@@ -1,7 +1,6 @@
 package tech.ydb.importer.target;
 
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.sql.Blob;
 import java.sql.ResultSet;
 import java.util.ArrayList;
@@ -15,7 +14,6 @@ import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.PrimitiveValue;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.Value;
-import tech.ydb.table.values.VoidValue;
 
 /**
  * JDBC to YDB BLOB copying logic. Each BLOB value is converted to a sequence of records in an
@@ -92,25 +90,22 @@ public class BlobReader extends ValueReader {
     }
 
     @Override
-    public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
-        try (InputStream is = openStream(rs, index)) {
+    public void read(ResultSet rs, int rsIdx, int targetIdx, ValueWriter writer, SynthKey synthKey) throws Exception {
+        try (InputStream is = openStream(rs, rsIdx)) {
             if (rs.wasNull()) {
                 if (synthKey != null) {
-                    synthKey.updateSeparator();
+                    synthKey.hashNull();
                 }
-                return VoidValue.of();
+                writer.writeNull(targetIdx);
+                return;
             }
 
             long id = nextBlobId;
-            PrimitiveValue ydbId = PrimitiveValue.newInt64(id);
-            saveBlob(ydbId, is);
+            saveBlob(PrimitiveValue.newInt64(id), is);
             if (synthKey != null) {
-                ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
-                buffer.putLong(id);
-                synthKey.update(buffer);
-                synthKey.updateSeparator();
+                synthKey.hashLong(id);
             }
-            return ydbId;
+            writer.writeInt64(targetIdx, id);
         }
     }
 

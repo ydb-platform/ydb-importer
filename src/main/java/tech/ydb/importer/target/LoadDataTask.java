@@ -422,6 +422,7 @@ public class LoadDataTask implements Callable<Boolean> {
         for (int idx = 0; idx < values.length; idx += 1) {
             values[idx] = VoidValue.of();
         }
+        RowValueWriter writer = new RowValueWriter(type, values);
 
         for (int rsIdx = 1; rsIdx <= columns.length; rsIdx += 1) {
             ColumnIndex column = columns[rsIdx - 1];
@@ -431,7 +432,7 @@ public class LoadDataTask implements Callable<Boolean> {
 
             int valuesIdx = column.getStructIndex();
             try {
-                values[valuesIdx] = column.getReader().readValue(synthKey, rs, rsIdx);
+                column.getReader().read(rs, rsIdx, valuesIdx, writer, synthKey);
             } catch (Exception ex) {
                 throw new Exception("Failed conversion for column " + rsIdx + " " + type.getMemberName(valuesIdx), ex);
             }

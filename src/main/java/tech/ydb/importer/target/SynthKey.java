@@ -31,19 +31,6 @@ public class SynthKey {
         this.base64Encoder = Base64.getUrlEncoder().withoutPadding();
     }
 
-    public void update(byte[] bytes) {
-        digest.update(bytes);
-    }
-
-    public void update(ByteBuffer buffer) {
-        buffer.flip();
-        digest.update(buffer);
-    }
-
-    public void updateSeparator() {
-        digest.update(SEPARATOR);
-    }
-
     public void hashNull() {
         digest.update(SEPARATOR);
     }
