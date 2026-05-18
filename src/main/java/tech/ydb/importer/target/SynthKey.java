@@ -11,9 +11,6 @@ import java.sql.Timestamp;
 import java.time.LocalTime;
 import java.util.Base64;
 
-import tech.ydb.table.values.PrimitiveValue;
-import tech.ydb.table.values.Value;
-
 /**
  * Builder of synthetic primary keys for imported rows.
  *
@@ -123,8 +120,8 @@ public class SynthKey {
         digest.update(SEPARATOR);
     }
 
-    public Value<?> build() {
+    public String buildString() {
         byte[] sign = digest.digest();
-        return PrimitiveValue.newText(base64Encoder.encodeToString(sign));
+        return base64Encoder.encodeToString(sign);
     }
 }

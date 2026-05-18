@@ -6,7 +6,6 @@ import tech.ydb.core.Status;
 import tech.ydb.table.SessionRetryContext;
 import tech.ydb.table.query.BulkUpsertData;
 import tech.ydb.table.settings.BulkUpsertSettings;
-import tech.ydb.table.values.ListValue;
 
 /**
  *
@@ -29,36 +28,24 @@ public class YdbUpsertOp {
         this.counter = counter;
     }
 
-    public void upload(ListValue values) {
-        if (values == null || values.isEmpty()) {
+    public void upload(BulkUpsertData data, int rowCount, Runnable onFailure) {
+        if (data == null || rowCount == 0) {
             return;
         }
 
-        BulkUpsertData data = new BulkUpsertData(values);
         Status status = retryCtx.supplyStatus(
                 session -> session.executeBulkUpsert(tablePath, data, upsertSettings)
         ).join();
 
         if (status.isSuccess()) {
-            counter.accept(values.size());
+            counter.accept(rowCount);
             return;
         }
 
-        if (LOG.isDebugEnabled()) {
-            logValues(values);
+        if (LOG.isDebugEnabled() && onFailure != null) {
+            onFailure.run();
         }
 
         status.expectSuccess(errorMsg);
-    }
-
-    private void logValues(ListValue values) {
-        int size = values.size();
-        LOG.debug("********************************");
-        LOG.debug("Problematic data block dump START, size is {}", size);
-        for (int i = 0; i < size; ++i) {
-            LOG.debug("{} {}", i, values.get(i));
-        }
-        LOG.debug("Problematic data block dump FINISH");
-        LOG.debug("********************************");
     }
 }

@@ -13,6 +13,7 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
     private int readerPoolSize = 1;
     private int writerPoolSize = 1;
     private int bufferCount = 1;
+    private boolean useArrow = false;
 
     public WorkerConfig() {
     }
@@ -25,6 +26,11 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
 
         Element bufEl = getOneChild(c, "buffer-count");
         this.bufferCount = (bufEl != null) ? validatedSize(getInt(bufEl)) : this.readerPoolSize;
+
+        Element useArrowEl = getOneChild(c, "use-arrow");
+        if (useArrowEl != null) {
+            this.useArrow = parseBoolean(useArrowEl, null, getText(useArrowEl));
+        }
     }
 
     private static int validatedSize(int v) {
@@ -59,6 +65,14 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
 
     public void setBufferCount(int bufferCount) {
         this.bufferCount = bufferCount;
+    }
+
+    public boolean isUseArrow() {
+        return useArrow;
+    }
+
+    public void setUseArrow(boolean useArrow) {
+        this.useArrow = useArrow;
     }
 
 }

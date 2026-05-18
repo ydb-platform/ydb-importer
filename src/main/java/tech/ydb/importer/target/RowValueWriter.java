@@ -6,9 +6,9 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import tech.ydb.table.values.DecimalType;
+import tech.ydb.table.values.ListValue;
 import tech.ydb.table.values.PrimitiveValue;
 import tech.ydb.table.values.StructType;
-import tech.ydb.table.values.Type;
 import tech.ydb.table.values.Value;
 import tech.ydb.table.values.VoidValue;
 
@@ -17,11 +17,16 @@ import tech.ydb.table.values.VoidValue;
  */
 public class RowValueWriter implements ValueWriter {
 
-    private final StructType type;
-    private final Value<?>[] values;
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(RowValueWriter.class);
 
-    public RowValueWriter(StructType type, Value<?>[] values) {
-        this.type = type;
+    private final DecimalType[] decimalTypes;
+    private Value<?>[] values;
+
+    public RowValueWriter(StructType type) {
+        this.decimalTypes = ValueWriter.precomputeDecimalTypes(type);
+    }
+
+    public void setValues(Value<?>[] values) {
         this.values = values;
     }
 
@@ -117,13 +122,17 @@ public class RowValueWriter implements ValueWriter {
 
     @Override
     public void writeDecimal(int idx, BigDecimal v) {
-        values[idx] = decimalType(type.getMemberType(idx)).newValue(v);
+        values[idx] = decimalTypes[idx].newValue(v);
     }
 
-    private static DecimalType decimalType(Type t) {
-        if (t.getKind() == Type.Kind.OPTIONAL) {
-            t = t.unwrapOptional();
+    public static void logValues(ListValue values) {
+        int size = values.size();
+        LOG.debug("********************************");
+        LOG.debug("Problematic data block dump START, size is {}", size);
+        for (int i = 0; i < size; ++i) {
+            LOG.debug("{} {}", i, values.get(i));
         }
-        return (DecimalType) t;
+        LOG.debug("Problematic data block dump FINISH");
+        LOG.debug("********************************");
     }
 }

@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,9 +21,12 @@ import tech.ydb.importer.source.ColumnInfo;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.importer.source.TaskInfo;
 import tech.ydb.importer.source.TaskQuery;
+import tech.ydb.table.query.BulkUpsertData;
+import tech.ydb.table.query.arrow.ApacheArrowData;
+import tech.ydb.table.query.arrow.ApacheArrowWriter;
 import tech.ydb.table.values.ListType;
+import tech.ydb.table.values.ListValue;
 import tech.ydb.table.values.StructType;
-import tech.ydb.table.values.StructValue;
 import tech.ydb.table.values.Value;
 import tech.ydb.table.values.VoidValue;
 
@@ -49,6 +53,7 @@ public class LoadDataTask implements Callable<Boolean> {
     private final int taskIdx;
     private final int taskBits;
     private final boolean partitionBuffers;
+    private final boolean useArrow;
     private final WriterPool writerPool;
     private long rowIndex;
 
@@ -79,6 +84,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.taskIdx = task.getIndex();
         this.taskBits = BlobReader.bitsRequired(tab.getMetadata().getTasks().size());
         this.partitionBuffers = tab.partitionBuffers();
+        this.useArrow = owner.getConfig().getWorkers().isUseArrow();
         this.writerPool = writerPool;
         this.rowIndex = 0;
     }
@@ -182,20 +188,20 @@ public class LoadDataTask implements Callable<Boolean> {
      */
     private long copyData(ResultSet rs) throws Exception {
         final StructType paramType = tab.getTarget().getFields();
-        final ListType paramListType = ListType.of(paramType);
         final ResultSetMetaData rsmd = rs.getMetaData();
         final ColumnIndex[] columns = buildMainIndex(paramType, rsmd);
         final List<BlobReader> blobReaders = collectBlobReaders(columns);
-        final SynthKey synchKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
+        final SynthKey synthKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
 
         PartitionBounds pb = partitionBuffers ? resolvePartitionBounds(rsmd) : null;
         if (partitionBuffers && pb == null) {
             LOG.debug("partition-buffers requested for {}.{} but no integer partition cuts, "
                     + "plain batching", tab.getSchema(), tab.getTable());
         }
-        long copied = (pb != null)
-                ? copyDataGrouped(rs, paramType, paramListType, columns, blobReaders, synchKey, pb)
-                : copyDataPlain(rs, paramType, paramListType, columns, blobReaders, synchKey);
+
+        long copied = useArrow
+                ? copyDataArrow(rs, paramType, columns, blobReaders, synthKey, pb)
+                : copyDataRows(rs, paramType, columns, blobReaders, synthKey, pb);
 
         for (ColumnIndex ci : columns) {
             if (ci != null) {
@@ -206,64 +212,42 @@ public class LoadDataTask implements Callable<Boolean> {
         return copied;
     }
 
-    /** Plain batching: fills one batch in read order, no regrouping.
-     *  A batch may span several YDB partitions. */
-    private long copyDataPlain(ResultSet rs, StructType paramType, ListType paramListType,
-            ColumnIndex[] columns, List<BlobReader> blobReaders, SynthKey synthKey)
-            throws Exception {
-        final List<Value<?>> batch = new ArrayList<>(maxBatchRows);
-        long copied = 0;
-        long readStart = System.nanoTime();
-        while (rs.next()) {
-            rowIndex++;
-            copied++;
-            progress.countReadRows(1);
-            setNextBlobIds(blobReaders);
-            batch.add(read(rs, paramType, columns, synthKey));
-            if (batch.size() >= maxBatchRows) {
-                progress.countReadBatch(System.nanoTime() - readStart);
-                checkCancelled();
-                writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
-                batch.clear();
-                readStart = System.nanoTime();
-            }
-        }
-        if (!batch.isEmpty()) {
-            progress.countReadBatch(System.nanoTime() - readStart);
-            checkCancelled();
-            writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
-            batch.clear();
-        }
-        return copied;
-    }
-
-    /** Regroups rows into YDB partition buffers so each batch goes to a single YDB partition. */
-    private long copyDataGrouped(ResultSet rs, StructType paramType, ListType paramListType,
-            ColumnIndex[] columns, List<BlobReader> blobReaders, SynthKey synthKey,
-            PartitionBounds pb) throws Exception {
-        final int partCount = pb.cuts.length + 1;
+    /** Row batching, one buffer per partition when bounds are known, else a single buffer. */
+    private long copyDataRows(ResultSet rs, StructType paramType, ColumnIndex[] columns,
+            List<BlobReader> blobReaders, SynthKey synthKey, PartitionBounds pb) throws Exception {
+        final ListType paramListType = ListType.of(paramType);
+        final int partCount = (pb == null) ? 1 : pb.cuts.length + 1;
         final List<List<Value<?>>> buffers = new ArrayList<>(partCount);
         for (int i = 0; i < partCount; i++) {
             buffers.add(new ArrayList<>(maxBatchRows));
         }
+        final RowValueWriter writer = new RowValueWriter(paramType);
         long copied = 0;
         long readStart = System.nanoTime();
+
         while (rs.next()) {
             rowIndex++;
             copied++;
             progress.countReadRows(1);
-            setNextBlobIds(blobReaders);
-            long key = rs.getLong(pb.pkIndex);
-            List<Value<?>> buffer = buffers.get(partitionOf(key, pb.cuts));
-            buffer.add(read(rs, paramType, columns, synthKey));
+            setupBlobIds(blobReaders);
+
+            int part = (pb == null) ? 0 : partitionOf(rs.getLong(pb.pkIndex), pb.cuts);
+            Value<?>[] values = new Value[paramType.getMembersCount()];
+            Arrays.fill(values, VoidValue.of());
+            writer.setValues(values);
+            readRow(rs, paramType, columns, writer, synthKey);
+            List<Value<?>> buffer = buffers.get(part);
+            buffer.add(paramType.newValueUnsafe(values));
+
             if (buffer.size() >= maxBatchRows) {
                 progress.countReadBatch(System.nanoTime() - readStart);
                 checkCancelled();
-                writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(buffer)));
+                submitRowBatch(paramListType, buffer);
                 buffer.clear();
                 readStart = System.nanoTime();
             }
         }
+
         boolean counted = false;
         for (List<Value<?>> buffer : buffers) {
             if (!buffer.isEmpty()) {
@@ -272,20 +256,90 @@ public class LoadDataTask implements Callable<Boolean> {
                     counted = true;
                 }
                 checkCancelled();
-                writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(buffer)));
+                submitRowBatch(paramListType, buffer);
                 buffer.clear();
             }
         }
         return copied;
     }
 
-    private void setNextBlobIds(List<BlobReader> blobReaders) {
+    /** Arrow batching, one batch per partition when bounds are known, else a single batch. */
+    private long copyDataArrow(ResultSet rs, StructType paramType, ColumnIndex[] columns,
+            List<BlobReader> blobReaders, SynthKey synthKey, PartitionBounds pb) throws Exception {
+        final int partCount = (pb == null) ? 1 : pb.cuts.length + 1;
+        final ArrowBatchBuilder[] builders = new ArrowBatchBuilder[partCount];
+        final ApacheArrowWriter.Batch[] batches = new ApacheArrowWriter.Batch[partCount];
+        final int[] counts = new int[partCount];
+        final ArrowValueWriter writer = new ArrowValueWriter(paramType);
+        long copied = 0;
+        long readStart = System.nanoTime();
+        try {
+            for (int i = 0; i < partCount; i++) {
+                builders[i] = new ArrowBatchBuilder(paramType, maxBatchRows);
+            }
+            while (rs.next()) {
+                rowIndex++;
+                copied++;
+                progress.countReadRows(1);
+                setupBlobIds(blobReaders);
+
+                int part = (pb == null) ? 0 : partitionOf(rs.getLong(pb.pkIndex), pb.cuts);
+                if (batches[part] == null) {
+                    batches[part] = builders[part].newBatch();
+                }
+                writer.setRow(batches[part].writeNextRow());
+                readRow(rs, paramType, columns, writer, synthKey);
+                counts[part]++;
+
+                if (counts[part] >= maxBatchRows) {
+                    progress.countReadBatch(System.nanoTime() - readStart);
+                    checkCancelled();
+                    submitArrowBatch(batches[part], counts[part]);
+                    batches[part] = null;
+                    counts[part] = 0;
+                    readStart = System.nanoTime();
+                }
+            }
+            boolean counted = false;
+            for (int i = 0; i < partCount; i++) {
+                if (counts[i] > 0) {
+                    if (!counted) {
+                        progress.countReadBatch(System.nanoTime() - readStart);
+                        counted = true;
+                    }
+                    checkCancelled();
+                    submitArrowBatch(batches[i], counts[i]);
+                }
+            }
+        } finally {
+            for (ArrowBatchBuilder b : builders) {
+                if (b != null) {
+                    b.close();
+                }
+            }
+        }
+        return copied;
+    }
+
+    private void setupBlobIds(List<BlobReader> blobReaders) {
         if (!blobReaders.isEmpty()) {
             long blobId = BlobReader.packBlobId(taskIdx, rowIndex, taskBits);
             for (BlobReader br : blobReaders) {
                 br.setNextBlobId(blobId);
             }
         }
+    }
+
+    private void submitRowBatch(ListType paramListType, List<Value<?>> batch) throws Exception {
+        final ListValue lv = paramListType.newValue(batch);
+        writerPool.submit(new UploadBatch(ydbOp, new BulkUpsertData(lv), batch.size(),
+                () -> RowValueWriter.logValues(lv)));
+    }
+
+    private void submitArrowBatch(ApacheArrowWriter.Batch arrowBatch, int rowCount) throws Exception {
+        final ApacheArrowData data = arrowBatch.buildBatch();
+        writerPool.submit(new UploadBatch(ydbOp, data, rowCount,
+                () -> ArrowValueWriter.logValues(data)));
     }
 
     /** Which YDB partition a key falls into, by binary search over the cuts. */
@@ -409,21 +463,17 @@ public class LoadDataTask implements Callable<Boolean> {
     }
 
     /**
-     * Converts the current row from the source ResultSet to the StructValue
-     * representation.
+     * Reads the current source row column by column and writes the synthetic key column when configured.
      *
-     * @param type StructValue type definition
-     * @param rs Input result set
-     * @return StructValue with the converted copies of fields
+     * @param rs Source result set
+     * @param type Target struct type
+     * @param columns Column index mappings
+     * @param writer Destination for the converted values
+     * @param synthKey Row synthetic key, or null when unused
      * @throws Exception
      */
-    private StructValue read(ResultSet rs, StructType type, ColumnIndex[] columns, SynthKey synthKey) throws Exception {
-        Value<?>[] values = new Value[type.getMembersCount()];
-        for (int idx = 0; idx < values.length; idx += 1) {
-            values[idx] = VoidValue.of();
-        }
-        RowValueWriter writer = new RowValueWriter(type, values);
-
+    private void readRow(ResultSet rs, StructType type, ColumnIndex[] columns,
+            ValueWriter writer, SynthKey synthKey) throws Exception {
         for (int rsIdx = 1; rsIdx <= columns.length; rsIdx += 1) {
             ColumnIndex column = columns[rsIdx - 1];
             if (column == null) {
@@ -439,9 +489,8 @@ public class LoadDataTask implements Callable<Boolean> {
         }
 
         if (synthKey != null) {
-            values[tab.getTarget().getSynthKeyPos()] = synthKey.build();
+            writer.writeText(tab.getTarget().getSynthKeyPos(), synthKey.buildString());
         }
-        return type.newValueUnsafe(values);
     }
 
     private static class ColumnIndex {

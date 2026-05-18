@@ -5,6 +5,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import tech.ydb.table.values.DecimalType;
+import tech.ydb.table.values.StructType;
+import tech.ydb.table.values.Type;
+
 /**
  * Receives column values produced by ValueReader during row construction.
  */
@@ -47,4 +51,18 @@ public interface ValueWriter {
     void writeTimestamp64(int idx, Instant v);
 
     void writeDecimal(int idx, BigDecimal v);
+
+    static DecimalType[] precomputeDecimalTypes(StructType type) {
+        DecimalType[] result = new DecimalType[type.getMembersCount()];
+        for (int i = 0; i < result.length; i++) {
+            Type t = type.getMemberType(i);
+            if (t.getKind() == Type.Kind.OPTIONAL) {
+                t = t.unwrapOptional();
+            }
+            if (t.getKind() == Type.Kind.DECIMAL) {
+                result[i] = (DecimalType) t;
+            }
+        }
+        return result;
+    }
 }

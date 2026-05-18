@@ -9,7 +9,9 @@ import java.util.List;
 import com.google.protobuf.ByteString;
 
 import tech.ydb.table.SessionRetryContext;
+import tech.ydb.table.query.BulkUpsertData;
 import tech.ydb.table.values.ListType;
+import tech.ydb.table.values.ListValue;
 import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.PrimitiveValue;
 import tech.ydb.table.values.StructType;
@@ -138,7 +140,9 @@ public class BlobReader extends ValueReader {
 
             // Send the values list to YDB if it's time
             if (currentBulk.size() >= maxBlobRecords) {
-                upsertOp.upload(BLOB_LIST.newValue(currentBulk));
+                final ListValue lv = BLOB_LIST.newValue(currentBulk);
+                upsertOp.upload(new BulkUpsertData(lv), currentBulk.size(),
+                        () -> RowValueWriter.logValues(lv));
                 currentBulk.clear();
             }
         }
@@ -147,7 +151,9 @@ public class BlobReader extends ValueReader {
     @Override
     public void flush() {
         if (!currentBulk.isEmpty()) {
-            upsertOp.upload(BLOB_LIST.newValue(currentBulk));
+            final ListValue lv = BLOB_LIST.newValue(currentBulk);
+            upsertOp.upload(new BulkUpsertData(lv), currentBulk.size(),
+                    () -> RowValueWriter.logValues(lv));
             currentBulk.clear();
         }
     }
