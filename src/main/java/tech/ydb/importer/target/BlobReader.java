@@ -108,6 +108,7 @@ public class BlobReader extends ValueReader {
                 ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
                 buffer.putLong(id);
                 synthKey.update(buffer);
+                synthKey.updateSeparator();
             }
             return ydbId;
         }
