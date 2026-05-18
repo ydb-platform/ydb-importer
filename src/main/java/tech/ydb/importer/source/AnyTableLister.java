@@ -120,7 +120,12 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             }
         }
         List<TaskInfo> tasks;
-        if (tableMaps.getConfig().getWorkers().isUsePartitions()) {
+        TableRef ref = td.getTableRef();
+        if (ref != null && ref.hasSplit()) {
+            tasks = RangeSplitter.generate(td, tm, this);
+            LOG.info("Table {}.{}: split by '{}' into {} splits",
+                    td.getSchema(), td.getTable(), ref.getSplitBy(), tasks.size());
+        } else if (tableMaps.getConfig().getWorkers().isUsePartitions()) {
             tasks = listPartitions(con, td, tm);
             if (!tasks.isEmpty()) {
                 LOG.info("Table {}.{}: found {} partitions",
@@ -193,6 +198,21 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         sql.append(".");
         sql.append(safeId(table));
         return sql.toString();
+    }
+
+    /** Formats a value as a SQL literal of the given column type. */
+    protected String formatLiteral(SplitColumnType type, String value) {
+        switch (type) {
+            case INTEGER:
+            case DECIMAL:
+            case DOUBLE:
+                return value;
+            case DATE:
+            case TIMESTAMP:
+                return "'" + value + "'";
+            default:
+                throw new IllegalStateException();
+        }
     }
 
     private void declaredPrimaryKey(TableDecision td, TableMetadata tm) {
