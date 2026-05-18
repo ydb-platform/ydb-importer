@@ -37,14 +37,26 @@ public final class YdbImporterRunner {
         private LocalYdbTestContainer ydbContainer;
         private String schema;
         private String table;
-        private final List<String[]> additionalTables = new ArrayList<>();
+        private final List<AdditionalTable> additionalTables = new ArrayList<>();
         private String targetPrefix = DEFAULT_TARGET_PREFIX;
         private Consumer<TableOptions> optionsCustomizer = opts -> { };
+        private Consumer<TableRef> tableCustomizer = ref -> { };
         private int maxBatchRows = 1000;
         private int poolSize = 2;
         private int fetchSize = 10_000;
         private boolean usePartitions = true;
         private String queryText;
+
+        private static final class AdditionalTable {
+            final String schema;
+            final String table;
+            final Consumer<TableRef> customizer;
+            AdditionalTable(String schema, String table, Consumer<TableRef> customizer) {
+                this.schema = schema;
+                this.table = table;
+                this.customizer = customizer;
+            }
+        }
 
         private Builder() {
         }
@@ -67,8 +79,18 @@ public final class YdbImporterRunner {
         }
 
         public Builder addTable(String schemaName, String tableName) {
-            this.additionalTables.add(
-                    new String[] {schemaName, tableName});
+            return addTable(schemaName, tableName, ref -> { });
+        }
+
+        public Builder addTable(String schemaName, String tableName,
+                Consumer<TableRef> customizer) {
+            this.additionalTables.add(new AdditionalTable(schemaName, tableName,
+                    customizer == null ? ref -> { } : customizer));
+            return this;
+        }
+
+        public Builder customizeTable(Consumer<TableRef> customizer) {
+            this.tableCustomizer = customizer == null ? ref -> { } : customizer;
             return this;
         }
 
@@ -160,13 +182,15 @@ public final class YdbImporterRunner {
             if (queryText != null) {
                 ref.setQueryText(queryText);
             }
+            tableCustomizer.accept(ref);
             config.getTableRefs().add(ref);
 
-            for (String[] extra : additionalTables) {
+            for (AdditionalTable extra : additionalTables) {
                 TableRef extraRef = new TableRef();
                 extraRef.setOptions(options);
-                extraRef.setSchema(extra[0]);
-                extraRef.setTable(extra[1]);
+                extraRef.setSchema(extra.schema);
+                extraRef.setTable(extra.table);
+                extra.customizer.accept(extraRef);
                 config.getTableRefs().add(extraRef);
             }
 

@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.ImporterConfig;
 import tech.ydb.importer.config.TableOptions;
+import tech.ydb.importer.config.TableRef;
 import tech.ydb.importer.integration.common.YdbImporterRunner;
 import tech.ydb.importer.integration.common.YdbRowMatcher;
 import tech.ydb.importer.integration.common.YdbSchemaReader;
@@ -73,6 +74,10 @@ public final class TableTestBuilder {
     private Consumer<TableOptions> optionsCustomizer = opts -> { };
     private Optional<Integer> fetchSize = Optional.empty();
     private String queryText;
+    private String splitBy;
+    private String splitFrom;
+    private String splitTo;
+    private int splitCount;
 
     TableTestBuilder(AbstractYdbImporterTableTest test, String schema,
                      String table) {
@@ -137,6 +142,35 @@ public final class TableTestBuilder {
     public TableTestBuilder queryText(String sql) {
         this.queryText = sql;
         return this;
+    }
+
+    public TableTestBuilder splitBy(String column) {
+        this.splitBy = column;
+        return this;
+    }
+
+    public TableTestBuilder splitFrom(String value) {
+        this.splitFrom = value;
+        return this;
+    }
+
+    public TableTestBuilder splitTo(String value) {
+        this.splitTo = value;
+        return this;
+    }
+
+    public TableTestBuilder splitCount(int count) {
+        this.splitCount = count;
+        return this;
+    }
+
+    void applySplitTo(TableRef ref) {
+        if (splitBy != null) {
+            ref.setSplitBy(splitBy);
+            ref.setSplitFrom(splitFrom);
+            ref.setSplitTo(splitTo);
+            ref.setSplitCount(splitCount);
+        }
     }
 
     public TableTestBuilder expectPrimaryKey(String... columns) {
@@ -291,6 +325,7 @@ public final class TableTestBuilder {
                 .ydb(test.ydbContainer())
                 .table(schema, table)
                 .customizeOptions(optionsCustomizer)
+                .customizeTable(this::applySplitTo)
                 .queryText(queryText);
         if (fetchSize.isPresent()) {
             builder.fetchSize(fetchSize.get());
