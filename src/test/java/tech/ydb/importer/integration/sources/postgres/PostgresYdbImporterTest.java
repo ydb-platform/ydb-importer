@@ -35,16 +35,22 @@ public class PostgresYdbImporterTest {
         }
     }
 
-    @Nested
-    class TypeTests extends AbstractPostgresCompatibleTypeCases {
+    abstract class PostgresTypeCases extends AbstractPostgresCompatibleTypeCases {
         @Override
         public SourceDb sourceDb() {
             return new SourceDb(pgContainer, SourceType.POSTGRESQL, "public");
         }
     }
 
-    @Nested
-    class TableTests extends AbstractPostgresCompatibleTableCases {
+    @Nested class TypeTestsRow extends PostgresTypeCases {
+        @Override public boolean useArrow() { return false; }
+    }
+
+    @Nested class TypeTestsArrow extends PostgresTypeCases {
+        @Override public boolean useArrow() { return true; }
+    }
+
+    abstract class PostgresTableCases extends AbstractPostgresCompatibleTableCases {
         @Override
         public SourceDb sourceDb() {
             return new SourceDb(pgContainer, SourceType.POSTGRESQL, "public");
@@ -57,5 +63,13 @@ public class PostgresYdbImporterTest {
         public SourceDb sourceDb() {
             return new SourceDb(pgContainer, SourceType.POSTGRESQL, "public");
         }
+    }
+
+    @Nested class TableTestsRow extends PostgresTableCases {
+        @Override public boolean useArrow() { return false; }
+    }
+
+    @Nested class TableTestsArrow extends PostgresTableCases {
+        @Override public boolean useArrow() { return true; }
     }
 }

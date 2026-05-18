@@ -368,6 +368,7 @@ public final class TableTestBuilder {
                 .table(schema, table)
                 .customizeOptions(optionsCustomizer)
                 .customizeTable(this::applyConfigTo)
+                .useArrow(test.useArrow())
                 .queryText(queryText);
         if (fetchSize.isPresent()) {
             builder.fetchSize(fetchSize.get());

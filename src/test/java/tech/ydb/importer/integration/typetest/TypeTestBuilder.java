@@ -191,6 +191,7 @@ public final class TypeTestBuilder {
                 .ydb(test.ydbContainer())
                 .table(test.schemaName(), tableName)
                 .customizeOptions(optionsCustomizer)
+                .useArrow(test.useArrow())
                 .run();
     }
 

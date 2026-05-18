@@ -36,16 +36,22 @@ public class MySqlYdbImporterTest {
         }
     }
 
-    @Nested
-    class TypeTests extends AbstractMySqlCompatibleTypeCases {
+    abstract class MySqlTypeCases extends AbstractMySqlCompatibleTypeCases {
         @Override
         public SourceDb sourceDb() {
             return new SourceDb(mysqlContainer, SourceType.MYSQL, DB_NAME);
         }
     }
 
-    @Nested
-    class TableTests extends AbstractMySqlCompatibleTableCases {
+    @Nested class TypeTestsRow extends MySqlTypeCases {
+        @Override public boolean useArrow() { return false; }
+    }
+
+    @Nested class TypeTestsArrow extends MySqlTypeCases {
+        @Override public boolean useArrow() { return true; }
+    }
+
+    abstract class MySqlTableCases extends AbstractMySqlCompatibleTableCases {
         @Override
         public SourceDb sourceDb() {
             return new SourceDb(mysqlContainer, SourceType.MYSQL, DB_NAME);
@@ -58,5 +64,13 @@ public class MySqlYdbImporterTest {
         public SourceDb sourceDb() {
             return new SourceDb(mysqlContainer, SourceType.MYSQL, DB_NAME);
         }
+    }
+
+    @Nested class TableTestsRow extends MySqlTableCases {
+        @Override public boolean useArrow() { return false; }
+    }
+
+    @Nested class TableTestsArrow extends MySqlTableCases {
+        @Override public boolean useArrow() { return true; }
     }
 }

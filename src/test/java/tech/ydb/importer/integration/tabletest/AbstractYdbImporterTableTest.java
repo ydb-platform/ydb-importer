@@ -61,7 +61,8 @@ public abstract class AbstractYdbImporterTableTest extends AbstractYdbImporterIn
                     .source(sourceContainer(), sourceType())
                     .ydb(ydbContainer())
                     .table(primary.schema, primary.table)
-                    .customizeTable(primary::applyConfigTo);
+                    .customizeTable(primary::applyConfigTo)
+                    .useArrow(useArrow());
             for (int i = 1; i < tables.size(); i++) {
                 TableTestBuilder extra = tables.get(i);
                 builder.addTable(extra.schema, extra.table, extra::applyConfigTo);

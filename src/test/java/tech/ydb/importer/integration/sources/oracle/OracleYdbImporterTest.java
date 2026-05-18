@@ -228,7 +228,12 @@ public class OracleYdbImporterTest {
         }
     }
 
-    @Nested class TypeTests extends OracleTypeCases {
+    @Nested class TypeTestsRow extends OracleTypeCases {
+        @Override public boolean useArrow() { return false; }
+    }
+
+    @Nested class TypeTestsArrow extends OracleTypeCases {
+        @Override public boolean useArrow() { return true; }
     }
 
     abstract class OracleTableCases extends AbstractYdbImporterTableTest {
@@ -595,7 +600,12 @@ public class OracleYdbImporterTest {
 
     }
 
-    @Nested class TableTests extends OracleTableCases {
+    @Nested class TableTestsRow extends OracleTableCases {
+        @Override public boolean useArrow() { return false; }
+    }
+
+    @Nested class TableTestsArrow extends OracleTableCases {
+        @Override public boolean useArrow() { return true; }
     }
 
     @Nested class PartitioningTests extends AbstractOraclePartitioningTests {
