@@ -115,8 +115,36 @@ public final class YdbSchemaReader implements AutoCloseable {
     /** Reads BLOB bytes for a row from the aux table */
     public byte[] readBlobBytes(String mainPath, String blobColumn,
                                 String pkColumn, Object pkValue) {
+        List<Object> chunks = readAuxChunks(mainPath, blobColumn, pkColumn, pkValue);
+        if (chunks == null) {
+            return null;
+        }
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        for (Object v : chunks) {
+            byte[] bytes = (byte[]) v;
+            out.write(bytes, 0, bytes.length);
+        }
+        return out.toByteArray();
+    }
+
+    /** Reads CLOB text for a row from the aux table */
+    public String readClobText(String mainPath, String clobColumn,
+                                String pkColumn, Object pkValue) {
+        List<Object> chunks = readAuxChunks(mainPath, clobColumn, pkColumn, pkValue);
+        if (chunks == null) {
+            return null;
+        }
+        StringBuilder out = new StringBuilder();
+        for (Object v : chunks) {
+            out.append((String) v);
+        }
+        return out.toString();
+    }
+
+    private List<Object> readAuxChunks(String mainPath, String column,
+                                       String pkColumn, Object pkValue) {
         String mainFull = database + "/" + mainPath;
-        String idYql = "SELECT " + blobColumn + " FROM `" + mainFull
+        String idYql = "SELECT " + column + " FROM `" + mainFull
                 + "` WHERE " + pkColumn + " = " + ydbLiteral(pkValue) + ";";
         ResultSetReader rs = executeDataQuery(idYql);
         if (!rs.next()) {
@@ -127,19 +155,18 @@ public final class YdbSchemaReader implements AutoCloseable {
             return null;
         }
         long id = ((Number) idValue).longValue();
-        String auxFull = database + "/" + mainPath + "_" + blobColumn;
+        String auxFull = database + "/" + mainPath + "_" + column;
         ResultSetReader chunks = executeDataQuery(
                 "SELECT val FROM `" + auxFull + "` WHERE id = " + id
                 + " ORDER BY pos;");
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        List<Object> result = new ArrayList<>();
         while (chunks.next()) {
             Object v = readValue(chunks.getColumn(0), chunks.getColumnType(0));
             if (v != null) {
-                byte[] bytes = (byte[]) v;
-                out.write(bytes, 0, bytes.length);
+                result.add(v);
             }
         }
-        return out.toByteArray();
+        return result;
     }
 
     private static String ydbLiteral(Object v) {

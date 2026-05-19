@@ -425,4 +425,37 @@ public abstract class AbstractPostgresCompatibleTableCases
                         .expectRowCount(3))
                 .run();
     }
+
+    @Test
+    public void clobContentImport() throws Exception {
+        String s = schemaName();
+        String bigText = repeat("Y", 524288);
+
+        tableTest(s, "clob_docs")
+                .setupSql(
+                    "CREATE TABLE " + s + ".clob_docs ("
+                    + "  id    INTEGER PRIMARY KEY,"
+                    + "  short TEXT,"
+                    + "  large TEXT"
+                    + ")")
+                .insertRow("INSERT INTO " + s + ".clob_docs VALUES (?, ?, ?)",
+                        1, "YDB", bigText)
+                .insertRow("INSERT INTO " + s + ".clob_docs VALUES (?, ?, ?)",
+                        2, null, null)
+                .insertRow("INSERT INTO " + s + ".clob_docs VALUES (?, ?, ?)",
+                        3, "", "")
+                .cleanupSql("DROP TABLE IF EXISTS " + s + ".clob_docs CASCADE")
+                .clobColumns("short", "large")
+                .expectPrimaryKey("id")
+                .expectRowCount(3)
+                .expectClobColumn("short")
+                .expectClobColumn("large")
+                .expectClobContent("short", "id", 1, "YDB")
+                .expectClobContent("large", "id", 1, bigText)
+                .expectClobContent("short", "id", 2, null)
+                .expectClobContent("large", "id", 2, null)
+                .expectClobContent("short", "id", 3, "")
+                .expectClobContent("large", "id", 3, "")
+                .run();
+    }
 }

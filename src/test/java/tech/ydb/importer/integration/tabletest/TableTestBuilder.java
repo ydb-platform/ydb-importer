@@ -56,6 +56,7 @@ public final class TableTestBuilder {
     private final Map<String, Type> expectedColumnTypes = new HashMap<>();
     private final List<Object[]> expectedRows = new ArrayList<>();
     private final List<String> expectedBlobColumns = new ArrayList<>();
+    private final List<String> expectedClobColumns = new ArrayList<>();
     private final List<BlobCheck> blobChecks = new ArrayList<>();
     private final List<SetupAction> rowInserts = new ArrayList<>();
 
@@ -83,6 +84,7 @@ public final class TableTestBuilder {
     private String ydbPartitionTo;
     private Boolean useSourcePartitions;
     private Optional<Integer> expectedPartitionCount = Optional.empty();
+    private final List<String> clobColumns = new ArrayList<>();
 
     TableTestBuilder(AbstractYdbImporterTableTest test, String schema,
                      String table) {
@@ -189,6 +191,11 @@ public final class TableTestBuilder {
         return this;
     }
 
+    public TableTestBuilder clobColumns(String... names) {
+        Collections.addAll(this.clobColumns, names);
+        return this;
+    }
+
     void applyConfigTo(TableRef ref) {
         if (splitBy != null) {
             ref.setSplitBy(splitBy);
@@ -208,6 +215,7 @@ public final class TableTestBuilder {
         if (useSourcePartitions != null) {
             ref.setUseSourcePartitions(useSourcePartitions);
         }
+        ref.getClobColumns().addAll(clobColumns);
     }
 
     public TableTestBuilder expectPrimaryKey(String... columns) {
@@ -259,6 +267,21 @@ public final class TableTestBuilder {
             byte[] actual = ydb.readBlobBytes(targetPath, column, pkColumn, pkValue);
             assertArrayEquals(bytes, actual,
                     "BLOB " + column + " for " + pkColumn + "=" + pkValue);
+        });
+        return this;
+    }
+
+    public TableTestBuilder expectClobColumn(String columnName) {
+        this.expectedClobColumns.add(columnName);
+        return this;
+    }
+
+    public TableTestBuilder expectClobContent(String column, String pkColumn,
+                                            Object pkValue, String text) {
+        blobChecks.add((ydb, targetPath) -> {
+            String actual = ydb.readClobText(targetPath, column, pkColumn, pkValue);
+            assertEquals(text, actual,
+                    "CLOB " + column + " for " + pkColumn + "=" + pkValue);
         });
         return this;
     }
@@ -468,6 +491,14 @@ public final class TableTestBuilder {
                     + " should have rows");
         }
 
+        for (String clobCol : expectedClobColumns) {
+            String auxPath = targetPath + "_" + clobCol;
+            ydb.describe(auxPath);
+            assertTrue(ydb.countRows(auxPath) > 0,
+                    "Clob aux table " + auxPath
+                    + " should have rows");
+        }
+
         for (BlobCheck check : blobChecks) {
             check.verify(ydb, targetPath);
         }
@@ -476,6 +507,9 @@ public final class TableTestBuilder {
     void dropBlobTables(YdbSchemaReader ydb, String targetPath) {
         for (String blobCol : expectedBlobColumns) {
             ydb.dropTable(targetPath + "_" + blobCol);
+        }
+        for (String clobCol : expectedClobColumns) {
+            ydb.dropTable(targetPath + "_" + clobCol);
         }
     }
 }
