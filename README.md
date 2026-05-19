@@ -261,10 +261,10 @@ Below is the definition of the configuration file structure:
         <!-- Splits the table into split-count value ranges along the
              split-by column for parallel reads. All four elements are
              required, split-count must be at least 2. Column types:
-             integers (Tinyint/Smallint/Integer/Bigint), Decimal/Numeric,
-             Real/Float/Double, Date, Timestamp. Bounds are written as
-             yyyy-MM-dd for Date or yyyy-MM-dd [HH:mm:ss[.fraction]] for
-             Timestamp. Values below split-from or NULL go to the first
+             integers (TINYINT/SMALLINT/INTEGER/BIGINT), DECIMAL/NUMERIC,
+             REAL/FLOAT/DOUBLE, DATE, TIMESTAMP. Bounds are written as
+             yyyy-MM-dd for DATE or yyyy-MM-dd [HH:mm:ss[.fraction]] for
+             TIMESTAMP. Values below split-from or NULL go to the first
              split, values above split-to go to the last.
          -->
         <split-by>created_at</split-by>

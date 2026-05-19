@@ -252,10 +252,10 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
         <!-- Делит таблицу на split-count интервалов по колонке split-by,
              чтобы читать параллельно. Все четыре элемента обязательны,
              split-count не меньше 2. Допустимые типы колонки: целочисленные
-             (Tinyint/Smallint/Integer/Bigint), Decimal/Numeric,
-             Real/Float/Double, Date, Timestamp. Границы пишутся как
-             yyyy-MM-dd для Date или yyyy-MM-dd [HH:mm:ss[.fraction]] для
-             Timestamp. Всё что меньше split-from или равно NULL уходит
+             (TINYINT/SMALLINT/INTEGER/BIGINT), DECIMAL/NUMERIC,
+             REAL/FLOAT/DOUBLE, DATE, TIMESTAMP. Границы пишутся как
+             ГГГГ-ММ-ДД для DATE или ГГГГ-ММ-ДД [ЧЧ:ММ:СС[.доли]] для
+             TIMESTAMP. Всё что меньше split-from или равно NULL уходит
              в первый split, всё что больше split-to идет в последний.
          -->
         <split-by>created_at</split-by>
