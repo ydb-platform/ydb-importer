@@ -248,7 +248,7 @@ public class YdbImporter {
         try (ProgressCounter progress = new ProgressCounter()) {
             progress.start();
 
-            WriterPool writerPool = new WriterPool(writerPoolSize, bufferCount);
+            WriterPool writerPool = new WriterPool(writerPoolSize, bufferCount, progress);
             try {
                 final List<Future<Boolean>> results = new ArrayList<>();
                 submitLoadTasks(es, tables, progress, writerPool, results);

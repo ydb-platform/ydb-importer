@@ -189,6 +189,7 @@ public class LoadDataTask implements Callable<Boolean> {
         final SynthKey synchKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
 
         long copied = 0;
+        long readStart = System.nanoTime();
 
         while (rs.next()) {
             rowIndex++;
@@ -203,13 +204,16 @@ public class LoadDataTask implements Callable<Boolean> {
             }
             batch.add(read(rs, paramType, columns, synchKey));
             if (batch.size() >= maxBatchRows) {
+                progress.countReadBatch(System.nanoTime() - readStart);
                 checkCancelled();
                 writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
                 batch.clear();
+                readStart = System.nanoTime();
             }
         }
 
         if (!batch.isEmpty()) {
+            progress.countReadBatch(System.nanoTime() - readStart);
             checkCancelled();
             writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
             batch.clear();
