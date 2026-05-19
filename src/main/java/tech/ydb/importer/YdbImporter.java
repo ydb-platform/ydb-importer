@@ -189,6 +189,9 @@ public class YdbImporter {
                     for (TargetTable blobTable : td.getBlobTargets().values()) {
                         YdbTableBuilder.appendTo(writer, blobTable);
                     }
+                    for (TargetTable clobTable : td.getClobTargets().values()) {
+                        YdbTableBuilder.appendTo(writer, clobTable);
+                    }
                     YdbTableBuilder.appendTo(writer, td.getTarget());
                 }
             }
@@ -208,6 +211,9 @@ public class YdbImporter {
                 continue;
             }
             for (TargetTable yt : td.getBlobTargets().values()) {
+                results.add(es.submit(new CreateTableTask(this, yt)));
+            }
+            for (TargetTable yt : td.getClobTargets().values()) {
                 results.add(es.submit(new CreateTableTask(this, yt)));
             }
             results.add(es.submit(new CreateTableTask(this, td.getTarget())));

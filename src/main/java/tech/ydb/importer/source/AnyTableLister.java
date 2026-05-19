@@ -108,6 +108,19 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         return retval;
     }
 
+    private static void validateClobColumns(TableDecision td, TableMetadata tm) {
+        TableRef ref = td.getTableRef();
+        if (ref == null || ref.getClobColumns().isEmpty()) {
+            return;
+        }
+        for (String name : ref.getClobColumns()) {
+            if (tm.findColumn(name) == null) {
+                throw new IllegalArgumentException("Missing clob-column '" + name + "' in referenced table "
+                        + td.getSchema() + "." + td.getTable());
+            }
+        }
+    }
+
     public TableMetadata readMetadata(Connection con, TableDecision td) throws SQLException {
         final TableMetadata tm = new TableMetadata();
         if (td.getTableRef() == null) {
@@ -131,6 +144,7 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 }
             }
         }
+        validateClobColumns(td, tm);
         new AutoBoundsResolver(this).resolve(con, td, tm);
         List<TaskInfo> tasks;
         String readPlan;

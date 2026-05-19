@@ -31,16 +31,38 @@ public class YdbTableBuilder {
     }
 
     public void build() {
+        tab.getBlobTargets().clear();
+        tab.getClobTargets().clear();
+        for (ColumnInfo ci : tab.getMetadata().getColumns()) {
+            if (ci.isBlob()) {
+                tab.getBlobTargets().put(ci.getName(),
+                        buildAuxTable(ci, "String", BlobReader.BLOB_ROW));
+            } else if (ci.isClob()) {
+                tab.getClobTargets().put(ci.getName(),
+                        buildAuxTable(ci, "Text", ClobReader.CLOB_ROW));
+            } else if (isClobOverride(ci.getName())) {
+                validateClobOverride(ci);
+                ci.setSqlType(java.sql.Types.CLOB);
+                tab.getClobTargets().put(ci.getName(),
+                        buildAuxTable(ci, "Text", ClobReader.CLOB_ROW));
+            }
+        }
+
         TargetTable tt = buildMainTable();
         if (tt != null) {
             tab.setTarget(tt);
-            tab.getBlobTargets().clear();
-            for (ColumnInfo ci : tab.getMetadata().getColumns()) {
-                if (ci.isBlob()) {
-                    tab.getBlobTargets().put(ci.getName(),
-                            buildBlobTable(tab.getTarget(), ci));
-                }
-            }
+        }
+    }
+
+    private boolean isClobOverride(String columnName) {
+        return tab.getTableRef() != null && tab.getTableRef().isClobColumn(columnName);
+    }
+
+    private void validateClobOverride(ColumnInfo ci) {
+        Type type = YdbTypeMapper.convertType(ci, tab.getOptions());
+        if (!PrimitiveType.Text.equals(type)) {
+            throw new RuntimeException("clob-column " + ci.getName()
+                    + " in table " + makeTableName() + " maps to " + type + ", not Text");
         }
     }
 
@@ -52,7 +74,7 @@ public class YdbTableBuilder {
         sb.append("`").append(fullName).append("`");
         sb.append(" (").append(EOL);
         for (ColumnInfo ci : tab.getMetadata().getColumns()) {
-            final Type type;
+            Type type;
             try {
                 type = YdbTypeMapper.convertType(ci, tab.getOptions());
             } catch (Exception ex) {
@@ -122,15 +144,15 @@ public class YdbTableBuilder {
         sb.append(", AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9999").append(EOL);
     }
 
-    private TargetTable buildBlobTable(TargetTable main, ColumnInfo ci) {
+    private TargetTable buildAuxTable(ColumnInfo ci, String valType, StructType rowType) {
         final StringBuilder sb = new StringBuilder();
         final String fullName = makeBlobName(ci.getDestinationName());
         sb.append("CREATE TABLE `").append(fullName).append("` (").append(EOL);
         sb.append("  `id` Int64,").append(EOL);
         sb.append("  `pos` Int32,").append(EOL);
-        sb.append("  `val` String,").append(EOL);
+        sb.append("  `val` ").append(valType).append(",").append(EOL);
         sb.append("  PRIMARY KEY(`id`, `pos`));").append(EOL);
-        return new TargetTable(tab, fullName, sb.toString(), BlobReader.BLOB_ROW);
+        return new TargetTable(tab, fullName, sb.toString(), rowType);
     }
 
     private String makeTableName() {

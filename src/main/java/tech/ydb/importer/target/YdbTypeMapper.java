@@ -75,7 +75,6 @@ public final class YdbTypeMapper {
             case java.sql.Types.NCHAR:
             case java.sql.Types.LONGNVARCHAR:
             case java.sql.Types.LONGVARCHAR:
-            case java.sql.Types.CLOB: // MAYBE: store in a separate table, like BLOBS
                 return PrimitiveType.Text;
             case java.sql.Types.BINARY:
             case java.sql.Types.VARBINARY:
@@ -83,7 +82,10 @@ public final class YdbTypeMapper {
             case java.sql.Types.BLOB:
             case java.sql.Types.LONGVARBINARY:
             case java.sql.Types.SQLXML:
-                return PrimitiveType.Int64; // Id of record sequence in the separate table.
+                return PrimitiveType.Int64; // Id of record sequence in the separate BLOB table.
+            case java.sql.Types.CLOB:
+            case java.sql.Types.NCLOB:
+                return PrimitiveType.Int64; // Id of record sequence in the separate CLOB table.
             case java.sql.Types.DATE:
                 switch (options.getDateConv()) {
                     case DATE_NEW:

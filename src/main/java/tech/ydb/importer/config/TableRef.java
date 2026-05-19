@@ -19,6 +19,7 @@ public class TableRef extends JdomHelper implements TableIdentity {
     private String tableName;
     private String queryText;
     private final List<String> keyNames = new ArrayList<>();
+    private final List<String> clobColumns = new ArrayList<>();
     public static final int AUTO = -1;
     public static final int NONE = -2;
     public static final String SPLIT_BY_AUTO = "auto";
@@ -45,6 +46,9 @@ public class TableRef extends JdomHelper implements TableIdentity {
         this.queryText = getText(getOneChild(c, "query-text"), true);
         for (Element elKey : getChildren(c, "key-column")) {
             this.keyNames.add(getText(elKey));
+        }
+        for (Element elClob : getChildren(c, "clob-column")) {
+            this.clobColumns.add(getText(elClob));
         }
         this.splitBy = getText(c, "split-by", null);
         this.splitFrom = parseAutoableText(c, "split-from");
@@ -171,6 +175,14 @@ public class TableRef extends JdomHelper implements TableIdentity {
 
     public List<String> getKeyNames() {
         return keyNames;
+    }
+
+    public List<String> getClobColumns() {
+        return clobColumns;
+    }
+
+    public boolean isClobColumn(String name) {
+        return clobColumns.contains(name);
     }
 
     public boolean hasSplit() {

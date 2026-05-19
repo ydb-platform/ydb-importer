@@ -78,7 +78,8 @@ public class LoadDataTask implements Callable<Boolean> {
         this.maxBlobRows = owner.getConfig().getTarget().getMaxBlobRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
         this.retryCount = (tab.getMetadata().getTasks().size() > 1
-                        && tab.getBlobTargets().isEmpty())
+                        && tab.getBlobTargets().isEmpty()
+                        && tab.getClobTargets().isEmpty())
                 ? owner.getConfig().getSource().getRetryCount()
                 : 0;
         this.taskIdx = task.getIndex();
@@ -191,6 +192,7 @@ public class LoadDataTask implements Callable<Boolean> {
         final ResultSetMetaData rsmd = rs.getMetaData();
         final ColumnIndex[] columns = buildMainIndex(paramType, rsmd);
         final List<BlobReader> blobReaders = collectBlobReaders(columns);
+        final List<ClobReader> clobReaders = collectClobReaders(columns);
         final SynthKey synthKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
 
         PartitionBounds pb = partitionBuffers ? resolvePartitionBounds(rsmd) : null;
@@ -200,8 +202,8 @@ public class LoadDataTask implements Callable<Boolean> {
         }
 
         long copied = useArrow
-                ? copyDataArrow(rs, paramType, columns, blobReaders, synthKey, pb)
-                : copyDataRows(rs, paramType, columns, blobReaders, synthKey, pb);
+                ? copyDataArrow(rs, paramType, columns, blobReaders, clobReaders, synthKey, pb)
+                : copyDataRows(rs, paramType, columns, blobReaders, clobReaders, synthKey, pb);
 
         for (ColumnIndex ci : columns) {
             if (ci != null) {
@@ -214,7 +216,8 @@ public class LoadDataTask implements Callable<Boolean> {
 
     /** Row batching, one buffer per partition when bounds are known, else a single buffer. */
     private long copyDataRows(ResultSet rs, StructType paramType, ColumnIndex[] columns,
-            List<BlobReader> blobReaders, SynthKey synthKey, PartitionBounds pb) throws Exception {
+            List<BlobReader> blobReaders, List<ClobReader> clobReaders, SynthKey synthKey,
+            PartitionBounds pb) throws Exception {
         final ListType paramListType = ListType.of(paramType);
         final int partCount = (pb == null) ? 1 : pb.cuts.length + 1;
         final List<List<Value<?>>> buffers = new ArrayList<>(partCount);
@@ -229,7 +232,7 @@ public class LoadDataTask implements Callable<Boolean> {
             rowIndex++;
             copied++;
             progress.countReadRows(1);
-            setupBlobIds(blobReaders);
+            setupBlobIds(blobReaders, clobReaders);
 
             int part = (pb == null) ? 0 : partitionOf(rs.getLong(pb.pkIndex), pb.cuts);
             Value<?>[] values = new Value[paramType.getMembersCount()];
@@ -265,7 +268,8 @@ public class LoadDataTask implements Callable<Boolean> {
 
     /** Arrow batching, one batch per partition when bounds are known, else a single batch. */
     private long copyDataArrow(ResultSet rs, StructType paramType, ColumnIndex[] columns,
-            List<BlobReader> blobReaders, SynthKey synthKey, PartitionBounds pb) throws Exception {
+            List<BlobReader> blobReaders, List<ClobReader> clobReaders, SynthKey synthKey,
+            PartitionBounds pb) throws Exception {
         final int partCount = (pb == null) ? 1 : pb.cuts.length + 1;
         final ArrowBatchBuilder[] builders = new ArrowBatchBuilder[partCount];
         final ApacheArrowWriter.Batch[] batches = new ApacheArrowWriter.Batch[partCount];
@@ -281,7 +285,7 @@ public class LoadDataTask implements Callable<Boolean> {
                 rowIndex++;
                 copied++;
                 progress.countReadRows(1);
-                setupBlobIds(blobReaders);
+                setupBlobIds(blobReaders, clobReaders);
 
                 int part = (pb == null) ? 0 : partitionOf(rs.getLong(pb.pkIndex), pb.cuts);
                 if (batches[part] == null) {
@@ -321,12 +325,16 @@ public class LoadDataTask implements Callable<Boolean> {
         return copied;
     }
 
-    private void setupBlobIds(List<BlobReader> blobReaders) {
-        if (!blobReaders.isEmpty()) {
-            long blobId = BlobReader.packBlobId(taskIdx, rowIndex, taskBits);
-            for (BlobReader br : blobReaders) {
-                br.setNextBlobId(blobId);
-            }
+    private void setupBlobIds(List<BlobReader> blobReaders, List<ClobReader> clobReaders) {
+        if (blobReaders.isEmpty() && clobReaders.isEmpty()) {
+            return;
+        }
+        long blobId = BlobReader.packBlobId(taskIdx, rowIndex, taskBits);
+        for (BlobReader br : blobReaders) {
+            br.setNextBlobId(blobId);
+        }
+        for (ClobReader cr : clobReaders) {
+            cr.setNextClobId(blobId);
         }
     }
 
@@ -410,6 +418,16 @@ public class LoadDataTask implements Callable<Boolean> {
         return readers;
     }
 
+    private static List<ClobReader> collectClobReaders(ColumnIndex[] columns) {
+        List<ClobReader> readers = new ArrayList<>();
+        for (ColumnIndex ci : columns) {
+            if (ci != null && ci.getReader() instanceof ClobReader) {
+                readers.add((ClobReader) ci.getReader());
+            }
+        }
+        return readers;
+    }
+
     private ColumnIndex[] buildMainIndex(StructType paramListType, ResultSetMetaData rsmd) throws Exception {
         final Map<String, Integer> targetColumns = new HashMap<>();
         for (int i = 0; i < paramListType.getMembersCount(); ++i) {
@@ -449,6 +467,11 @@ public class LoadDataTask implements Callable<Boolean> {
                     ValueReader reader = new BlobReader(blobPath, target.getRetryCtx(), progress, maxBlobRows, isBlob);
                     index[i] = new ColumnIndex(ixTarget, reader);
                 }
+            } else if (tab.getClobTargets().containsKey(columnName)) {
+                TargetTable tt = tab.getClobTargets().get(columnName);
+                String clobPath = target.getDatabase() + "/" + tt.getFullName();
+                ValueReader reader = new ClobReader(clobPath, target.getRetryCtx(), progress, maxBlobRows);
+                index[i] = new ColumnIndex(ixTarget, reader);
             } else {
                 ValueReader reader = ValueReader.getReader(paramListType.getMemberType(ixTarget), ci.getSqlType());
                 if (reader == null) {
