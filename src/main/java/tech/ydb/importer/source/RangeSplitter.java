@@ -109,7 +109,9 @@ final class RangeSplitter {
     private static List<String> computeIntegerCuts(String lower, String upper, int count) {
         long lo = parseLong(lower, "split-from");
         long hi = parseLong(upper, "split-to");
+        requireOrdered(lo < hi, lower, upper);
         long stride = (hi - lo) / count;
+        requirePositiveStride(stride > 0, lower, upper, count);
         List<String> cuts = new ArrayList<>(count - 1);
         for (int i = 1; i < count; i++) {
             cuts.add(Long.toString(lo + stride * i));
@@ -120,8 +122,10 @@ final class RangeSplitter {
     private static List<String> computeDecimalCuts(String lower, String upper, int count) {
         BigDecimal lo = parseBigDecimal(lower, "split-from");
         BigDecimal hi = parseBigDecimal(upper, "split-to");
+        requireOrdered(lo.compareTo(hi) < 0, lower, upper);
         BigDecimal stride = hi.subtract(lo)
                 .divide(BigDecimal.valueOf(count), 18, RoundingMode.HALF_EVEN);
+        requirePositiveStride(stride.signum() > 0, lower, upper, count);
         List<String> cuts = new ArrayList<>(count - 1);
         for (int i = 1; i < count; i++) {
             cuts.add(lo.add(stride.multiply(BigDecimal.valueOf(i))).toPlainString());
@@ -132,7 +136,9 @@ final class RangeSplitter {
     private static List<String> computeDateCuts(String lower, String upper, int count) {
         LocalDate lo = parseDate(lower, "split-from");
         LocalDate hi = parseDate(upper, "split-to");
+        requireOrdered(lo.isBefore(hi), lower, upper);
         long stride = ChronoUnit.DAYS.between(lo, hi) / count;
+        requirePositiveStride(stride > 0, lower, upper, count);
         List<String> cuts = new ArrayList<>(count - 1);
         for (int i = 1; i < count; i++) {
             cuts.add(lo.plusDays(stride * i).toString());
@@ -143,12 +149,31 @@ final class RangeSplitter {
     private static List<String> computeTimestampCuts(String lower, String upper, int count) {
         LocalDateTime lo = parseTimestamp(lower, "split-from");
         LocalDateTime hi = parseTimestamp(upper, "split-to");
+        requireOrdered(lo.isBefore(hi), lower, upper);
         long stride = ChronoUnit.MICROS.between(lo, hi) / count;
+        requirePositiveStride(stride > 0, lower, upper, count);
         List<String> cuts = new ArrayList<>(count - 1);
         for (int i = 1; i < count; i++) {
             cuts.add(lo.plus(stride * i, ChronoUnit.MICROS).format(TS_FORMAT));
         }
         return cuts;
+    }
+
+    private static void requireOrdered(boolean ordered, String lower, String upper) {
+        if (!ordered) {
+            throw new IllegalArgumentException(
+                    "split-from must be less than split-to: '"
+                    + lower + "' >= '" + upper + "'");
+        }
+    }
+
+    private static void requirePositiveStride(boolean positive, String lower, String upper,
+            int count) {
+        if (!positive) {
+            throw new IllegalArgumentException(
+                    "Cannot split range '" + lower + "' to '" + upper
+                    + "' into " + count + " parts");
+        }
     }
 
     private static long parseLong(String value, String fieldName) {
