@@ -76,6 +76,14 @@ public class TableDecision implements TableIdentity {
         return tableRef;
     }
 
+    public boolean useSourcePartitions() {
+        if (tableRef != null && tableRef.getUseSourcePartitions() != null) {
+            return tableRef.getUseSourcePartitions();
+        }
+        Boolean fromOptions = (options != null) ? options.getUseSourcePartitions() : null;
+        return (fromOptions != null) ? fromOptions : true;
+    }
+
     public TableMetadata getMetadata() {
         return metadata;
     }

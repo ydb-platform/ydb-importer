@@ -125,7 +125,7 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             tasks = RangeSplitter.generate(td, tm, this);
             LOG.info("Table {}.{}: split by '{}' into {} splits",
                     td.getSchema(), td.getTable(), ref.getSplitBy(), tasks.size());
-        } else if (tableMaps.getConfig().getWorkers().isUsePartitions()) {
+        } else if (td.useSourcePartitions()) {
             tasks = listPartitions(con, td, tm);
             if (!tasks.isEmpty()) {
                 LOG.info("Table {}.{}: found {} partitions",

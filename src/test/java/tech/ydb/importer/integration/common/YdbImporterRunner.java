@@ -147,7 +147,6 @@ public final class YdbImporterRunner {
             workers.setReaderPoolSize(poolSize);
             workers.setWriterPoolSize(poolSize);
             workers.setBufferCount(poolSize);
-            workers.setUsePartitions(usePartitions);
             config.setWorkers(workers);
 
             SourceConfig src = new SourceConfig();
@@ -172,6 +171,7 @@ public final class YdbImporterRunner {
                     DEFAULT_TABLE_OPTIONS_NAME,
                     targetPrefix + ".${schema}.${table}");
             options.setBlobTemplate(targetPrefix + ".${schema}.${table}_${field}");
+            options.setUseSourcePartitions(usePartitions);
             optionsCustomizer.accept(options);
             config.getOptionsMap().put(options.getName(), options);
 

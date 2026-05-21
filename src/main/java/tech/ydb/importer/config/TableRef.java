@@ -23,6 +23,7 @@ public class TableRef extends JdomHelper implements TableIdentity {
     private String splitFrom;
     private String splitTo;
     private int splitCount;
+    private Boolean useSourcePartitions;
 
     public TableRef() {
     }
@@ -53,6 +54,15 @@ public class TableRef extends JdomHelper implements TableIdentity {
             throw raise(c, "split-by, split-from, split-to, "
                     + "split-count (>= 2) must all be specified together");
         }
+        this.useSourcePartitions = parseOptionalBoolean(c, "use-source-partitions");
+    }
+
+    static Boolean parseOptionalBoolean(Element c, String name) {
+        Element el = getOneChild(c, name);
+        if (el == null) {
+            return null;
+        }
+        return parseBoolean(el, null, getText(el));
     }
 
     public TableOptions getOptions() {
@@ -131,6 +141,14 @@ public class TableRef extends JdomHelper implements TableIdentity {
 
     public void setSplitCount(int splitCount) {
         this.splitCount = splitCount;
+    }
+
+    public Boolean getUseSourcePartitions() {
+        return useSourcePartitions;
+    }
+
+    public void setUseSourcePartitions(Boolean useSourcePartitions) {
+        this.useSourcePartitions = useSourcePartitions;
     }
 
 }

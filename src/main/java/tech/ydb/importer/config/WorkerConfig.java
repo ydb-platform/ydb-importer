@@ -13,7 +13,6 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
     private int readerPoolSize = 1;
     private int writerPoolSize = 1;
     private int bufferCount = 1;
-    private boolean usePartitions = true;
 
     public WorkerConfig() {
     }
@@ -26,11 +25,6 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
 
         Element bufEl = getOneChild(c, "buffer-count");
         this.bufferCount = (bufEl != null) ? validatedSize(getInt(bufEl)) : this.readerPoolSize;
-
-        Element usePartEl = getOneChild(c, "use-partitions");
-        if (usePartEl != null) {
-            this.usePartitions = parseBoolean(usePartEl, null, getText(usePartEl));
-        }
     }
 
     private static int validatedSize(int v) {
@@ -65,14 +59,6 @@ public class WorkerConfig extends tech.ydb.importer.config.JdomHelper {
 
     public void setBufferCount(int bufferCount) {
         this.bufferCount = bufferCount;
-    }
-
-    public boolean isUsePartitions() {
-        return usePartitions;
-    }
-
-    public void setUsePartitions(boolean usePartitions) {
-        this.usePartitions = usePartitions;
     }
 
 }

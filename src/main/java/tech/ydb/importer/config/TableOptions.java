@@ -18,6 +18,7 @@ public class TableOptions extends JdomHelper {
     private boolean allowCustomDecimal;
     private boolean skipUnknownTypes;
     private StoreType storeType;
+    private Boolean useSourcePartitions;
 
     public TableOptions(String name, String template) {
         this.name = name;
@@ -63,6 +64,7 @@ public class TableOptions extends JdomHelper {
         } catch (Exception ex) {
             throw raiseIllegal(c, "store-type", v);
         }
+        this.useSourcePartitions = TableRef.parseOptionalBoolean(c, "use-source-partitions");
     }
 
     public String getName() {
@@ -131,6 +133,14 @@ public class TableOptions extends JdomHelper {
 
     public void setStoreType(StoreType storeType) {
         this.storeType = storeType;
+    }
+
+    public Boolean getUseSourcePartitions() {
+        return useSourcePartitions;
+    }
+
+    public void setUseSourcePartitions(Boolean useSourcePartitions) {
+        this.useSourcePartitions = useSourcePartitions;
     }
 
     /**
