@@ -50,7 +50,7 @@ final class RangeSplitter {
                     + "' not found in table " + td.getSchema() + "." + td.getTable()
                     + " (if using <query>, the split-by column must be in the SELECT list)");
         }
-        SplitColumnType type = detectType(col.getSqlType());
+        SplitColumnType type = detectType(col.getSqlType(), col.getSqlScale());
         int count = ref.getSplitCount();
         List<String> cuts = computeCuts(ref.getSplitFrom(), ref.getSplitTo(), count, type);
 
@@ -69,7 +69,7 @@ final class RangeSplitter {
         return result;
     }
 
-    private static SplitColumnType detectType(int sqlType) {
+    static SplitColumnType detectType(int sqlType, int scale) {
         switch (sqlType) {
             case Types.TINYINT:
             case Types.SMALLINT:
@@ -78,7 +78,7 @@ final class RangeSplitter {
                 return SplitColumnType.INTEGER;
             case Types.DECIMAL:
             case Types.NUMERIC:
-                return SplitColumnType.DECIMAL;
+                return scale == 0 ? SplitColumnType.INTEGER : SplitColumnType.DECIMAL;
             case Types.FLOAT:
             case Types.REAL:
             case Types.DOUBLE:
@@ -94,7 +94,7 @@ final class RangeSplitter {
         }
     }
 
-    private static List<String> computeCuts(String lower, String upper, int count,
+    static List<String> computeCuts(String lower, String upper, int count,
             SplitColumnType type) {
         switch (type) {
             case INTEGER:   return computeIntegerCuts(lower, upper, count);
@@ -128,7 +128,8 @@ final class RangeSplitter {
         requirePositiveStride(stride.signum() > 0, lower, upper, count);
         List<String> cuts = new ArrayList<>(count - 1);
         for (int i = 1; i < count; i++) {
-            cuts.add(lo.add(stride.multiply(BigDecimal.valueOf(i))).toPlainString());
+            BigDecimal cut = lo.add(stride.multiply(BigDecimal.valueOf(i)));
+            cuts.add(cut.stripTrailingZeros().toPlainString());
         }
         return cuts;
     }
@@ -213,7 +214,23 @@ final class RangeSplitter {
         }
     }
 
-    private static String buildWhere(int i, int count, String quotedCol, List<String> cuts,
+    static int compareBounds(String a, String b, SplitColumnType type) {
+        switch (type) {
+            case INTEGER:
+                return Long.compare(parseLong(a, "value"), parseLong(b, "value"));
+            case DECIMAL:
+            case DOUBLE:
+                return parseBigDecimal(a, "value").compareTo(parseBigDecimal(b, "value"));
+            case DATE:
+                return parseDate(a, "value").compareTo(parseDate(b, "value"));
+            case TIMESTAMP:
+                return parseTimestamp(a, "value").compareTo(parseTimestamp(b, "value"));
+            default:
+                throw new IllegalStateException();
+        }
+    }
+
+    static String buildWhere(int i, int count, String quotedCol, List<String> cuts,
             SplitColumnType type, AnyTableLister lister) {
         if (i == 0) {
             return quotedCol + " < " + lister.formatLiteral(type, cuts.get(0))
