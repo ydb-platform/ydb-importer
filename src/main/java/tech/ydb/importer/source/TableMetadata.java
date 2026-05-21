@@ -19,7 +19,8 @@ public class TableMetadata {
     private final List<ColumnInfo> columns = new ArrayList<>();
     private final Map<String, ColumnInfo> lookup = new HashMap<>();
     private final List<ColumnInfo> key = new ArrayList<>();
-    private String basicSql = null;
+    private List<TaskInfo> tasks = Collections.emptyList();
+    private List<String> partitionAtKeys = Collections.emptyList();
 
     public boolean isValid() {
         return !columns.isEmpty();
@@ -98,12 +99,24 @@ public class TableMetadata {
         key.clear();
     }
 
-    public String getBasicSql() {
-        return basicSql;
+    public List<TaskInfo> getTasks() {
+        return Collections.unmodifiableList(tasks);
     }
 
-    public void setBasicSql(String basicSql) {
-        this.basicSql = basicSql;
+    public void setTasks(List<TaskInfo> tasks) {
+        this.tasks = tasks;
+    }
+
+    public List<String> getPartitionAtKeys() {
+        return Collections.unmodifiableList(partitionAtKeys);
+    }
+
+    public void setPartitionAtKeys(List<String> partitionAtKeys) {
+        this.partitionAtKeys = partitionAtKeys;
+    }
+
+    public boolean hasPartitionAtKeys() {
+        return !partitionAtKeys.isEmpty();
     }
 
 }

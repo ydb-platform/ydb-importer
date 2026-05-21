@@ -22,7 +22,7 @@ public class TableDecision implements TableIdentity {
     private final TableOptions options;
     private final TableRef tableRef; // for table-ref defined only
     private TableMetadata metadata; // fetched from the source database
-    private boolean failure;
+    private volatile boolean failure;
     private TargetTable target;
     // blob column name -> blob table definition
     private final Map<String, TargetTable> blobTargets = new HashMap<>();
@@ -62,7 +62,7 @@ public class TableDecision implements TableIdentity {
         if (metadata == null || target == null) {
             return false;
         }
-        if (isBlank(metadata.getBasicSql())) {
+        if (metadata.getTasks().isEmpty()) {
             return false;
         }
         return metadata.isValid() && target.isValid();
@@ -74,6 +74,22 @@ public class TableDecision implements TableIdentity {
 
     public TableRef getTableRef() {
         return tableRef;
+    }
+
+    public boolean useSourcePartitions() {
+        if (tableRef != null && tableRef.getUseSourcePartitions() != null) {
+            return tableRef.getUseSourcePartitions();
+        }
+        Boolean fromOptions = (options != null) ? options.getUseSourcePartitions() : null;
+        return (fromOptions != null) ? fromOptions : true;
+    }
+
+    public int ydbPartitionCount() {
+        if (tableRef != null && tableRef.getYdbPartitionCount() != null) {
+            return tableRef.getYdbPartitionCount();
+        }
+        Integer fromOptions = (options != null) ? options.getYdbPartitionCount() : null;
+        return (fromOptions != null) ? fromOptions : TableRef.AUTO;
     }
 
     public TableMetadata getMetadata() {

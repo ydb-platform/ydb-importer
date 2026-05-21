@@ -21,7 +21,7 @@ import static tech.ydb.importer.integration.verification.LogicalType.STRING;
 public final class ShopScenarios {
 
     private static final LocalDate BASE_DATE = LocalDate.of(2020, 1, 1);
-    private static final LocalDateTime BASE_DT =
+    static final LocalDateTime BASE_DT =
             LocalDateTime.of(2024, 1, 1, 0, 0, 0);
     private static final String[] CURRENCIES = {"USD", "EUR", "RUB"};
     private static final String[] METHODS = {"card", "cash", "transfer", "crypto"};
@@ -66,10 +66,11 @@ public final class ShopScenarios {
     }
 
     public static TableScenario inventory(long n) {
+        final long warehouseCount = Math.max(50L, n / 1000L);
         return Scenario.table("inventory", n)
                 .col("id",           INT64,    id -> id)
                 .col("product_id",   INT64,    id -> (id % n) + 1)
-                .col("warehouse_id", INT32,    id -> (int) (id % 50))
+                .col("warehouse_id", INT32,    id -> (int) (id % warehouseCount))
                 .col("quantity",     INT32,    id -> (int) ((id * 13) % 10000))
                 .col("updated_at",   DATETIME, id -> BASE_DT.plusSeconds(id))
                 .partition(PartitionStyle.HASH_INT, "warehouse_id")

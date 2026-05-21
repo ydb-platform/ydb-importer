@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.TableIdentity;
 
 /**
@@ -181,5 +182,32 @@ public class MySqlTableLister extends AnyTableLister {
             throw new IllegalArgumentException("Backticks within the identifier: " + id);
         }
         return "`" + id + "`";
+    }
+
+    @Override
+    public List<TaskInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        if (td.getTableRef() != null && td.getTableRef().hasQueryText()) {
+            return Collections.emptyList();
+        }
+        final List<TaskInfo> tasks = new ArrayList<>();
+        final String baseSql = makeSelectSql(td.getSchema(), td.getTable(), tm.getColumns());
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT DISTINCT partition_name "
+                + "FROM information_schema.partitions "
+                + "WHERE table_schema=? AND table_name=? "
+                + "  AND partition_name IS NOT NULL")) {
+            ps.setString(1, td.getSchema());
+            ps.setString(2, td.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String partName = rs.getString(1);
+                    String sql = baseSql + " PARTITION (" + safeId(partName) + ")";
+                    String label = td.getSchema() + "." + td.getTable() + "#" + partName;
+                    tasks.add(new TaskInfo(label, sql));
+                }
+            }
+        }
+        return tasks;
     }
 }

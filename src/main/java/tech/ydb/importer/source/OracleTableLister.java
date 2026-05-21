@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import tech.ydb.importer.TableDecision;
@@ -185,6 +186,40 @@ public class OracleTableLister extends AnyTableLister {
             throw new IllegalArgumentException("Double quotes within the identifier: " + id);
         }
         return "\"" + id + "\"";
+    }
+
+    @Override
+    public List<TaskInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        if (td.getTableRef() != null && td.getTableRef().hasQueryText()) {
+            return Collections.emptyList();
+        }
+        final List<TaskInfo> tasks = new ArrayList<>();
+        final String baseSql = makeSelectSql(td.getSchema(), td.getTable(), tm.getColumns());
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT PARTITION_NAME FROM ALL_TAB_PARTITIONS "
+                + "WHERE TABLE_OWNER=? AND TABLE_NAME=?")) {
+            ps.setString(1, td.getSchema());
+            ps.setString(2, td.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String partName = rs.getString(1);
+                    String sql = baseSql + " PARTITION (" + safeId(partName) + ")";
+                    String label = td.getSchema() + "." + td.getTable() + "#" + partName;
+                    tasks.add(new TaskInfo(label, sql));
+                }
+            }
+        }
+        return tasks;
+    }
+
+    @Override
+    protected String formatLiteral(SplitColumnType type, String value) {
+        switch (type) {
+            case DATE:      return "DATE '" + value + "'";
+            case TIMESTAMP: return "TIMESTAMP '" + value + "'";
+            default:        return super.formatLiteral(type, value);
+        }
     }
 
 }

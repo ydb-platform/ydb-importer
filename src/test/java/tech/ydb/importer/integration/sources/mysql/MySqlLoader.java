@@ -1,5 +1,7 @@
 package tech.ydb.importer.integration.sources.mysql;
 
+import java.time.LocalDateTime;
+
 import tech.ydb.importer.integration.verification.DialectLoader;
 import tech.ydb.importer.integration.verification.LogicalType;
 import tech.ydb.importer.integration.verification.TableScenario;
@@ -57,14 +59,18 @@ public class MySqlLoader extends DialectLoader {
                 ddl.append("PARTITION pmax VALUES LESS THAN MAXVALUE)");
                 break;
             }
-            case RANGE_DATE:
-                ddl.append(" PARTITION BY RANGE(YEAR(").append(column)
-                        .append(")) (")
-                        .append("PARTITION p2024 VALUES LESS THAN (2025),")
-                        .append("PARTITION p2025 VALUES LESS THAN (2026),")
-                        .append("PARTITION p2026 VALUES LESS THAN (2027),")
-                        .append("PARTITION pmax VALUES LESS THAN MAXVALUE)");
+            case RANGE_DATE: {
+                LocalDateTime[] db = rangeDateBoundaries(scenario);
+                ddl.append(" PARTITION BY RANGE COLUMNS(").append(column).append(") (");
+                for (int i = 0; i < db.length; i++) {
+                    ddl.append("PARTITION p").append(i)
+                            .append(" VALUES LESS THAN ('")
+                            .append(db[i].format(DATE_LITERAL_FMT))
+                            .append("'),");
+                }
+                ddl.append("PARTITION pmax VALUES LESS THAN (MAXVALUE))");
                 break;
+            }
             case LIST_STRING:
                 ddl.append(" PARTITION BY LIST COLUMNS(").append(column)
                         .append(") (")

@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,8 @@ import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.YdbImporter;
 import tech.ydb.importer.source.ColumnInfo;
 import tech.ydb.importer.source.SourceCP;
+import tech.ydb.importer.source.TaskInfo;
+import tech.ydb.importer.source.TaskQuery;
 import tech.ydb.table.values.ListType;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.StructValue;
@@ -36,15 +39,23 @@ public class LoadDataTask implements Callable<Boolean> {
 
     private final YdbUpsertOp ydbOp;
     private final TableDecision tab;
+    private final TaskInfo task;
     private final ProgressCounter progress;
 
     private final int maxBatchRows;
     private final int maxBlobRows;
     private final int fetchSize;
+    private final int retryCount;
+    private final int taskIdx;
+    private final int taskBits;
     private final WriterPool writerPool;
+    private long rowIndex;
+
+    private static final long INITIAL_BACKOFF_MS = 1000;
+    private static final long MAX_BACKOFF_MS = 30_000;
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
-            WriterPool writerPool) {
+            TaskInfo task, WriterPool writerPool) {
         this.source = owner.getSourceCP();
         this.target = owner.getTargetCP();
 
@@ -55,11 +66,19 @@ public class LoadDataTask implements Callable<Boolean> {
                 progress::countWrittenRows
         );
         this.tab = tab;
+        this.task = task;
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.maxBlobRows = owner.getConfig().getTarget().getMaxBlobRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
+        this.retryCount = (tab.getMetadata().getTasks().size() > 1
+                        && tab.getBlobTargets().isEmpty())
+                ? owner.getConfig().getSource().getRetryCount()
+                : 0;
+        this.taskIdx = task.getIndex();
+        this.taskBits = BlobReader.bitsRequired(tab.getMetadata().getTasks().size());
         this.writerPool = writerPool;
+        this.rowIndex = 0;
     }
 
     @Override
@@ -69,28 +88,88 @@ public class LoadDataTask implements Callable<Boolean> {
             return false;
         }
         if (tab.isFailure()) {
-            LOG.warn("Skipping failed source table {}.{}", tab.getSchema(), tab.getTable());
+            LOG.warn("Skipping {} because the table has already failed", task.getName());
             return false;
         }
-        LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
-        try (Connection con = source.getConnection()) {
-            long copied;
-            try (PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql())) {
-                ps.setFetchSize(fetchSize);
-                try (ResultSet rs = ps.executeQuery()) {
-                    copied = copyData(rs);
-                }
-            }
-            if (!con.getAutoCommit()) {
-                con.commit();
-            }
-            LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
+        LOG.info("Loading data from {}", task.getName());
+        try {
+            long copied = executeTask();
+            LOG.info("Copied {} rows from {}", copied, task.getName());
             return true;
         } catch (Throwable e) {
-            LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
-            tab.setFailure(true);
+            if (e instanceof InterruptedException) {
+                LOG.warn("Interrupted {}", task.getName());
+                return false;
+            }
+            if (tab.isFailure()) {
+                LOG.warn("Cancelled {} because the table has already failed", task.getName());
+            } else {
+                LOG.error("Failed to load data from {}", task.getName(), e);
+                tab.setFailure(true);
+            }
             return false;
         }
+    }
+
+    private void checkCancelled() {
+        if (tab.isFailure()) {
+            throw new RuntimeException("Cancelled: table " + tab.getSchema() + "."
+                    + tab.getTable() + " marked as failed by another task");
+        }
+    }
+
+    /**
+     * Reads all queries of a task, retrying each one on failure.
+     */
+    private long executeTask() throws Exception {
+        List<TaskQuery> queries = task.getQueries();
+        long copied = 0;
+        int nextQuery = 0;
+        int attempt = 0;
+        long backoffMs = INITIAL_BACKOFF_MS;
+        long savedRowIndex = rowIndex;
+
+        while (nextQuery < queries.size()) {
+            try (Connection con = source.getConnection()) {
+                while (nextQuery < queries.size()) {
+                    checkCancelled();
+                    savedRowIndex = rowIndex;
+                    TaskQuery query = queries.get(nextQuery);
+                    copied += executeQuery(con, query.getSql());
+                    nextQuery++;
+                    attempt = 0;
+                    backoffMs = INITIAL_BACKOFF_MS;
+                }
+            } catch (SQLException e) {
+                if (tab.isFailure()) {
+                    throw e;
+                }
+                rowIndex = savedRowIndex;
+                if (++attempt > retryCount) {
+                    throw e;
+                }
+                TaskQuery failed = queries.get(nextQuery);
+                LOG.warn("Query {} failed (attempt {}/{}), retrying in {} ms",
+                        failed.getName(), attempt, retryCount, backoffMs, e);
+                Thread.sleep(backoffMs);
+                backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+            }
+        }
+        return copied;
+    }
+
+    private long executeQuery(Connection con, String sql) throws Exception {
+        long copied;
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setFetchSize(fetchSize);
+            try (ResultSet rs = ps.executeQuery()) {
+                copied = copyData(rs);
+            }
+        }
+        if (!con.getAutoCommit()) {
+            con.commit();
+        }
+        return copied;
     }
 
     /**
@@ -104,24 +183,38 @@ public class LoadDataTask implements Callable<Boolean> {
         final ListType paramListType = ListType.of(paramType);
         final ResultSetMetaData rsmd = rs.getMetaData();
         final ColumnIndex[] columns = buildMainIndex(paramType, rsmd);
+        final List<BlobReader> blobReaders = collectBlobReaders(columns);
 
         final List<Value<?>> batch = new ArrayList<>(maxBatchRows);
         final SynthKey synchKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
 
         long copied = 0;
+        long readStart = System.nanoTime();
 
         while (rs.next()) {
+            rowIndex++;
             copied++;
             progress.countReadRows(1);
 
+            if (!blobReaders.isEmpty()) {
+                long blobId = BlobReader.packBlobId(taskIdx, rowIndex, taskBits);
+                for (BlobReader br : blobReaders) {
+                    br.setNextBlobId(blobId);
+                }
+            }
             batch.add(read(rs, paramType, columns, synchKey));
             if (batch.size() >= maxBatchRows) {
+                progress.countReadBatch(System.nanoTime() - readStart);
+                checkCancelled();
                 writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
                 batch.clear();
+                readStart = System.nanoTime();
             }
         }
 
         if (!batch.isEmpty()) {
+            progress.countReadBatch(System.nanoTime() - readStart);
+            checkCancelled();
             writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
             batch.clear();
         }
@@ -134,6 +227,16 @@ public class LoadDataTask implements Callable<Boolean> {
         }
 
         return copied;
+    }
+
+    private static List<BlobReader> collectBlobReaders(ColumnIndex[] columns) {
+        List<BlobReader> readers = new ArrayList<>();
+        for (ColumnIndex ci : columns) {
+            if (ci != null && ci.getReader() instanceof BlobReader) {
+                readers.add((BlobReader) ci.getReader());
+            }
+        }
+        return readers;
     }
 
     private ColumnIndex[] buildMainIndex(StructType paramListType, ResultSetMetaData rsmd) throws Exception {

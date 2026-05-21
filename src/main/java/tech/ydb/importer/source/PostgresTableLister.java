@@ -216,6 +216,36 @@ public class PostgresTableLister extends AnyTableLister {
         }
     }
 
+    @Override
+    public List<TaskInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        if (td.getTableRef() != null && td.getTableRef().hasQueryText()) {
+            return Collections.emptyList();
+        }
+        final List<TaskInfo> tasks = new ArrayList<>();
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT child_ns.nspname, child_cls.relname "
+                + "FROM pg_inherits inh "
+                + "INNER JOIN pg_class parent_cls ON inh.inhparent = parent_cls.oid "
+                + "INNER JOIN pg_namespace parent_ns ON parent_cls.relnamespace = parent_ns.oid "
+                + "INNER JOIN pg_class child_cls ON inh.inhrelid = child_cls.oid "
+                + "INNER JOIN pg_namespace child_ns ON child_cls.relnamespace = child_ns.oid "
+                + "WHERE parent_ns.nspname = ? AND parent_cls.relname = ? "
+                + "  AND parent_cls.relkind = 'p'")) {
+            ps.setString(1, td.getSchema());
+            ps.setString(2, td.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String childSchema = rs.getString(1);
+                    String childTable = rs.getString(2);
+                    String sql = makeSelectSql(childSchema, childTable, tm.getColumns());
+                    tasks.add(new TaskInfo(childSchema + "." + childTable, sql));
+                }
+            }
+        }
+        return tasks;
+    }
+
     private void readIndexColumns(Connection con, long indexRelId, int keyCount, TableMetadata tm)
             throws SQLException {
         try (PreparedStatement ps = con.prepareStatement(

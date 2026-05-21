@@ -2,6 +2,7 @@ package tech.ydb.importer.target;
 
 import java.io.BufferedWriter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.text.StringSubstitutor;
@@ -89,6 +90,22 @@ public class YdbTableBuilder {
         sb.append(") WITH (").append(EOL);
         if (TableOptions.StoreType.COLUMN.equals(tab.getOptions().getStoreType())) {
             sb.append("  STORE = COLUMN").append(EOL);
+        } else if (tab.getMetadata().hasPartitionAtKeys()) {
+            List<String> keys = tab.getMetadata().getPartitionAtKeys();
+            int minPartitions = keys.size() + 1;
+            sb.append("  AUTO_PARTITIONING_BY_SIZE = ENABLED").append(EOL);
+            sb.append(", AUTO_PARTITIONING_BY_LOAD = ENABLED").append(EOL);
+            sb.append(", AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = ")
+                    .append(minPartitions).append(EOL);
+            sb.append(", AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9999").append(EOL);
+            sb.append(", PARTITION_AT_KEYS = (");
+            for (int i = 0; i < keys.size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append(keys.get(i));
+            }
+            sb.append(")").append(EOL);
         } else {
             sb.append("  AUTO_PARTITIONING_BY_SIZE = ENABLED").append(EOL);
             sb.append(", AUTO_PARTITIONING_BY_LOAD = ENABLED").append(EOL);

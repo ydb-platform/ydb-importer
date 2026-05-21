@@ -91,7 +91,27 @@ The order of blocks stored is defined by the values of the `pos` column, contain
 A unique value of type `Int64` is generated for each source BLOB value, and stored in the `id` field of the BLOB supplemental table.
 This identifier is also stored in the "main" target table in the field having the same name as the BLOB field in the source table.
 
-## 5. Configuration file format
+## 5. YDB partitioning and parallel source reading
+
+The tool independently manages two aspects.
+
+- **YDB target table partitioning** via `<ydb-partition-count>`. Sets the number of partitions for the YDB table created via `PARTITION_AT_KEYS`.
+- **Parallel source reading** via `<split-by>` and `<split-count>`, or via reading the source native partitions (`<use-source-partitions>`). Defines how many parts the source queries are split into.
+
+Both modes solve three tasks:
+- speeding up reads and writes through parallel tasks,
+- independent error handling (a failed task is retried alone, see `<retry-count>`),
+- write locality, so values of one batch land in one YDB partition.
+
+See the "Configuration file format" section for the details of each tag.
+
+### Source partitions
+
+If the source partitions do not overlap by the first key column (the source is partitioned by the same key as YDB), each read task corresponds to a single YDB partition. This is the most efficient mode.
+
+If the source partitions overlap by the first key column (the source is partitioned by a different key), then without `<split-by>` each source partition is read by a single query, but the values of one write batch land in different YDB partitions. You can additionally set `<split-by>`. In that case subqueries with a range filter over the split column are generated for each source partition. Each task again corresponds to a single YDB partition.
+
+## 6. Configuration file format
 
 Sample configuration files:
 * [for PostgreSQL](scripts/sample-postgres.xml);
@@ -147,6 +167,11 @@ Below is the definition of the configuration file structure:
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
         <password>password</password>
+        <!-- Number of retries per partition query on source read errors,
+             with exponential backoff (1s, 2s, 4s, ..., capped at 30s).
+             Applies to partitioned tables without BLOB columns.
+         -->
+        <retry-count>7</retry-count>
     </source>
     <!-- Target YDB database connection parameters. -->
     <target type="ydb">
@@ -227,6 +252,19 @@ Below is the definition of the configuration file structure:
         <!-- If true, columns with unsupported types are skipped with warning,
              otherwise import error is generated, and the whole table is skipped. -->
         <skip-unknown-types>true</skip-unknown-types>
+        <!-- Use source-side native partitions for parallel reads. Works for databases
+             that support partitioning. Default is true. Can be overridden in <table-ref>. -->
+        <use-source-partitions>true</use-source-partitions>
+        <!-- Initial number of YDB target table partitions (PARTITION_AT_KEYS in DDL).
+             auto - copy the partition count and boundaries from the source. If the source
+                    has no partitions or their ranges over the first key column overlap,
+                    partitioning is skipped and YDB distributes data on its own by load.
+             N    - integer >= 2, create N partitions by splitting the first key column
+                    range into equal intervals.
+             none - do not set initial partitioning, YDB manages partitions on its own
+                    via AUTO_PARTITIONING_BY_SIZE/LOAD.
+             Default is auto. Can be overridden in <table-ref>. -->
+        <ydb-partition-count>auto</ydb-partition-count>
     </table-options>
     <!-- Table map filters the source tables and defines the conversion modes for them. -->
     <table-map options="default">
@@ -249,11 +287,38 @@ Below is the definition of the configuration file structure:
         <!-- Primary key columns should be defined for the query.  -->
         <key-column>OWNER</key-column>
         <key-column>TABLE_NAME</key-column>
+        <!-- Splits the table into split-count value ranges along the
+             split-by column for parallel reads. Column types:
+             integers (TINYINT/SMALLINT/INTEGER/BIGINT), DECIMAL/NUMERIC,
+             REAL/FLOAT/DOUBLE, DATE, TIMESTAMP. Bounds are written as
+             yyyy-MM-dd for DATE or yyyy-MM-dd [HH:mm:ss[.fraction]] for
+             TIMESTAMP. Values below split-from or NULL go to the first
+             split, values above split-to go to the last.
+
+             Each of split-count, split-from, split-to accepts a number
+             (or a date literal for bounds), or the auto literal.
+             The auto literal is equivalent to an omitted tag. With auto:
+                split-count inherits the value of ydb-partition-count,
+                split-from and split-to are taken as MIN/MAX from the source.
+         -->
+        <split-by>created_at</split-by>
+        <split-from>2020-01-01 00:00:00</split-from>
+        <split-to>2026-01-01 00:00:00</split-to>
+        <split-count>auto</split-count>
+        <!-- Per-table overrides of the partitioning settings from <table-options>.
+             Same values as in <table-options>. -->
+        <use-source-partitions>true</use-source-partitions>
+        <ydb-partition-count>16</ydb-partition-count>
+        <!-- Explicit bounds of the first key column for splitting the YDB table
+             into equal intervals. Used only with a numeric ydb-partition-count.
+             If not set, MIN/MAX of the first key column is taken from the source. -->
+        <ydb-partition-from>1</ydb-partition-from>
+        <ydb-partition-to>1000000</ydb-partition-to>
     </table-ref>
 </ydb-importer>
 ```
 
-## 6. Building the tool from the source code
+## 7. Building the tool from the source code
 
 Java 8 or higher is required to build and run the tool. Maven is required to build the tool (tested on version 3.8.6).
 

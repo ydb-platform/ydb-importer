@@ -501,6 +501,98 @@ public class OracleYdbImporterTest {
                     .run();
         }
 
+        @Test
+        public void rangeSplitsByColumnType() throws Exception {
+            String s = schemaName();
+            importTogether()
+                    .add(tableTest(s, "SPLIT_INT")
+                            .setupSql(
+                                "CREATE TABLE " + s + ".SPLIT_INT ("
+                                + "ID  NUMBER(10,0) NOT NULL PRIMARY KEY,"
+                                + "VAL NUMBER(10,0) NOT NULL);"
+                                + "INSERT INTO " + s + ".SPLIT_INT VALUES (1,5);"
+                                + "INSERT INTO " + s + ".SPLIT_INT VALUES (2,12);"
+                                + "INSERT INTO " + s + ".SPLIT_INT VALUES (3,28);"
+                                + "INSERT INTO " + s + ".SPLIT_INT VALUES (4,45);"
+                                + "INSERT INTO " + s + ".SPLIT_INT VALUES (5,60);"
+                                + "INSERT INTO " + s + ".SPLIT_INT VALUES (6,73);"
+                                + "INSERT INTO " + s + ".SPLIT_INT VALUES (7,88);"
+                                + "INSERT INTO " + s + ".SPLIT_INT VALUES (8,99)")
+                            .cleanupSql("DROP TABLE " + s + ".SPLIT_INT")
+                            .splitBy("VAL").splitFrom("0").splitTo("100").splitCount(4)
+                            .expectPrimaryKey("ID")
+                            .expectRowCount(8))
+                    .add(tableTest(s, "SPLIT_DEC")
+                            .setupSql(
+                                "CREATE TABLE " + s + ".SPLIT_DEC ("
+                                + "ID  NUMBER(10,0) NOT NULL PRIMARY KEY,"
+                                + "VAL NUMBER(10,2) NOT NULL);"
+                                + "INSERT INTO " + s + ".SPLIT_DEC VALUES (1,1.50);"
+                                + "INSERT INTO " + s + ".SPLIT_DEC VALUES (2,10.25);"
+                                + "INSERT INTO " + s + ".SPLIT_DEC VALUES (3,33.75);"
+                                + "INSERT INTO " + s + ".SPLIT_DEC VALUES (4,50.00);"
+                                + "INSERT INTO " + s + ".SPLIT_DEC VALUES (5,75.50);"
+                                + "INSERT INTO " + s + ".SPLIT_DEC VALUES (6,99.99)")
+                            .cleanupSql("DROP TABLE " + s + ".SPLIT_DEC")
+                            .splitBy("VAL").splitFrom("0").splitTo("100").splitCount(3)
+                            .expectPrimaryKey("ID")
+                            .expectRowCount(6))
+                    .add(tableTest(s, "SPLIT_DBL")
+                            .setupSql(
+                                "CREATE TABLE " + s + ".SPLIT_DBL ("
+                                + "ID  NUMBER(10,0) NOT NULL PRIMARY KEY,"
+                                + "VAL BINARY_DOUBLE NOT NULL);"
+                                + "INSERT INTO " + s + ".SPLIT_DBL VALUES (1,0.1);"
+                                + "INSERT INTO " + s + ".SPLIT_DBL VALUES (2,1.5);"
+                                + "INSERT INTO " + s + ".SPLIT_DBL VALUES (3,3.7);"
+                                + "INSERT INTO " + s + ".SPLIT_DBL VALUES (4,5.0);"
+                                + "INSERT INTO " + s + ".SPLIT_DBL VALUES (5,7.2)")
+                            .cleanupSql("DROP TABLE " + s + ".SPLIT_DBL")
+                            .splitBy("VAL").splitFrom("0").splitTo("10").splitCount(3)
+                            .expectPrimaryKey("ID")
+                            .expectRowCount(5))
+                    .add(tableTest(s, "SPLIT_DATE")
+                            .setupSql(
+                                "CREATE TABLE " + s + ".SPLIT_DATE ("
+                                + "ID  NUMBER(10,0) NOT NULL PRIMARY KEY,"
+                                + "VAL DATE NOT NULL);"
+                                + "INSERT INTO " + s + ".SPLIT_DATE VALUES"
+                                + "  (1, DATE '2024-01-15');"
+                                + "INSERT INTO " + s + ".SPLIT_DATE VALUES"
+                                + "  (2, DATE '2024-03-10');"
+                                + "INSERT INTO " + s + ".SPLIT_DATE VALUES"
+                                + "  (3, DATE '2024-06-01');"
+                                + "INSERT INTO " + s + ".SPLIT_DATE VALUES"
+                                + "  (4, DATE '2024-09-20');"
+                                + "INSERT INTO " + s + ".SPLIT_DATE VALUES"
+                                + "  (5, DATE '2024-12-25')")
+                            .cleanupSql("DROP TABLE " + s + ".SPLIT_DATE")
+                            .splitBy("VAL")
+                                .splitFrom("2024-01-01").splitTo("2025-01-01")
+                                .splitCount(4)
+                            .expectPrimaryKey("ID")
+                            .expectRowCount(5))
+                    .add(tableTest(s, "SPLIT_TS")
+                            .setupSql(
+                                "CREATE TABLE " + s + ".SPLIT_TS ("
+                                + "ID  NUMBER(10,0) NOT NULL PRIMARY KEY,"
+                                + "VAL TIMESTAMP NOT NULL);"
+                                + "INSERT INTO " + s + ".SPLIT_TS VALUES"
+                                + "  (1, TIMESTAMP '2024-01-15 10:00:00');"
+                                + "INSERT INTO " + s + ".SPLIT_TS VALUES"
+                                + "  (2, TIMESTAMP '2024-06-01 14:30:00');"
+                                + "INSERT INTO " + s + ".SPLIT_TS VALUES"
+                                + "  (3, TIMESTAMP '2024-12-25 23:59:59')")
+                            .cleanupSql("DROP TABLE " + s + ".SPLIT_TS")
+                            .splitBy("VAL")
+                                .splitFrom("2024-01-01 00:00:00")
+                                .splitTo("2025-01-01 00:00:00")
+                                .splitCount(3)
+                            .expectPrimaryKey("ID")
+                            .expectRowCount(3))
+                    .run();
+        }
+
     }
 
     @Nested class TableTests extends OracleTableCases {
