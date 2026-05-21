@@ -217,7 +217,7 @@ public class PostgresTableLister extends AnyTableLister {
     }
 
     @Override
-    public List<TaskInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+    protected List<TaskInfo> loadPartitions(Connection con, TableDecision td, TableMetadata tm)
             throws SQLException {
         if (td.getTableRef() != null && td.getTableRef().hasQueryText()) {
             return Collections.emptyList();

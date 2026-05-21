@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -14,6 +15,7 @@ import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.SourceType;
 import tech.ydb.importer.config.TableIdentity;
 import tech.ydb.importer.config.TableRef;
+import tech.ydb.importer.source.RangeSplitter.Range;
 
 /**
  *
@@ -34,9 +36,19 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
 
     protected abstract List<String> listTables(Connection con, String schema) throws SQLException;
 
-    public List<TaskInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+    protected List<TaskInfo> loadPartitions(Connection con, TableDecision td, TableMetadata tm)
             throws SQLException {
         return Collections.emptyList();
+    }
+
+    public List<TaskInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        List<TaskInfo> cached = tm.getSourcePartitions();
+        if (cached == null) {
+            cached = loadPartitions(con, td, tm);
+            tm.setSourcePartitions(cached);
+        }
+        return cached;
     }
 
     // Safely quote the identifier
@@ -119,26 +131,40 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 }
             }
         }
+        new AutoBoundsResolver(this).resolve(con, td, tm);
         List<TaskInfo> tasks;
+        String readPlan;
         TableRef ref = td.getTableRef();
         if (ref != null && ref.hasSplit()) {
-            tasks = RangeSplitter.generate(td, tm, this);
-            LOG.info("Table {}.{}: split by '{}' into {} splits",
-                    td.getSchema(), td.getTable(), ref.getSplitBy(), tasks.size());
+            try {
+                tasks = RangeSplitter.generate(td, tm, this);
+                readPlan = "split by '" + ref.getSplitBy() + "' [" + ref.getSplitFrom()
+                        + ", " + ref.getSplitTo() + "] into " + tasks.size() + " ranges";
+            } catch (RangeSplitter.UnsplittableRangeException ex) {
+                LOG.warn("Cannot split {}.{} for parallel read ({}), reading with a single query",
+                        td.getSchema(), td.getTable(), ex.getMessage());
+                tasks = Collections.emptyList();
+                readPlan = "single query";
+            }
         } else if (td.useSourcePartitions()) {
             tasks = listPartitions(con, td, tm);
-            if (!tasks.isEmpty()) {
-                LOG.info("Table {}.{}: found {} partitions",
-                        td.getSchema(), td.getTable(), tasks.size());
-            }
+            readPlan = tasks.isEmpty()
+                    ? "single query"
+                    : tasks.size() + " source partitions";
         } else {
             tasks = Collections.emptyList();
+            readPlan = "single query";
         }
         if (tasks.isEmpty()) {
             String label = td.getSchema() + "." + td.getTable();
             tasks = Collections.singletonList(
                     new TaskInfo(label, makeSelectSql(td, tm.getColumns())));
         }
+        String ydbPlan = tm.hasPartitionAtKeys()
+                ? "YDB " + (tm.getPartitionAtKeys().size() + 1)
+                        + " partitions " + tm.getPartitionStrategy()
+                : "YDB default partitioning";
+        LOG.info("Table {}.{}: {}, {}", td.getSchema(), td.getTable(), readPlan, ydbPlan);
         tm.setTasks(tasks);
         return tm;
     }
@@ -175,6 +201,26 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             return td.getTableRef().getQueryText();
         }
         return makeSelectSql(td.getSchema(), td.getTable(), columns);
+    }
+
+    Range queryMinMaxOn(Connection con, String sourceExpr, String column,
+            SplitColumnType type) throws SQLException {
+        String quotedCol = safeId(column);
+        String sql = "SELECT min(" + quotedCol + "), max(" + quotedCol
+                + ") FROM " + sourceExpr;
+        try (Statement s = con.createStatement();
+                ResultSet rs = s.executeQuery(sql)) {
+            if (!rs.next()) {
+                return null;
+            }
+            Object lo = rs.getObject(1);
+            Object hi = rs.getObject(2);
+            if (lo == null || hi == null) {
+                return null;
+            }
+            return new Range(RangeSplitter.formatBound(lo, type),
+                    RangeSplitter.formatBound(hi, type));
+        }
     }
 
     protected String makeSelectSql(String schema, String table, List<ColumnInfo> columns) {

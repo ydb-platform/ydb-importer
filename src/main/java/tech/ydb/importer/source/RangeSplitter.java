@@ -41,6 +41,7 @@ final class RangeSplitter {
     private RangeSplitter() {
     }
 
+    /** Builds one read task per slice: N range queries over the split column. */
     static List<TaskInfo> generate(TableDecision td, TableMetadata tm, AnyTableLister lister) {
         TableRef ref = td.getTableRef();
         ColumnInfo col = tm.findColumn(ref.getSplitBy());
@@ -69,6 +70,7 @@ final class RangeSplitter {
         return result;
     }
 
+    /** Maps a JDBC SQL type to a split category. */
     static SplitColumnType detectType(int sqlType, int scale) {
         switch (sqlType) {
             case Types.TINYINT:
@@ -94,6 +96,7 @@ final class RangeSplitter {
         }
     }
 
+    /** Returns the boundaries that split the range into count equal slices. */
     static List<String> computeCuts(String lower, String upper, int count,
             SplitColumnType type) {
         switch (type) {
@@ -162,7 +165,7 @@ final class RangeSplitter {
 
     private static void requireOrdered(boolean ordered, String lower, String upper) {
         if (!ordered) {
-            throw new IllegalArgumentException(
+            throw new UnsplittableRangeException(
                     "split-from must be less than split-to: '"
                     + lower + "' >= '" + upper + "'");
         }
@@ -171,7 +174,7 @@ final class RangeSplitter {
     private static void requirePositiveStride(boolean positive, String lower, String upper,
             int count) {
         if (!positive) {
-            throw new IllegalArgumentException(
+            throw new UnsplittableRangeException(
                     "Cannot split range '" + lower + "' to '" + upper
                     + "' into " + count + " parts");
         }
@@ -214,6 +217,7 @@ final class RangeSplitter {
         }
     }
 
+    /** Compares two bound strings by their typed value. */
     static int compareBounds(String a, String b, SplitColumnType type) {
         switch (type) {
             case INTEGER:
@@ -230,7 +234,9 @@ final class RangeSplitter {
         }
     }
 
-    static String buildWhere(int i, int count, String quotedCol, List<String> cuts,
+    /** SQL filter for read-slice i: rows whose key falls into this slice. The first slice
+     *  also takes NULLs and keys below the first cut, the last takes keys above the last cut. */
+    private static String buildWhere(int i, int count, String quotedCol, List<String> cuts,
             SplitColumnType type, AnyTableLister lister) {
         if (i == 0) {
             return quotedCol + " < " + lister.formatLiteral(type, cuts.get(0))
@@ -241,5 +247,59 @@ final class RangeSplitter {
         }
         return quotedCol + " >= " + lister.formatLiteral(type, cuts.get(i - 1))
                 + " AND " + quotedCol + " < " + lister.formatLiteral(type, cuts.get(i));
+    }
+
+    /** Formats a JDBC value into the string form used by Range. */
+    static String formatBound(Object value, SplitColumnType type) {
+        switch (type) {
+            case INTEGER:
+                if (value instanceof Number) {
+                    return Long.toString(((Number) value).longValue());
+                }
+                return value.toString();
+            case DECIMAL:
+            case DOUBLE:
+                if (value instanceof BigDecimal) {
+                    return ((BigDecimal) value).toPlainString();
+                }
+                return value.toString();
+            case DATE:
+                if (value instanceof java.sql.Date) {
+                    return ((java.sql.Date) value).toLocalDate().toString();
+                }
+                if (value instanceof LocalDate) {
+                    return value.toString();
+                }
+                return value.toString();
+            case TIMESTAMP:
+                if (value instanceof java.sql.Timestamp) {
+                    return ((java.sql.Timestamp) value).toLocalDateTime().format(TS_FORMAT);
+                }
+                if (value instanceof LocalDateTime) {
+                    return ((LocalDateTime) value).format(TS_FORMAT);
+                }
+                return value.toString();
+            default:
+                throw new IllegalStateException("Unsupported type: " + type);
+        }
+    }
+
+    static final class Range {
+        final String lower;
+        final String upper;
+
+        Range(String lower, String upper) {
+            this.lower = lower;
+            this.upper = upper;
+        }
+    }
+
+    /** Thrown when a range cannot be divided into the requested number of slices. */
+    static final class UnsplittableRangeException extends IllegalArgumentException {
+        private static final long serialVersionUID = 1L;
+
+        UnsplittableRangeException(String message) {
+            super(message);
+        }
     }
 }
