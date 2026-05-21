@@ -19,6 +19,7 @@ public class TableOptions extends JdomHelper {
     private boolean skipUnknownTypes;
     private StoreType storeType;
     private Boolean useSourcePartitions;
+    private Integer ydbPartitionCount;
 
     public TableOptions(String name, String template) {
         this.name = name;
@@ -65,6 +66,7 @@ public class TableOptions extends JdomHelper {
             throw raiseIllegal(c, "store-type", v);
         }
         this.useSourcePartitions = TableRef.parseOptionalBoolean(c, "use-source-partitions");
+        this.ydbPartitionCount = TableRef.parseAutoableCount(c, "ydb-partition-count", true);
     }
 
     public String getName() {
@@ -141,6 +143,14 @@ public class TableOptions extends JdomHelper {
 
     public void setUseSourcePartitions(Boolean useSourcePartitions) {
         this.useSourcePartitions = useSourcePartitions;
+    }
+
+    public Integer getYdbPartitionCount() {
+        return ydbPartitionCount;
+    }
+
+    public void setYdbPartitionCount(Integer ydbPartitionCount) {
+        this.ydbPartitionCount = ydbPartitionCount;
     }
 
     /**

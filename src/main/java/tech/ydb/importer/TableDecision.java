@@ -84,6 +84,14 @@ public class TableDecision implements TableIdentity {
         return (fromOptions != null) ? fromOptions : true;
     }
 
+    public int ydbPartitionCount() {
+        if (tableRef != null && tableRef.getYdbPartitionCount() != null) {
+            return tableRef.getYdbPartitionCount();
+        }
+        Integer fromOptions = (options != null) ? options.getYdbPartitionCount() : null;
+        return (fromOptions != null) ? fromOptions : TableRef.AUTO;
+    }
+
     public TableMetadata getMetadata() {
         return metadata;
     }
