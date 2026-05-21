@@ -20,7 +20,7 @@ public class SourceConfig extends JdomHelper {
     private String userName;
     private String password;
     private int fetchSize = 10000;
-    private int retryCount = 7;
+    private int retryCount = 10;
 
     public SourceConfig() {
     }
