@@ -20,6 +20,7 @@ import tech.ydb.table.query.DataQueryResult;
 import tech.ydb.table.query.Params;
 import tech.ydb.table.result.ResultSetReader;
 import tech.ydb.table.result.ValueReader;
+import tech.ydb.table.settings.DescribeTableSettings;
 import tech.ydb.table.settings.ExecuteScanQuerySettings;
 import tech.ydb.table.transaction.TxControl;
 import tech.ydb.table.values.PrimitiveType;
@@ -57,8 +58,10 @@ public final class YdbSchemaReader implements AutoCloseable {
     /** Describes a logical table by its relative path */
     public YdbTableInfo describe(String logicalPath) {
         String fullPath = database + "/" + logicalPath;
+        DescribeTableSettings settings = new DescribeTableSettings();
+        settings.setIncludeShardKeyBounds(true);
         TableDescription desc = retryCtx
-                .supplyResult(session -> session.describeTable(fullPath))
+                .supplyResult(session -> session.describeTable(fullPath, settings))
                 .join()
                 .getValue();
 
@@ -66,7 +69,9 @@ public final class YdbSchemaReader implements AutoCloseable {
         for (TableColumn col : desc.getColumns()) {
             columns.add(new YdbColumn(col.getName(), col.getType()));
         }
-        return new YdbTableInfo(columns, desc.getPrimaryKeys());
+        int partitionCount = desc.getKeyRanges() == null
+                ? 0 : desc.getKeyRanges().size();
+        return new YdbTableInfo(columns, desc.getPrimaryKeys(), partitionCount);
     }
 
     /** Executes a YQL data query */
@@ -257,18 +262,24 @@ public final class YdbSchemaReader implements AutoCloseable {
 
         private final Map<String, YdbColumn> byName;
         private final List<String> primaryKey;
+        private final int partitionCount;
 
-        YdbTableInfo(List<YdbColumn> columns, List<String> primaryKey) {
+        YdbTableInfo(List<YdbColumn> columns, List<String> primaryKey, int partitionCount) {
             this.primaryKey = Collections.unmodifiableList(new ArrayList<>(primaryKey));
             Map<String, YdbColumn> index = new HashMap<>();
             for (YdbColumn c : columns) {
                 index.put(c.getName(), c);
             }
             this.byName = Collections.unmodifiableMap(index);
+            this.partitionCount = partitionCount;
         }
 
         public List<String> getPrimaryKey() {
             return primaryKey;
+        }
+
+        public int getPartitionCount() {
+            return partitionCount;
         }
 
         public YdbColumn getColumn(String name) {
