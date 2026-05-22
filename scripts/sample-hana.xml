@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SAP HANA to YDB importer job configuration example -->
+<ydb-importer>
+    <workers>
+        <reader-pool size="4"/>
+    </workers>
+    <source type="hana">
+        <jdbc-class>com.sap.db.jdbc.Driver</jdbc-class>
+        <!-- For tenant DB connect directly to its port (typically 3{instance}41).
+             For SystemDB use 3{instance}13 or add ?databaseName=TENANT_NAME -->
+        <jdbc-url>jdbc:sap://hostname:39041</jdbc-url>
+        <username>SYSTEM</username>
+        <password>Password1</password>
+    </source>
+    <target type="ydb">
+        <script-file>sample-hana.yql.tmp</script-file>
+        <connection-string>grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g</connection-string>
+        <!--
+        <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
+        -->
+        <!-- Custom TLS certificate file, if needed
+        <tls-certificate-file>ca.crt</tls-certificate-file>
+        -->
+        <!-- ENV, NONE, STATIC, METADATA, SAKEY -->
+        <auth-mode>ENV</auth-mode>
+        <!-- auth-mode: STATIC
+        <static-login>username</static-login>
+        <static-password>password</static-password>
+        -->
+        <!-- auth-mode: SAKEY
+        <sa-key-file>ydb-sa-keyfile.json</sa-key-file>
+        -->
+        <replace-existing>true</replace-existing>
+        <load-data>true</load-data>
+        <max-batch-rows>1000</max-batch-rows>
+        <max-blob-rows>200</max-blob-rows>
+    </target>
+    <table-options name="default">
+        <!--  ASIS, LOWER, UPPER -->
+        <case-mode>ASIS</case-mode>
+        <!-- Substitution values: ${schema}, ${table} -->
+        <table-name-format>hana1/${schema}/${table}</table-name-format>
+        <!-- Substitution values: ${schema}, ${table}, ${field} -->
+        <blob-name-format>hana1/${schema}/${table}_${field}</blob-name-format>
+        <!-- DATE_NEW, DATE, INT, STR -->
+        <conv-date>DATE_NEW</conv-date>
+        <conv-timestamp>DATE_NEW</conv-timestamp>
+        <allow-custom-decimal>true</allow-custom-decimal>
+        <skip-unknown-types>true</skip-unknown-types>
+    </table-options>
+    <table-map options="default">
+        <include-schemas regexp="true">.*</include-schemas>
+        <!-- Possible extra tags: include-tables, exclude-tables, exclude-schemas -->
+    </table-map>
+    <table-ref options="default">
+        <schema-name>SYS</schema-name>
+        <table-name>TABLES</table-name>
+        <key-column>SCHEMA_NAME</key-column>
+        <key-column>TABLE_NAME</key-column>
+    </table-ref>
+    <table-ref options="default">
+        <schema-name>SYS</schema-name>
+        <table-name>TABLE_COLUMNS</table-name>
+        <query-text>SELECT * FROM SYS.TABLE_COLUMNS</query-text>
+        <key-column>SCHEMA_NAME</key-column>
+        <key-column>TABLE_NAME</key-column>
+        <key-column>COLUMN_NAME</key-column>
+    </table-ref>
+</ydb-importer>

@@ -330,6 +330,8 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 return new MariaDbTableLister(tableMaps);
             case VERTICA:
                 return new VerticaTableLister(tableMaps);
+            case HANA:
+                return new HanaTableLister(tableMaps);
             case CLICKHOUSE:
                 return new ClickHouseTableLister(tableMaps);
             case INFORMIX:

@@ -16,4 +16,5 @@ public enum SourceType {
     CLICKHOUSE,
     MARIADB,
     VERTICA,
+    HANA,
 }
