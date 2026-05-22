@@ -51,6 +51,12 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         return cached;
     }
 
+    public void beforeTableRead(Connection con, TableDecision td) throws SQLException {
+    }
+
+    public void afterTableRead(Connection con, TableDecision td) throws SQLException {
+    }
+
     // Safely quote the identifier
     protected abstract String safeId(String id);
 

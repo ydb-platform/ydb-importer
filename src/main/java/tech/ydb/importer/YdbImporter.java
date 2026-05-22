@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,7 +120,12 @@ public class YdbImporter {
                         createMissingTables(workers, tables);
                         // Load data if necessary
                         if (config.getTarget().isLoadData()) {
-                            loadTableData(workers, tables);
+                            invokeBeforeReadHooks(tables);
+                            try {
+                                loadTableData(workers, tables);
+                            } finally {
+                                invokeAfterReadHooks(tables);
+                            }
                         }
                     }
                 }
@@ -243,6 +250,42 @@ public class YdbImporter {
             }
         }
         table.setFields(StructType.of(fields));
+    }
+
+    private void invokeBeforeReadHooks(List<TableDecision> tables) throws SQLException {
+        runReadHooks(tables, true, (con, td) -> {
+            try {
+                tableLister.beforeTableRead(con, td);
+            } catch (SQLException ex) {
+                LOG.warn("beforeTableRead failed for table {}.{}",
+                        td.getSchema(), td.getTable(), ex);
+                td.setFailure(true);
+            }
+        });
+    }
+
+    private void invokeAfterReadHooks(List<TableDecision> tables) throws SQLException {
+        runReadHooks(tables, false, (con, td) -> {
+            try {
+                tableLister.afterTableRead(con, td);
+            } catch (SQLException ex) {
+                LOG.warn("afterTableRead failed for table {}.{}",
+                        td.getSchema(), td.getTable(), ex);
+            }
+        });
+    }
+
+    private void runReadHooks(List<TableDecision> tables, boolean skipFailed,
+            BiConsumer<Connection, TableDecision> action) throws SQLException {
+        try (Connection con = sourceCP.getConnection()) {
+            con.setAutoCommit(true);
+            for (TableDecision td : tables) {
+                if (skipFailed && td.isFailure()) {
+                    continue;
+                }
+                action.accept(con, td);
+            }
+        }
     }
 
     private void loadTableData(ExecutorService es, List<TableDecision> tables) throws Exception {
