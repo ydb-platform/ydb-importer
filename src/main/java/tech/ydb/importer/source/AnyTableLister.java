@@ -57,6 +57,10 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
     public void afterTableRead(Connection con, TableDecision td) throws SQLException {
     }
 
+    public boolean useStringForClobRead() {
+        return false;
+    }
+
     // Safely quote the identifier
     protected abstract String safeId(String id);
 
@@ -322,6 +326,8 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 return new PostgresTableLister(tableMaps);
             case MYSQL:
                 return new MySqlTableLister(tableMaps);
+            case CLICKHOUSE:
+                return new ClickHouseTableLister(tableMaps);
             case INFORMIX:
             case DB2:
             case MSSQL:

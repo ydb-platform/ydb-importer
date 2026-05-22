@@ -7,6 +7,7 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
 import tech.ydb.importer.config.SourceConfig;
+import tech.ydb.importer.config.SourceType;
 
 /**
  * Connection pool wrapper object
@@ -19,7 +20,9 @@ public class SourceCP implements AutoCloseable {
 
     public SourceCP(SourceConfig sc, int poolSize) throws SQLException {
         HikariConfig hc = new HikariConfig();
-        hc.setAutoCommit(false);
+        if (SourceType.CLICKHOUSE != sc.getType()) {
+            hc.setAutoCommit(false);
+        }
         hc.setJdbcUrl(sc.getJdbcUrl());
         hc.setUsername(sc.getUserName());
         hc.setPassword(sc.getPassword());

@@ -13,4 +13,5 @@ public enum SourceType {
     MSSQL,
     DB2,
     INFORMIX,
+    CLICKHOUSE,
 }
