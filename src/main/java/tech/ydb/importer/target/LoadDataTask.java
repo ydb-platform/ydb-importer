@@ -144,6 +144,9 @@ public class LoadDataTask implements Callable<Boolean> {
                     checkCancelled();
                     savedRowIndex = rowIndex;
                     TaskQuery query = queries.get(nextQuery);
+                    if (queries.size() > 1) {
+                        LOG.info("Reading range {}", query.getName());
+                    }
                     copied += executeQuery(con, query.getSql());
                     nextQuery++;
                     attempt = 0;
