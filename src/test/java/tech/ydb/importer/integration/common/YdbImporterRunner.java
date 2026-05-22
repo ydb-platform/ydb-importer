@@ -179,6 +179,7 @@ public final class YdbImporterRunner {
                     targetPrefix + ".${schema}.${table}");
             options.setBlobTemplate(targetPrefix + ".${schema}.${table}_${field}");
             options.setUseSourcePartitions(usePartitions);
+            options.setYdbPartitionCount(usePartitions ? TableRef.AUTO : TableRef.NONE);
             optionsCustomizer.accept(options);
             config.getOptionsMap().put(options.getName(), options);
 

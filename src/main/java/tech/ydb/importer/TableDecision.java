@@ -91,7 +91,7 @@ public class TableDecision implements TableIdentity {
             return tableRef.getYdbPartitionCount();
         }
         Integer fromOptions = (options != null) ? options.getYdbPartitionCount() : null;
-        return (fromOptions != null) ? fromOptions : TableRef.AUTO;
+        return (fromOptions != null) ? fromOptions : TableRef.NONE;
     }
 
     public boolean partitionBuffers() {

@@ -281,7 +281,7 @@ Below is the definition of the configuration file structure:
              N    - integer >= 2, split the first key column range into N equal
                     intervals (from ydb-partition-from/to, otherwise source MIN/MAX).
              none - do not set it, YDB manages partitions on its own.
-             Default is auto. Can be overridden in <table-ref>. -->
+             Default is none. Can be overridden in <table-ref>. -->
         <ydb-partition-count>auto</ydb-partition-count>
     </table-options>
     <!-- Table map filters the source tables and defines the conversion modes for them. -->
