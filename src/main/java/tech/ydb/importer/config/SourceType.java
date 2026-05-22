@@ -14,4 +14,5 @@ public enum SourceType {
     DB2,
     INFORMIX,
     CLICKHOUSE,
+    MARIADB,
 }
