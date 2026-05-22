@@ -15,4 +15,5 @@ public enum SourceType {
     INFORMIX,
     CLICKHOUSE,
     MARIADB,
+    VERTICA,
 }
