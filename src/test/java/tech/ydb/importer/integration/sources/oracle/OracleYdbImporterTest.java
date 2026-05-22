@@ -597,4 +597,11 @@ public class OracleYdbImporterTest {
 
     @Nested class TableTests extends OracleTableCases {
     }
+
+    @Nested class PartitioningTests extends AbstractOraclePartitioningTests {
+        @Override
+        public SourceDb sourceDb() {
+            return new SourceDb(oracleContainer, SourceType.ORACLE, schemaName);
+        }
+    }
 }
