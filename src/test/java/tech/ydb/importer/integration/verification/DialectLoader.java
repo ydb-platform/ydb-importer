@@ -28,7 +28,7 @@ public abstract class DialectLoader {
                 ddl.append(", ");
             }
             ddl.append(cols.get(i).name()).append(' ')
-                    .append(toDdl(cols.get(i).type()));
+                    .append(columnDdl(cols.get(i)));
         }
         if (scenario.blobColumn() != null) {
             String blobType = blobDdlType();
@@ -139,10 +139,9 @@ public abstract class DialectLoader {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     protected LocalDateTime[] rangeDateBoundaries(TableScenario scenario) {
-        long n = scenario.oracle().rowCount();
         int p = partitionCount(scenario);
         LocalDateTime[] b = new LocalDateTime[p - 1];
-        long chunkSeconds = Math.max(1L, n / p);
+        long chunkSeconds = Math.max(1L, ShopScenarios.TARGET_SECONDS / p);
         for (int i = 0; i < p - 1; i++) {
             b[i] = ShopScenarios.BASE_DT.plusSeconds((i + 1) * chunkSeconds);
         }
@@ -150,6 +149,10 @@ public abstract class DialectLoader {
     }
 
     protected abstract String toDdl(LogicalType type);
+
+    protected String columnDdl(ColumnSpec col) {
+        return toDdl(col.type());
+    }
 
     protected String blobDdlType() {
         return null;

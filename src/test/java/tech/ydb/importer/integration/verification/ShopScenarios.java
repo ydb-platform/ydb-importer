@@ -187,9 +187,9 @@ public final class ShopScenarios {
                 .col("is_verified",     BOOL,     id -> intMod(id, B_VERIFIED, 100) < 67)
                 .col("registered_date", DATE,     id ->
                         BASE_DATE.plusDays(intMod(id, T_REGISTERED, 1460)))
-                .col("bio",             STRING,   id ->
+                .colNullable("bio",     STRING,   id ->
                         oneIn(id, G_BIO, 5) ? null : "Bio of user " + id)
-                .col("deleted_at",      DATETIME, id ->
+                .colNullable("deleted_at", DATETIME, id ->
                         oneIn(id, G_DELETED, 100) ? randomTime(id, T_DELETED) : null)
                 .build();
     }
@@ -313,7 +313,7 @@ public final class ShopScenarios {
                 .col("address_id",    INT64,    id ->
                         zipfLikePick(id, addressCount, ZIPF_ALPHA, FK_ADDRESS))
                 .col("shipped_at",    DATETIME, id -> randomTime(id, T_SHIPPED))
-                .col("tracking_code", STRING,   id ->
+                .colNullable("tracking_code", STRING,   id ->
                         oneIn(id, G_TRACKING, 4) ? null : "TRK-" + id)
                 .partition(PartitionStyle.HASH_INT, "address_id")
                 .build();
