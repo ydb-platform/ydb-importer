@@ -51,4 +51,12 @@ public class MySqlYdbImporterTest {
             return new SourceDb(mysqlContainer, SourceType.MYSQL, DB_NAME);
         }
     }
+
+    @Nested
+    class PartitioningTests extends AbstractMySqlPartitioningTests {
+        @Override
+        public SourceDb sourceDb() {
+            return new SourceDb(mysqlContainer, SourceType.MYSQL, DB_NAME);
+        }
+    }
 }
