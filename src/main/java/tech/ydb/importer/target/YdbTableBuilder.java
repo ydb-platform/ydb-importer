@@ -35,6 +35,10 @@ public class YdbTableBuilder {
         tab.getClobTargets().clear();
         for (ColumnInfo ci : tab.getMetadata().getColumns()) {
             if (ci.isBlob()) {
+                if (isClobOverride(ci.getName())) {
+                    LOG.warn("ignoring user defined CLOB column {} in table {}: column is BLOB",
+                            ci.getName(), makeTableName());
+                }
                 tab.getBlobTargets().put(ci.getName(),
                         buildAuxTable(ci, "String", BlobReader.BLOB_ROW));
             } else if (ci.isClob()) {
