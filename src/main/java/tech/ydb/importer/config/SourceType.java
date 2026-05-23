@@ -17,4 +17,5 @@ public enum SourceType {
     MARIADB,
     VERTICA,
     HANA,
+    GREENPLUM,
 }

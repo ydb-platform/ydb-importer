@@ -332,6 +332,8 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 return new VerticaTableLister(tableMaps);
             case HANA:
                 return new HanaTableLister(tableMaps);
+            case GREENPLUM:
+                return new GreenplumTableLister(tableMaps);
             case CLICKHOUSE:
                 return new ClickHouseTableLister(tableMaps);
             case INFORMIX:
