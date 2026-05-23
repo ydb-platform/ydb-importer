@@ -11,10 +11,15 @@ Right now the tested data sources include the following:
 
 * [PostgreSQL](https://www.postgresql.org/),
 * [MySQL](https://www.mysql.com/),
+* [MariaDB](https://mariadb.org/) (including [ColumnStore](https://mariadb.com/docs/analytics/mariadb-columnstore)),
 * [Oracle Database](https://www.oracle.com/database/),
 * [Microsoft SQL Server](https://www.microsoft.com/sql-server/),
 * [IBM Db2](https://www.ibm.com/products/db2),
-* [IBM Informix](https://www.ibm.com/products/informix).
+* [IBM Informix](https://www.ibm.com/products/informix),
+* [ClickHouse](https://clickhouse.com/),
+* [SAP HANA](https://www.sap.com/products/data-cloud/hana.html),
+* [Vertica](https://www.opentext.com/products/analytics-database),
+* [Greenplum](https://techdocs.broadcom.com/us/en/vmware-tanzu/data-solutions/tanzu-greenplum/7.html).
 
 Other data sources will probably work, too, as the tool uses the generic JDBC APIs to retrieve data and metadata.
 
@@ -127,10 +132,15 @@ Reading and target partitioning are resolved independently.
 Sample configuration files:
 * [for PostgreSQL](scripts/sample-postgres.xml);
 * [for MySQL](scripts/sample-mysql.xml);
+* [for MariaDB](scripts/sample-mariadb.xml);
 * [for Oracle Database](scripts/sample-oracle.xml);
 * [for Microsoft SQL Server](scripts/sample-mssql.xml);
 * [for IBM Db2](scripts/sample-db2.xml);
-* [for IBM Informix](scripts/sample-informix.xml).
+* [for IBM Informix](scripts/sample-informix.xml);
+* [for ClickHouse](scripts/sample-clickhouse.xml);
+* [for SAP HANA](scripts/sample-hana.xml);
+* [for Vertica](scripts/sample-vertica.xml);
+* [for Greenplum](scripts/sample-greenplum.xml).
 
 Below is the definition of the configuration file structure:
 
@@ -159,7 +169,7 @@ Below is the definition of the configuration file structure:
     <!-- Source database connection parameters.
          type - the required attribute defining the type of the data source
       -->
-    <source type="generic|postgresql|mysql|oracle|mssql|db2|informix">
+    <source type="generic|postgresql|greenplum|mysql|mariadb|oracle|mssql|db2|informix|clickhouse|hana|vertica">
         <!-- JDBC driver class name to be used. Typical values:
               org.postgresql.Driver
               com.mysql.cj.jdbc.Driver
@@ -168,6 +178,10 @@ Below is the definition of the configuration file structure:
               com.microsoft.sqlserver.jdbc.SQLServerDriver
               com.ibm.db2.jcc.DB2Driver
               com.informix.jdbc.IfxDriver
+              com.clickhouse.jdbc.ClickHouseDriver
+              com.sap.db.jdbc.Driver
+              com.vertica.jdbc.Driver
+              (for greenplum, same as PostgreSQL: org.postgresql.Driver)
         -->
         <jdbc-class>driver-class-name</jdbc-class>
         <!-- JDBC driver URL. Value templates:
@@ -178,6 +192,10 @@ Below is the definition of the configuration file structure:
               jdbc:sqlserver://localhost;encrypt=true;trustServerCertificate=true;database=AdventureWorks2022;
               jdbc:db2://localhost:50000/SAMPLE
               jdbc:informix-sqli://localhost:9088/stores_demo:INFORMIXSERVER=informix
+              jdbc:clickhouse://hostname:8123/default
+              jdbc:sap://hostname:39041
+              jdbc:vertica://hostname:5433/VMart
+              (for greenplum, same as PostgreSQL: jdbc:postgresql://hostname:5432/dbname)
         -->
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>

@@ -6,10 +6,15 @@
 
 * [PostgreSQL](https://www.postgresql.org/),
 * [MySQL](https://www.mysql.com/),
+* [MariaDB](https://mariadb.org/) (включая [ColumnStore](https://mariadb.com/docs/analytics/mariadb-columnstore)),
 * [Oracle Database](https://www.oracle.com/database/),
 * [Microsoft SQL Server](https://www.microsoft.com/sql-server/),
 * [IBM Db2](https://www.ibm.com/products/db2),
-* [IBM Informix](https://www.ibm.com/products/informix).
+* [IBM Informix](https://www.ibm.com/products/informix),
+* [ClickHouse](https://clickhouse.com/),
+* [SAP HANA](https://www.sap.com/products/data-cloud/hana.html),
+* [Vertica](https://www.opentext.com/products/analytics-database),
+* [Greenplum](https://techdocs.broadcom.com/us/en/vmware-tanzu/data-solutions/tanzu-greenplum/7.html).
 
 Непротестированные источники данных JDBC с определенной вероятностью также могут оказаться поддержаны утилитой, поскольку в ней используются стандартные API для доступа к данным и метаданным.
 
@@ -127,10 +132,15 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
 Примеры файлов настроек с комментариями:
 * [для PostgreSQL](scripts/sample-postgres.xml);
 * [для MySQL](scripts/sample-mysql.xml);
+* [для MariaDB](scripts/sample-mariadb.xml);
 * [для Oracle Database](scripts/sample-oracle.xml);
 * [для Microsoft SQL Server](scripts/sample-mssql.xml);
 * [для IBM Db2](scripts/sample-db2.xml);
-* [для IBM Informix](scripts/sample-informix.xml).
+* [для IBM Informix](scripts/sample-informix.xml);
+* [для ClickHouse](scripts/sample-clickhouse.xml);
+* [для SAP HANA](scripts/sample-hana.xml);
+* [для Vertica](scripts/sample-vertica.xml);
+* [для Greenplum](scripts/sample-greenplum.xml).
 
 Описание формата файла настроек:
 
@@ -159,7 +169,7 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
     <!-- Параметры подключения к БД-источнику.
          type - обязательный атрибут, влияющий на логику взаимодействия с источником
       -->
-    <source type="generic|postgresql|mysql|oracle|mssql|db2|informix">
+    <source type="generic|postgresql|greenplum|mysql|mariadb|oracle|mssql|db2|informix|clickhouse|hana|vertica">
         <!-- Имя основного класса драйвера JDBC. Типичные значения:
               org.postgresql.Driver
               com.mysql.cj.jdbc.Driver
@@ -168,6 +178,10 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
               com.microsoft.sqlserver.jdbc.SQLServerDriver
               com.ibm.db2.jcc.DB2Driver
               com.informix.jdbc.IfxDriver
+              com.clickhouse.jdbc.ClickHouseDriver
+              com.sap.db.jdbc.Driver
+              com.vertica.jdbc.Driver
+              (для greenplum используется драйвер PostgreSQL: org.postgresql.Driver)
         -->
         <jdbc-class>driver-class-name</jdbc-class>
         <!-- URL JDBC для подключения к источнику. Примеры значений:
@@ -178,6 +192,10 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
               jdbc:sqlserver://localhost;encrypt=true;trustServerCertificate=true;database=AdventureWorks2022;
               jdbc:db2://localhost:50000/SAMPLE
               jdbc:informix-sqli://localhost:9088/stores_demo:INFORMIXSERVER=informix
+              jdbc:clickhouse://hostname:8123/default
+              jdbc:sap://hostname:39041
+              jdbc:vertica://hostname:5433/VMart
+              (для greenplum используется URL PostgreSQL: jdbc:postgresql://hostname:5432/dbname)
         -->
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
