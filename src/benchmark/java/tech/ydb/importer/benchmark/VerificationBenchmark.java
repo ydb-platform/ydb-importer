@@ -250,7 +250,8 @@ public class VerificationBenchmark {
                 "  --pool-size N         importer worker pool size (default 4)",
                 "  --gen-pool-size N     threads for source data loading (default 4)",
                 "  --fetch-size N        JDBC fetchSize (default 10000)",
-                "  --sources LIST        comma-separated from: postgres, mysql, oracle",
+                "  --sources LIST        comma-separated from: postgres, mysql, oracle,",
+                "                        clickhouse, mariadb, vertica, hana, greenplum, db2",
                 "                        (default postgres)",
                 "  --modes LIST          comma-separated from: ROW, ROW+PART, ARROW, ARROW+PART",
                 "                        (default ROW+PART)",
@@ -335,10 +336,25 @@ public class VerificationBenchmark {
             case "postgres":
             case "pg":
                 return SourceDbProfile.postgres(DEFAULT_DB_NAME);
+            case "clickhouse":
+            case "ch":
+                return SourceDbProfile.clickhouse();
+            case "mariadb":
+                return SourceDbProfile.mariadb(DEFAULT_DB_NAME);
+            case "vertica":
+                return SourceDbProfile.vertica();
+            case "hana":
+                return SourceDbProfile.hana();
+            case "greenplum":
+            case "gp":
+                return SourceDbProfile.greenplum();
+            case "db2":
+                return SourceDbProfile.db2();
             default:
                 throw new IllegalArgumentException(
                         "Unknown source: " + name
-                                + ". Use: postgres, mysql, oracle");
+                                + ". Use: postgres, mysql, oracle, clickhouse,"
+                                + " mariadb, vertica, hana, greenplum, db2");
         }
     }
 

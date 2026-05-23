@@ -11,12 +11,23 @@ import java.util.Set;
 import org.testcontainers.containers.JdbcDatabaseContainer;
 
 import tech.ydb.importer.config.SourceType;
+import tech.ydb.importer.integration.sources.clickhouse.ClickHouseLoader;
+import tech.ydb.importer.integration.sources.clickhouse.ClickHouseTestContainer;
+import tech.ydb.importer.integration.sources.db2.Db2Loader;
+import tech.ydb.importer.integration.sources.db2.Db2TestContainer;
+import tech.ydb.importer.integration.sources.greenplum.GreenplumTestContainer;
+import tech.ydb.importer.integration.sources.hana.HanaLoader;
+import tech.ydb.importer.integration.sources.hana.HanaTestContainer;
+import tech.ydb.importer.integration.sources.mariadb.MariaDbLoader;
+import tech.ydb.importer.integration.sources.mariadb.MariaDbTestContainer;
 import tech.ydb.importer.integration.sources.mysql.MySqlLoader;
 import tech.ydb.importer.integration.sources.mysql.MySqlTestContainer;
 import tech.ydb.importer.integration.sources.oracle.OracleLoader;
 import tech.ydb.importer.integration.sources.oracle.OracleTestContainer;
 import tech.ydb.importer.integration.sources.postgres.PostgresLoader;
 import tech.ydb.importer.integration.sources.postgres.PostgresTestContainer;
+import tech.ydb.importer.integration.sources.vertica.VerticaLoader;
+import tech.ydb.importer.integration.sources.vertica.VerticaTestContainer;
 import tech.ydb.importer.integration.verification.TableScenario.Feature;
 
 /** Source DB test profile with container, connection and dialect loader */
@@ -58,6 +69,22 @@ public final class SourceDbProfile {
         return name;
     }
 
+    public static SourceDbProfile clickhouse() {
+        return new SourceDbProfile("clickhouse",
+                ClickHouseTestContainer.create(),
+                SourceType.CLICKHOUSE, "default",
+                ClickHouseLoader.INSTANCE,
+                EnumSet.of(Feature.PARTITIONED));
+    }
+
+    public static SourceDbProfile mariadb(String dbName) {
+        return new SourceDbProfile("mariadb",
+                MariaDbTestContainer.create(dbName),
+                SourceType.MARIADB, dbName,
+                MariaDbLoader.INSTANCE,
+                EnumSet.of(Feature.BLOB, Feature.PARTITIONED));
+    }
+
     public static SourceDbProfile mysql(String dbName) {
         return new SourceDbProfile("mysql",
                 MySqlTestContainer.create(dbName),
@@ -74,6 +101,14 @@ public final class SourceDbProfile {
                 EnumSet.of(Feature.BLOB, Feature.PARTITIONED));
     }
 
+    public static SourceDbProfile greenplum() {
+        return new SourceDbProfile("greenplum",
+                new GreenplumTestContainer(),
+                SourceType.GREENPLUM, "public",
+                PostgresLoader.INSTANCE,
+                EnumSet.of(Feature.PARTITIONED));
+    }
+
     public static SourceDbProfile oracle() {
         return new SourceDbProfile("oracle",
                 OracleTestContainer.create(),
@@ -82,11 +117,41 @@ public final class SourceDbProfile {
                 EnumSet.of(Feature.BLOB, Feature.PARTITIONED));
     }
 
+    public static SourceDbProfile db2() {
+        return new SourceDbProfile("db2",
+                new Db2TestContainer(),
+                SourceType.DB2, Db2TestContainer.SCHEMA,
+                Db2Loader.INSTANCE,
+                EnumSet.of(Feature.BLOB, Feature.PARTITIONED));
+    }
+
+    public static SourceDbProfile vertica() {
+        return new SourceDbProfile("vertica",
+                new VerticaTestContainer(),
+                SourceType.VERTICA, "public",
+                VerticaLoader.INSTANCE,
+                EnumSet.of(Feature.BLOB, Feature.PARTITIONED));
+    }
+
+    public static SourceDbProfile hana() {
+        return new SourceDbProfile("hana",
+                new HanaTestContainer(),
+                SourceType.HANA, HanaTestContainer.SCHEMA,
+                HanaLoader.INSTANCE,
+                EnumSet.of(Feature.BLOB, Feature.PARTITIONED));
+    }
+
     public static List<SourceDbProfile> all(String defaultDbName) {
         List<SourceDbProfile> list = new ArrayList<>();
-        list.add(postgres(defaultDbName));
+        list.add(clickhouse());
+        list.add(mariadb(defaultDbName));
         list.add(mysql(defaultDbName));
+        list.add(postgres(defaultDbName));
+        list.add(greenplum());
         list.add(oracle());
+        list.add(db2());
+        list.add(vertica());
+        list.add(hana());
         return list;
     }
 }
