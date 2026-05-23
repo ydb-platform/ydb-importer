@@ -336,8 +336,9 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 return new GreenplumTableLister(tableMaps);
             case CLICKHOUSE:
                 return new ClickHouseTableLister(tableMaps);
-            case INFORMIX:
             case DB2:
+                return new DB2TableLister(tableMaps);
+            case INFORMIX:
             case MSSQL:
                 return new GenericJdbcTableLister(tableMaps, con);
             default:

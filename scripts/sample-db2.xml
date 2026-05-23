@@ -6,18 +6,21 @@
     </workers>
     <source type="db2">
         <jdbc-class>com.ibm.db2.jcc.DB2Driver</jdbc-class>
-        <jdbc-url>jdbc:db2://localhost:50000/SAMPLE</jdbc-url>
+        <jdbc-url>jdbc:db2://hostname:50000/SAMPLE</jdbc-url>
         <username>db2inst1</username>
         <password>password</password>
     </source>
     <target type="ydb">
         <script-file>sample-db2.yql.tmp</script-file>
-        <connection-string>grpc://localhost:2136?database=/Root/test</connection-string>
+        <connection-string>grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g</connection-string>
+        <!--
+        <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
+        -->
         <!-- Custom TLS certificate file, if needed
         <tls-certificate-file>ca.crt</tls-certificate-file>
         -->
         <!-- ENV, NONE, STATIC, METADATA, SAKEY -->
-        <auth-mode>NONE</auth-mode>
+        <auth-mode>ENV</auth-mode>
         <!-- auth-mode: STATIC
         <static-login>username</static-login>
         <static-password>password</static-password>
@@ -45,7 +48,20 @@
     </table-options>
     <table-map options="default">
         <include-schemas regexp="true">.*</include-schemas>
-        <exclude-schemas>INFORMATION_SCHEMA</exclude-schemas>
         <!-- Possible extra tags: include-tables, exclude-tables, exclude-schemas -->
     </table-map>
+    <table-ref options="default">
+        <schema-name>SYSCAT</schema-name>
+        <table-name>TABLES</table-name>
+        <key-column>TABSCHEMA</key-column>
+        <key-column>TABNAME</key-column>
+    </table-ref>
+    <table-ref options="default">
+        <schema-name>SYSCAT</schema-name>
+        <table-name>COLUMNS</table-name>
+        <query-text>SELECT * FROM SYSCAT.COLUMNS</query-text>
+        <key-column>TABSCHEMA</key-column>
+        <key-column>TABNAME</key-column>
+        <key-column>COLNAME</key-column>
+    </table-ref>
 </ydb-importer>
