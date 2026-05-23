@@ -497,6 +497,47 @@
                     <artifactId>ojdbc8</artifactId>
                     <version>23.7.0.25.01</version>
                 </dependency>
+                <dependency>
+                    <groupId>org.testcontainers</groupId>
+                    <artifactId>testcontainers-clickhouse</artifactId>
+                    <version>2.0.3</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.testcontainers</groupId>
+                    <artifactId>testcontainers-mariadb</artifactId>
+                    <version>2.0.3</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.testcontainers</groupId>
+                    <artifactId>testcontainers-db2</artifactId>
+                    <version>2.0.3</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.clickhouse</groupId>
+                    <artifactId>clickhouse-jdbc</artifactId>
+                    <version>0.9.8</version>
+                    <classifier>all</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.mariadb.jdbc</groupId>
+                    <artifactId>mariadb-java-client</artifactId>
+                    <version>3.5.3</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.vertica.jdbc</groupId>
+                    <artifactId>vertica-jdbc</artifactId>
+                    <version>24.1.0-0</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.sap.cloud.db.jdbc</groupId>
+                    <artifactId>ngdbc</artifactId>
+                    <version>2.28.6</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.ibm.db2</groupId>
+                    <artifactId>jcc</artifactId>
+                    <version>12.1.4.0</version>
+                </dependency>
             </dependencies>
         </profile>
     </profiles>
