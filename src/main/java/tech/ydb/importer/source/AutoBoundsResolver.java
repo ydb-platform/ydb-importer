@@ -11,6 +11,7 @@ import java.util.Map;
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.TableRef;
 import tech.ydb.importer.source.RangeSplitter.Range;
+import tech.ydb.importer.target.YdbTypeMapper;
 
 /**
  * Resolves source side split bounds and YDB PARTITION_AT_KEYS cuts for a table.
@@ -120,6 +121,11 @@ final class AutoBoundsResolver {
         }
         if (type != SplitColumnType.INTEGER) {
             logSkip(isAuto, td, "Leading key of {}.{} is not an integer type, "
+                    + "YDB partitioning skipped");
+            return;
+        }
+        if (!YdbTypeMapper.partitionableInteger(leading, td.getOptions())) {
+            logSkip(isAuto, td, "Leading key of {}.{} does not map to an integer YDB type, "
                     + "YDB partitioning skipped");
             return;
         }

@@ -5,7 +5,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -313,7 +312,7 @@ public class LoadDataTask implements Callable<Boolean> {
             return null;
         }
         ColumnInfo pk = key.get(0);
-        if (!isIntegerType(pk.getSqlType())) {
+        if (!YdbTypeMapper.partitionableInteger(pk, tab.getOptions())) {
             return null;
         }
         long[] cuts = new long[cutStrings.size()];
@@ -335,11 +334,6 @@ public class LoadDataTask implements Callable<Boolean> {
             return null;
         }
         return new PartitionBounds(cuts, pkIndex);
-    }
-
-    private static boolean isIntegerType(int sqlType) {
-        return sqlType == Types.BIGINT || sqlType == Types.INTEGER
-                || sqlType == Types.SMALLINT || sqlType == Types.TINYINT;
     }
 
     private static final class PartitionBounds {
