@@ -20,8 +20,7 @@ public class TableMetadata {
     private final Map<String, ColumnInfo> lookup = new HashMap<>();
     private final List<ColumnInfo> key = new ArrayList<>();
     private List<TaskInfo> tasks = Collections.emptyList();
-    private List<String> partitionAtKeys = Collections.emptyList();
-    private String partitionStrategy;
+    private YdbPartitioning ydbPartitioning = YdbPartitioning.ydbDefault();
     private List<TaskInfo> sourcePartitions;
 
     public boolean isValid() {
@@ -109,24 +108,12 @@ public class TableMetadata {
         this.tasks = tasks;
     }
 
-    public List<String> getPartitionAtKeys() {
-        return Collections.unmodifiableList(partitionAtKeys);
+    public YdbPartitioning getYdbPartitioning() {
+        return ydbPartitioning;
     }
 
-    public void setPartitionAtKeys(List<String> partitionAtKeys) {
-        this.partitionAtKeys = partitionAtKeys;
-    }
-
-    public boolean hasPartitionAtKeys() {
-        return !partitionAtKeys.isEmpty();
-    }
-
-    public String getPartitionStrategy() {
-        return partitionStrategy;
-    }
-
-    public void setPartitionStrategy(String partitionStrategy) {
-        this.partitionStrategy = partitionStrategy;
+    public void setYdbPartitioning(YdbPartitioning ydbPartitioning) {
+        this.ydbPartitioning = ydbPartitioning;
     }
 
     public List<TaskInfo> getSourcePartitions() {

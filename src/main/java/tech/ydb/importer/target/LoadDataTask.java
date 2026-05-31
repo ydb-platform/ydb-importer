@@ -307,7 +307,7 @@ public class LoadDataTask implements Callable<Boolean> {
      *  Returns null when regrouping is not possible. */
     private PartitionBounds resolvePartitionBounds(ResultSetMetaData rsmd) throws SQLException {
         List<ColumnInfo> key = tab.getMetadata().getKey();
-        List<String> cutStrings = tab.getMetadata().getPartitionAtKeys();
+        List<String> cutStrings = tab.getMetadata().getYdbPartitioning().getCuts();
         if (key.isEmpty() || cutStrings.isEmpty()) {
             return null;
         }

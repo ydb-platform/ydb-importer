@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.Map;
 
 import tech.ydb.importer.TableDecision;
+import tech.ydb.importer.config.TableOptions;
 import tech.ydb.importer.config.TableRef;
 import tech.ydb.importer.source.RangeSplitter.Range;
+import tech.ydb.importer.target.TargetTable;
 import tech.ydb.importer.target.YdbTypeMapper;
 
 /**
@@ -102,6 +104,10 @@ final class AutoBoundsResolver {
 
     private void resolveYdbPartition(Connection con, TableDecision td, TableMetadata tm,
             TableRef ref, Map<String, Range> cache) throws SQLException {
+        if (TableOptions.StoreType.COLUMN.equals(td.getOptions().getStoreType())) {
+            resolveColumnHashPartition(td, tm);
+            return;
+        }
         int requestedN = td.ydbPartitionCount();
         if (requestedN == TableRef.NONE) {
             return;
@@ -170,6 +176,24 @@ final class AutoBoundsResolver {
         tryMirrorPreSplit(con, td, tm, partitions, leading.getName(), type);
     }
 
+    private void resolveColumnHashPartition(TableDecision td, TableMetadata tm) {
+        int n = td.ydbPartitionCount();
+        if (n == TableRef.AUTO || n == TableRef.NONE) {
+            return;
+        }
+        if (tm.getKey().isEmpty()) {
+            tm.setYdbPartitioning(YdbPartitioning.hash(n, TargetTable.SYNTH_KEY_FIELD));
+            return;
+        }
+        ColumnInfo leading = tm.getKey().iterator().next();
+        if (leading.isNullable()) {
+            LOG.warn("Leading key of {}.{} is nullable, YDB HASH partitioning skipped",
+                    td.getSchema(), td.getTable());
+            return;
+        }
+        tm.setYdbPartitioning(YdbPartitioning.hash(n, leading.getDestinationName()));
+    }
+
     private void logSkip(boolean isAuto, TableDecision td, String msg) {
         if (!isAuto) {
             LOG.warn(msg, td.getSchema(), td.getTable());
@@ -225,8 +249,7 @@ final class AutoBoundsResolver {
 
     private void applyCuts(TableDecision td, TableMetadata tm,
             List<String> cuts, int n, String strategy) {
-        tm.setPartitionAtKeys(cuts);
-        tm.setPartitionStrategy(strategy);
+        tm.setYdbPartitioning(YdbPartitioning.keyRange(cuts, strategy));
         TableRef ref = td.getTableRef();
         if (ref != null) {
             ref.setYdbPartitionCount(n);

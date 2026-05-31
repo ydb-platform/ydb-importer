@@ -2,7 +2,6 @@ package tech.ydb.importer.target;
 
 import java.io.BufferedWriter;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.text.StringSubstitutor;
@@ -10,6 +9,7 @@ import org.apache.commons.text.StringSubstitutor;
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.TableOptions;
 import tech.ydb.importer.source.ColumnInfo;
+import tech.ydb.importer.source.YdbPartitioning;
 import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.Type;
@@ -86,33 +86,40 @@ public class YdbTableBuilder {
         } else {
             addPrimaryKey(sb);
         }
-        sb.append(") WITH (").append(EOL);
-        if (TableOptions.StoreType.COLUMN.equals(tab.getOptions().getStoreType())) {
+        sb.append(")").append(EOL);
+        appendPartitioning(sb);
+        return new TargetTable(tab, fullName, sb.toString(), StructType.of(types));
+    }
+
+    private void appendPartitioning(StringBuilder sb) {
+        final YdbPartitioning part = tab.getMetadata().getYdbPartitioning();
+        final boolean columnStore =
+                TableOptions.StoreType.COLUMN.equals(tab.getOptions().getStoreType());
+        if (columnStore && part.isHash()) {
+            sb.append("PARTITION BY HASH(`").append(part.getHashColumn()).append("`)").append(EOL);
+        }
+        sb.append("WITH (").append(EOL);
+        if (columnStore) {
             sb.append("  STORE = COLUMN").append(EOL);
-        } else if (tab.getMetadata().hasPartitionAtKeys()) {
-            List<String> keys = tab.getMetadata().getPartitionAtKeys();
-            int minPartitions = keys.size() + 1;
-            sb.append("  AUTO_PARTITIONING_BY_SIZE = ENABLED").append(EOL);
-            sb.append(", AUTO_PARTITIONING_BY_LOAD = ENABLED").append(EOL);
-            sb.append(", AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = ")
-                    .append(minPartitions).append(EOL);
-            sb.append(", AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9999").append(EOL);
-            sb.append(", PARTITION_AT_KEYS = (");
-            for (int i = 0; i < keys.size(); i++) {
-                if (i > 0) {
-                    sb.append(", ");
-                }
-                sb.append(keys.get(i));
+            if (part.isHash()) {
+                sb.append(", AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = ")
+                        .append(part.getHashPartitions()).append(EOL);
             }
-            sb.append(")").append(EOL);
+        } else if (part.isKeyRange()) {
+            appendAutoPartitioning(sb, part.getCuts().size() + 1);
+            sb.append(", PARTITION_AT_KEYS = (")
+                    .append(String.join(", ", part.getCuts())).append(")").append(EOL);
         } else {
-            sb.append("  AUTO_PARTITIONING_BY_SIZE = ENABLED").append(EOL);
-            sb.append(", AUTO_PARTITIONING_BY_LOAD = ENABLED").append(EOL);
-            sb.append(", AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 9999").append(EOL);
-            sb.append(", AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9999").append(EOL);
+            appendAutoPartitioning(sb, 9999);
         }
         sb.append(");").append(EOL);
-        return new TargetTable(tab, fullName, sb.toString(), StructType.of(types));
+    }
+
+    private void appendAutoPartitioning(StringBuilder sb, int minPartitions) {
+        sb.append("  AUTO_PARTITIONING_BY_SIZE = ENABLED").append(EOL);
+        sb.append(", AUTO_PARTITIONING_BY_LOAD = ENABLED").append(EOL);
+        sb.append(", AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = ").append(minPartitions).append(EOL);
+        sb.append(", AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9999").append(EOL);
     }
 
     private TargetTable buildBlobTable(TargetTable main, ColumnInfo ci) {

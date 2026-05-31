@@ -160,10 +160,16 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             tasks = Collections.singletonList(
                     new TaskInfo(label, makeSelectSql(td, tm.getColumns())));
         }
-        String ydbPlan = tm.hasPartitionAtKeys()
-                ? "YDB " + (tm.getPartitionAtKeys().size() + 1)
-                        + " partitions " + tm.getPartitionStrategy()
-                : "YDB default partitioning";
+        YdbPartitioning part = tm.getYdbPartitioning();
+        String ydbPlan;
+        if (part.isKeyRange()) {
+            ydbPlan = "YDB " + (part.getCuts().size() + 1)
+                    + " partitions " + part.getStrategy();
+        } else if (part.isHash()) {
+            ydbPlan = "YDB " + part.getHashPartitions() + " partitions " + part.getStrategy();
+        } else {
+            ydbPlan = "YDB default partitioning";
+        }
         LOG.info("Table {}.{}: {}, {}", td.getSchema(), td.getTable(), readPlan, ydbPlan);
         tm.setTasks(tasks);
         return tm;
