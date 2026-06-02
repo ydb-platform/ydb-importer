@@ -60,9 +60,11 @@ public abstract class AbstractYdbImporterTableTest extends AbstractYdbImporterIn
             YdbImporterRunner.Builder builder = YdbImporterRunner.builder()
                     .source(sourceContainer(), sourceType())
                     .ydb(ydbContainer())
-                    .table(primary.schema, primary.table);
+                    .table(primary.schema, primary.table)
+                    .customizeTable(primary::applyConfigTo);
             for (int i = 1; i < tables.size(); i++) {
-                builder.addTable(tables.get(i).schema, tables.get(i).table);
+                TableTestBuilder extra = tables.get(i);
+                builder.addTable(extra.schema, extra.table, extra::applyConfigTo);
             }
 
             List<String> targetPaths = new ArrayList<>();

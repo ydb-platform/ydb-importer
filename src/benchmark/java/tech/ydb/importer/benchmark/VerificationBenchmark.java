@@ -22,8 +22,8 @@ import tech.ydb.importer.integration.verification.SourceDbProfile;
 import tech.ydb.importer.integration.verification.TableScenario;
 
 /**
- * Benchmark that loads scenarios, imports to YDB, verifies row-by-row,
- * writes timings to bench-results/benchmark-N.json
+ * Benchmark that loads scenarios, imports to YDB in selected modes,
+ * verifies row-by-row, writes timings to bench-results/benchmark-N.json
  */
 public class VerificationBenchmark {
 
@@ -38,6 +38,7 @@ public class VerificationBenchmark {
         int genPoolSize = 4;
         int fetchSize = 10_000;
         String sourcesArg = "postgres";
+        String modesArg = "ROW+PART";
         boolean verify = true;
 
         for (int i = 0; i < args.length; i++) {
@@ -63,6 +64,9 @@ public class VerificationBenchmark {
                 case "--sources":
                     sourcesArg = args[++i];
                     break;
+                case "--modes":
+                    modesArg = args[++i];
+                    break;
                 case "--no-verify":
                     verify = false;
                     break;
@@ -79,10 +83,14 @@ public class VerificationBenchmark {
 
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
+        String[] allLabels = {"ROW", "ROW+PART"};
+        boolean[] allParts = {false, true};
+        List<Integer> selectedModes = parseModes(modesArg, allLabels);
         List<String> sources = parseSources(sourcesArg);
 
         System.out.printf("=== Verification Benchmark ===%n");
         System.out.printf("Sources:        %s%n", String.join(",", sources));
+        System.out.printf("Modes:          %s%n", joinSelectedModes(selectedModes, allLabels));
         System.out.printf("Rows per table: %,d%n", rows);
         System.out.printf("Batch size:     %,d%n", batchSize);
         System.out.printf("Gen batch:      %s%n",
@@ -95,8 +103,9 @@ public class VerificationBenchmark {
 
         List<SourceRun> runs = new ArrayList<>();
         for (String name : sources) {
-            runs.add(runSource(name, rows, batchSize, genBatchSize, poolSize,
-                    genPoolSize, fetchSize, verify));
+            runs.add(runSource(name, selectedModes, allLabels, allParts, rows,
+                    batchSize, genBatchSize, poolSize, genPoolSize, fetchSize,
+                    verify));
         }
 
         printRowCounts(runs);
@@ -109,7 +118,8 @@ public class VerificationBenchmark {
         }
     }
 
-    private static SourceRun runSource(String name, int rows, int batchSize,
+    private static SourceRun runSource(String name, List<Integer> selectedModes,
+            String[] allLabels, boolean[] allParts, int rows, int batchSize,
             int genBatchSize, int poolSize, int genPoolSize, int fetchSize,
             boolean verify) {
         System.out.printf("=== Source: %s ===%n", name);
@@ -136,13 +146,15 @@ public class VerificationBenchmark {
             run.loadMs = loadWithProgress(runner, genBatchSize, genPoolSize,
                     run.totalRows, name);
 
-            LocalYdbTestContainer ydb = new LocalYdbTestContainer();
-            ydb.start();
-            try {
-                run.modes.add(runMode("ROW", runner, ydb, batchSize, poolSize,
-                        fetchSize, verify));
-            } finally {
-                ydb.stop();
+            for (int idx : selectedModes) {
+                LocalYdbTestContainer ydb = new LocalYdbTestContainer();
+                ydb.start();
+                try {
+                    run.modes.add(runMode(allLabels[idx], allParts[idx], runner,
+                            ydb, batchSize, poolSize, fetchSize, verify));
+                } finally {
+                    ydb.stop();
+                }
             }
         } catch (Exception e) {
             run.error = shortMessage(e);
@@ -177,14 +189,15 @@ public class VerificationBenchmark {
         return loadMs;
     }
 
-    private static ModeResult runMode(String label, ScenarioRunner runner,
-            LocalYdbTestContainer ydb, int batchSize, int poolSize, int fetchSize,
-            boolean verify) throws Exception {
+    private static ModeResult runMode(String label, boolean usePartitions,
+            ScenarioRunner runner, LocalYdbTestContainer ydb, int batchSize,
+            int poolSize, int fetchSize, boolean verify) throws Exception {
 
         System.out.printf("=== Import [%s] ===%n", label);
 
         long importStart = System.currentTimeMillis();
-        runner.runImport(ydb, batchSize, poolSize, fetchSize, TARGET_PREFIX);
+        runner.runImport(ydb, batchSize, poolSize, fetchSize, usePartitions,
+                TARGET_PREFIX);
         long importMs = System.currentTimeMillis() - importStart;
 
         long totalRows = runner.totalRows();
@@ -238,6 +251,8 @@ public class VerificationBenchmark {
                 "  --fetch-size N        JDBC fetchSize (default 10000)",
                 "  --sources LIST        comma-separated from: postgres, mysql, oracle",
                 "                        (default postgres)",
+                "  --modes LIST          comma-separated from: ROW, ROW+PART",
+                "                        (default ROW+PART)",
                 "  --no-verify           skip verification step",
                 "  --help, -h            show this help"));
     }
@@ -255,6 +270,39 @@ public class VerificationBenchmark {
             System.exit(1);
         }
         return result;
+    }
+
+    private static List<Integer> parseModes(String modes, String[] allLabels) {
+        List<Integer> selected = new ArrayList<>();
+        for (String mode : modes.toUpperCase().split(",")) {
+            String trimmed = mode.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            for (int m = 0; m < allLabels.length; m++) {
+                if (allLabels[m].equals(trimmed)) {
+                    selected.add(m);
+                }
+            }
+        }
+        if (selected.isEmpty()) {
+            System.err.println("Unknown modes: " + modes
+                    + ". Use: ROW, ROW+PART");
+            System.exit(1);
+        }
+        return selected;
+    }
+
+    private static String joinSelectedModes(List<Integer> selected,
+            String[] allLabels) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < selected.size(); i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            sb.append(allLabels[selected.get(i)]);
+        }
+        return sb.toString();
     }
 
     private static void printProgress(long loaded, long total, long startNanos) {

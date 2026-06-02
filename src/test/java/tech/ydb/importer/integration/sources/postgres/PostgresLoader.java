@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDateTime;
 import java.util.function.LongConsumer;
 
 import org.postgresql.PGConnection;
@@ -100,16 +101,20 @@ public class PostgresLoader extends DialectLoader {
                             + ") TO (MAXVALUE)");
                     break;
                 }
-                case RANGE_DATE:
-                    st.execute("CREATE TABLE " + table + "_p0 PARTITION OF "
-                            + table + " FOR VALUES FROM (MINVALUE) TO ('2025-01-01')");
-                    st.execute("CREATE TABLE " + table + "_p1 PARTITION OF "
-                            + table + " FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')");
-                    st.execute("CREATE TABLE " + table + "_p2 PARTITION OF "
-                            + table + " FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')");
-                    st.execute("CREATE TABLE " + table + "_p3 PARTITION OF "
-                            + table + " FOR VALUES FROM ('2027-01-01') TO (MAXVALUE)");
+                case RANGE_DATE: {
+                    LocalDateTime[] db = rangeDateBoundaries(scenario);
+                    String from = "MINVALUE";
+                    for (int i = 0; i < db.length; i++) {
+                        String to = "'" + db[i].format(DATE_LITERAL_FMT) + "'";
+                        st.execute("CREATE TABLE " + table + "_p" + i
+                                + " PARTITION OF " + table
+                                + " FOR VALUES FROM (" + from + ") TO (" + to + ")");
+                        from = to;
+                    }
+                    st.execute("CREATE TABLE " + table + "_pmax PARTITION OF "
+                            + table + " FOR VALUES FROM (" + from + ") TO (MAXVALUE)");
                     break;
+                }
                 case LIST_STRING:
                     st.execute("CREATE TABLE " + table + "_card PARTITION OF "
                             + table + " FOR VALUES IN ('card')");

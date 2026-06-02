@@ -7,8 +7,10 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -26,6 +28,7 @@ import tech.ydb.importer.config.JdomHelper;
 import tech.ydb.importer.source.AnyTableLister;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.importer.source.TableMapList;
+import tech.ydb.importer.source.TaskInfo;
 import tech.ydb.importer.target.LoadDataTask;
 import tech.ydb.importer.target.ProgressCounter;
 import tech.ydb.importer.target.TargetCP;
@@ -245,15 +248,10 @@ public class YdbImporter {
         try (ProgressCounter progress = new ProgressCounter()) {
             progress.start();
 
-            WriterPool writerPool = new WriterPool(writerPoolSize, bufferCount);
+            WriterPool writerPool = new WriterPool(writerPoolSize, bufferCount, progress);
             try {
                 final List<Future<Boolean>> results = new ArrayList<>();
-                for (TableDecision td : tables) {
-                    if (td.isFailure()) {
-                        continue;
-                    }
-                    results.add(es.submit(new LoadDataTask(this, progress, td, writerPool)));
-                }
+                submitLoadTasks(es, tables, progress, writerPool, results);
                 if (results.isEmpty()) {
                     LOG.info("No valid tables to be loaded, nothing to do.");
                     return;
@@ -269,6 +267,39 @@ public class YdbImporter {
                 LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
             } finally {
                 writerPool.close();
+            }
+        }
+    }
+
+    /**
+     * Submits one task for each partition, or one task for a table without partitions.
+     * Tasks are picked from each table in round-robin order.
+     */
+    private void submitLoadTasks(ExecutorService es, List<TableDecision> tables,
+            ProgressCounter progress, WriterPool writerPool, List<Future<Boolean>> results) {
+        ArrayDeque<Iterator<LoadDataTask>> queue = new ArrayDeque<>();
+        for (TableDecision td : tables) {
+            if (td.isFailure()) {
+                continue;
+            }
+            List<TaskInfo> taskInfos = td.getMetadata().getTasks();
+            for (int i = 0; i < taskInfos.size(); i++) {
+                taskInfos.get(i).setIndex(i);
+            }
+            LOG.info("Table {}.{}: submitting {} task{}",
+                    td.getSchema(), td.getTable(), taskInfos.size(),
+                    taskInfos.size() == 1 ? "" : "s");
+            List<LoadDataTask> tasks = new ArrayList<>(taskInfos.size());
+            for (TaskInfo ti : taskInfos) {
+                tasks.add(new LoadDataTask(this, progress, td, ti, writerPool));
+            }
+            queue.add(tasks.iterator());
+        }
+        while (!queue.isEmpty()) {
+            Iterator<LoadDataTask> it = queue.poll();
+            results.add(es.submit(it.next()));
+            if (it.hasNext()) {
+                queue.add(it);
             }
         }
     }

@@ -5,7 +5,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -13,6 +15,7 @@ import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.SourceType;
 import tech.ydb.importer.config.TableIdentity;
 import tech.ydb.importer.config.TableRef;
+import tech.ydb.importer.source.RangeSplitter.Range;
 
 /**
  *
@@ -32,6 +35,21 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
     protected abstract List<String> listSchemas(Connection con) throws SQLException;
 
     protected abstract List<String> listTables(Connection con, String schema) throws SQLException;
+
+    protected List<TaskInfo> loadPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        return Collections.emptyList();
+    }
+
+    public List<TaskInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        List<TaskInfo> cached = tm.getSourcePartitions();
+        if (cached == null) {
+            cached = loadPartitions(con, td, tm);
+            tm.setSourcePartitions(cached);
+        }
+        return cached;
+    }
 
     // Safely quote the identifier
     protected abstract String safeId(String id);
@@ -113,17 +131,54 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 }
             }
         }
+        new AutoBoundsResolver(this).resolve(con, td, tm);
+        List<TaskInfo> tasks;
+        String readPlan;
+        TableRef ref = td.getTableRef();
+        if (ref != null && ref.hasSplit()) {
+            try {
+                tasks = RangeSplitter.generate(td, tm, this);
+                readPlan = "split by '" + ref.getSplitBy() + "' [" + ref.getSplitFrom()
+                        + ", " + ref.getSplitTo() + "] into " + tasks.size() + " ranges";
+            } catch (RangeSplitter.UnsplittableRangeException ex) {
+                LOG.warn("Cannot split {}.{} for parallel read ({}), reading with a single query",
+                        td.getSchema(), td.getTable(), ex.getMessage());
+                tasks = Collections.emptyList();
+                readPlan = "single query";
+            }
+        } else if (td.useSourcePartitions()) {
+            tasks = listPartitions(con, td, tm);
+            readPlan = tasks.isEmpty()
+                    ? "single query"
+                    : tasks.size() + " source partitions";
+        } else {
+            tasks = Collections.emptyList();
+            readPlan = "single query";
+        }
+        if (tasks.isEmpty()) {
+            String label = td.getSchema() + "." + td.getTable();
+            tasks = Collections.singletonList(
+                    new TaskInfo(label, makeSelectSql(td, tm.getColumns())));
+        }
+        YdbPartitioning part = tm.getYdbPartitioning();
+        String ydbPlan;
+        if (part.isKeyRange()) {
+            ydbPlan = "YDB " + (part.getCuts().size() + 1)
+                    + " partitions " + part.getStrategy();
+        } else if (part.isHash()) {
+            ydbPlan = "YDB " + part.getHashPartitions() + " partitions " + part.getStrategy();
+        } else {
+            ydbPlan = "YDB default partitioning";
+        }
+        LOG.info("Table {}.{}: {}, {}", td.getSchema(), td.getTable(), readPlan, ydbPlan);
+        tm.setTasks(tasks);
         return tm;
     }
 
     protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm)
             throws SQLException {
-        String sql = tm.getBasicSql();
-        if (isBlank(sql)) {
-            sql = makeSelectSql(td, tm.getColumns());
-            tm.setBasicSql(sql);
-        }
-        sql = "SELECT q.* FROM (" + sql + ") q WHERE 0=1"; // retrieve zero rows
+        String sql = "SELECT q.* FROM (" + makeSelectSql(td, tm.getColumns())
+                + ") q WHERE 0=1"; // retrieve zero rows
         try (PreparedStatement ps = con.prepareStatement(sql)) {
             try (ResultSet rs = ps.executeQuery()) {
                 final ResultSetMetaData rsmd = rs.getMetaData();
@@ -147,10 +202,34 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         }
     }
 
-    private String makeSelectSql(TableDecision td, List<ColumnInfo> columns) {
+    protected String makeSelectSql(TableDecision td, List<ColumnInfo> columns) {
         if (td.getTableRef() != null && td.getTableRef().hasQueryText()) {
             return td.getTableRef().getQueryText();
         }
+        return makeSelectSql(td.getSchema(), td.getTable(), columns);
+    }
+
+    Range queryMinMaxOn(Connection con, String sourceExpr, String column,
+            SplitColumnType type) throws SQLException {
+        String quotedCol = safeId(column);
+        String sql = "SELECT min(" + quotedCol + "), max(" + quotedCol
+                + ") FROM " + sourceExpr;
+        try (Statement s = con.createStatement();
+                ResultSet rs = s.executeQuery(sql)) {
+            if (!rs.next()) {
+                return null;
+            }
+            Object lo = rs.getObject(1);
+            Object hi = rs.getObject(2);
+            if (lo == null || hi == null) {
+                return null;
+            }
+            return new Range(RangeSplitter.formatBound(lo, type),
+                    RangeSplitter.formatBound(hi, type));
+        }
+    }
+
+    protected String makeSelectSql(String schema, String table, List<ColumnInfo> columns) {
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT ");
         if (columns == null || columns.isEmpty()) {
@@ -167,10 +246,25 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             }
         }
         sql.append(" FROM ");
-        sql.append(safeId(td.getSchema()));
+        sql.append(safeId(schema));
         sql.append(".");
-        sql.append(safeId(td.getTable()));
+        sql.append(safeId(table));
         return sql.toString();
+    }
+
+    /** Formats a value as a SQL literal of the given column type. */
+    protected String formatLiteral(SplitColumnType type, String value) {
+        switch (type) {
+            case INTEGER:
+            case DECIMAL:
+            case DOUBLE:
+                return value;
+            case DATE:
+            case TIMESTAMP:
+                return "'" + value + "'";
+            default:
+                throw new IllegalStateException();
+        }
     }
 
     private void declaredPrimaryKey(TableDecision td, TableMetadata tm) {

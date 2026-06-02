@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.ImporterConfig;
 import tech.ydb.importer.config.TableOptions;
+import tech.ydb.importer.config.TableRef;
 import tech.ydb.importer.integration.common.YdbImporterRunner;
 import tech.ydb.importer.integration.common.YdbRowMatcher;
 import tech.ydb.importer.integration.common.YdbSchemaReader;
@@ -73,6 +74,15 @@ public final class TableTestBuilder {
     private Consumer<TableOptions> optionsCustomizer = opts -> { };
     private Optional<Integer> fetchSize = Optional.empty();
     private String queryText;
+    private String splitBy;
+    private String splitFrom;
+    private String splitTo;
+    private int splitCount;
+    private Integer ydbPartitionCount;
+    private String ydbPartitionFrom;
+    private String ydbPartitionTo;
+    private Boolean useSourcePartitions;
+    private Optional<Integer> expectedPartitionCount = Optional.empty();
 
     TableTestBuilder(AbstractYdbImporterTableTest test, String schema,
                      String table) {
@@ -139,6 +149,67 @@ public final class TableTestBuilder {
         return this;
     }
 
+    public TableTestBuilder splitBy(String column) {
+        this.splitBy = column;
+        return this;
+    }
+
+    public TableTestBuilder splitFrom(String value) {
+        this.splitFrom = value;
+        return this;
+    }
+
+    public TableTestBuilder splitTo(String value) {
+        this.splitTo = value;
+        return this;
+    }
+
+    public TableTestBuilder splitCount(int count) {
+        this.splitCount = count;
+        return this;
+    }
+
+    public TableTestBuilder ydbPartitionCount(Integer count) {
+        this.ydbPartitionCount = count;
+        return this;
+    }
+
+    public TableTestBuilder ydbPartitionFrom(String value) {
+        this.ydbPartitionFrom = value;
+        return this;
+    }
+
+    public TableTestBuilder ydbPartitionTo(String value) {
+        this.ydbPartitionTo = value;
+        return this;
+    }
+
+    public TableTestBuilder useSourcePartitions(Boolean value) {
+        this.useSourcePartitions = value;
+        return this;
+    }
+
+    void applyConfigTo(TableRef ref) {
+        if (splitBy != null) {
+            ref.setSplitBy(splitBy);
+            ref.setSplitFrom(splitFrom);
+            ref.setSplitTo(splitTo);
+            ref.setSplitCount(splitCount);
+        }
+        if (ydbPartitionCount != null) {
+            ref.setYdbPartitionCount(ydbPartitionCount);
+        }
+        if (ydbPartitionFrom != null) {
+            ref.setYdbPartitionFrom(ydbPartitionFrom);
+        }
+        if (ydbPartitionTo != null) {
+            ref.setYdbPartitionTo(ydbPartitionTo);
+        }
+        if (useSourcePartitions != null) {
+            ref.setUseSourcePartitions(useSourcePartitions);
+        }
+    }
+
     public TableTestBuilder expectPrimaryKey(String... columns) {
         this.expectedPrimaryKey = Optional.of(Arrays.asList(columns));
         return this;
@@ -151,6 +222,11 @@ public final class TableTestBuilder {
 
     public TableTestBuilder expectRowCount(long count) {
         this.expectedRowCount = Optional.of(count);
+        return this;
+    }
+
+    public TableTestBuilder expectPartitionCount(int count) {
+        this.expectedPartitionCount = Optional.of(count);
         return this;
     }
 
@@ -291,6 +367,7 @@ public final class TableTestBuilder {
                 .ydb(test.ydbContainer())
                 .table(schema, table)
                 .customizeOptions(optionsCustomizer)
+                .customizeTable(this::applyConfigTo)
                 .queryText(queryText);
         if (fetchSize.isPresent()) {
             builder.fetchSize(fetchSize.get());
@@ -340,6 +417,10 @@ public final class TableTestBuilder {
         expectedPrimaryKey.ifPresent(expected ->
                 assertEquals(expected, info.getPrimaryKey(),
                         "YDB PK for " + targetPath));
+
+        expectedPartitionCount.ifPresent(expected ->
+                assertEquals(expected.intValue(), info.getPartitionCount(),
+                        "YDB partition count for " + targetPath));
 
         if (expectSyntheticKey) {
             assertEquals(Collections.singletonList(SYNTH_KEY_COLUMN),

@@ -91,7 +91,28 @@ The order of blocks stored is defined by the values of the `pos` column, contain
 A unique value of type `Int64` is generated for each source BLOB value, and stored in the `id` field of the BLOB supplemental table.
 This identifier is also stored in the "main" target table in the field having the same name as the BLOB field in the source table.
 
-## 5. Configuration file format
+## 5. YDB partitioning and parallel source reading
+
+The tool independently manages two aspects.
+
+- **YDB target table partitioning** via `<ydb-partition-count>`. Sets the number of partitions for the YDB table created via `PARTITION_AT_KEYS`.
+- **Parallel source reading**. How many parts the source queries are split into: by range over `<split-by>`/`<split-count>`, or by the source native partitions (`<use-source-partitions>`).
+
+Both modes create tasks that run in parallel, with a failed task retried on error (see `<retry-count>`).
+
+See the "Configuration file format" section for the details of each tag.
+
+### How the two modes interact
+
+Reading and target partitioning are resolved independently.
+
+**Reading.** With `<split-by>` reading goes by range over the split column (`<use-source-partitions>` then has no effect). Without it, each source native partition is read by a separate task.
+
+**Target partitioning.** When `<ydb-partition-count>=auto`, if the source has partitions whose first key column ranges do not overlap, the YDB table copies their count and boundaries. If `<split-by>` is over the same first key column, read slices line up with the YDB partitions, so each batch lands entirely in one of them.
+
+**When they do not line up.** `<use-partition-buffers>` regroups rows on the reader side into one batch per YDB partition. It requires an integer leading key and resolved `<ydb-partition-count>` boundaries. Otherwise it falls back to plain batching.
+
+## 6. Configuration file format
 
 Sample configuration files:
 * [for PostgreSQL](scripts/sample-postgres.xml);
@@ -147,6 +168,11 @@ Below is the definition of the configuration file structure:
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
         <password>password</password>
+        <!-- Number of retries per partition query on source read errors,
+             with exponential backoff (1s, 2s, 4s, ..., capped at 30s).
+             Applies to partitioned tables without BLOB columns.
+         -->
+        <retry-count>10</retry-count>
     </source>
     <!-- Target YDB database connection parameters. -->
     <target type="ydb">
@@ -227,6 +253,22 @@ Below is the definition of the configuration file structure:
         <!-- If true, columns with unsupported types are skipped with warning,
              otherwise import error is generated, and the whole table is skipped. -->
         <skip-unknown-types>true</skip-unknown-types>
+        <!-- Use source-side native partitions for parallel reads. Works for databases
+             that support partitioning. Default is true. Can be overridden in <table-ref>. -->
+        <use-source-partitions>true</use-source-partitions>
+        <!-- Regroup rows on the reader side into per-YDB-partition batches, so each bulk
+             upsert lands in a single partition. Default is true.
+             Can be overridden in <table-ref>. -->
+        <use-partition-buffers>true</use-partition-buffers>
+        <!-- Initial number of YDB target table partitions (PARTITION_AT_KEYS in DDL).
+             Applies only to an integer leading key column, otherwise skipped.
+             auto - partition count by the first key column: equals split-count if set,
+                    otherwise the number of source partitions if any (see section 5).
+             N    - integer >= 2, split the first key column range into N equal
+                    intervals (from ydb-partition-from/to, otherwise source MIN/MAX).
+             none - do not set it, YDB manages partitions on its own.
+             Default is auto. Can be overridden in <table-ref>. -->
+        <ydb-partition-count>auto</ydb-partition-count>
     </table-options>
     <!-- Table map filters the source tables and defines the conversion modes for them. -->
     <table-map options="default">
@@ -249,11 +291,42 @@ Below is the definition of the configuration file structure:
         <!-- Primary key columns should be defined for the query.  -->
         <key-column>OWNER</key-column>
         <key-column>TABLE_NAME</key-column>
+        <!-- Splits the table into split-count value ranges along the
+             split-by column for parallel reads. Column types:
+             integers (TINYINT/SMALLINT/INTEGER/BIGINT), DECIMAL/NUMERIC,
+             REAL/FLOAT/DOUBLE, DATE, TIMESTAMP. Bounds are written as
+             yyyy-MM-dd for DATE or yyyy-MM-dd [HH:mm:ss[.fraction]] for
+             TIMESTAMP. Values below split-from or NULL go to the first
+             split, values above split-to go to the last.
+
+             split-by also accepts the auto literal, meaning the first
+             primary key column (resolved while reading metadata, if the
+             table has no primary key or its leading column has an
+             unsupported type, the split is disabled). split-by may be
+             omitted when another split-* tag is set, it then defaults to auto.
+
+             split-count, split-from, split-to can be set to auto: then split-count
+             comes from ydb-partition-count, and split-from/to from the source MIN/MAX.
+         -->
+        <split-by>created_at</split-by>
+        <split-from>2020-01-01 00:00:00</split-from>
+        <split-to>2026-01-01 00:00:00</split-to>
+        <split-count>auto</split-count>
+        <!-- Per-table overrides of the partitioning settings from <table-options>.
+             Same values as in <table-options>. -->
+        <use-source-partitions>true</use-source-partitions>
+        <use-partition-buffers>false</use-partition-buffers>
+        <ydb-partition-count>16</ydb-partition-count>
+        <!-- Explicit bounds of the first key column for splitting the YDB table
+             into equal intervals. Used only with a numeric ydb-partition-count.
+             If not set, MIN/MAX of the first key column is taken from the source. -->
+        <ydb-partition-from>1</ydb-partition-from>
+        <ydb-partition-to>1000000</ydb-partition-to>
     </table-ref>
 </ydb-importer>
 ```
 
-## 6. Building the tool from the source code
+## 7. Building the tool from the source code
 
 Java 8 or higher is required to build and run the tool. Maven is required to build the tool (tested on version 3.8.6).
 

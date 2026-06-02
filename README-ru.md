@@ -91,7 +91,26 @@ CREATE TABLE `blob_table`(
 ALTER DATABASE dbname SET lo_compat_privileges TO on;
 ```
 
-## 5. Формат файла настроек
+## 5. Партиционирование YDB-таблицы и параллельное чтение источника
+
+Утилита независимо управляет двумя аспектами.
+
+- **Партиционирование целевой YDB-таблицы** через `<ydb-partition-count>`. Задаёт число партиций в YDB при создании таблицы через `PARTITION_AT_KEYS`.
+- **Параллельное чтение источника**. На сколько частей разбить запросы к источнику: по диапазону `<split-by>`/`<split-count>` либо по нативным партициям источника (`<use-source-partitions>`).
+
+В результате создаются задачи, которые выполняются параллельно, с повтором упавшей задачи при ошибке (см. `<retry-count>`).
+
+### Как два режима связаны
+
+Чтение и target-партиционирование определяются независимо.
+
+**Чтение.** С `<split-by>` чтение идёт по диапазону split-колонки (`<use-source-partitions>` тогда не влияет). Без него каждая нативная партиция источника читается отдельной задачей.
+
+**YDB-партиционирование.** При `<ydb-partition-count>=auto`, если у источника есть партиции с непересекающимися диапазонами по первой колонке ключа, YDB-таблица копирует их число и границы. Если `<split-by>` идёт по той же первой колонке ключа, слайсы чтения совпадают с партициями YDB, то каждый батч целиком попадает в одну из них.
+
+**Когда не совпадают.** `<use-partition-buffers>` регруппирует строки на стороне ридера в один батч на партицию YDB. Требует целочисленной первой колонки ключа и посчитанных границ `<ydb-partition-count>`.
+
+## 6. Формат файла настроек
 
 Примеры файлов настроек с комментариями:
 * [для PostgreSQL](scripts/sample-postgres.xml);
@@ -147,6 +166,11 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
         <jdbc-url>jdbc-url</jdbc-url>
         <username>username</username>
         <password>password</password>
+        <!-- Количество повторных попыток чтения партиции при ошибке источника,
+             с экспоненциальной задержкой (1s, 2s, 4s, ..., максимум 30s).
+             Применяется к партиционированным таблицам без BLOB-колонок.
+         -->
+        <retry-count>10</retry-count>
     </source>
     <!-- Параметры подключения к БД-получателю. -->
     <target type="ydb">
@@ -220,6 +244,22 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
              с выводов в лог соответствующего предупреждения. В противном случае генерируется
              ошибка импорта, и соответствующая таблица пропускается целиком. -->
         <skip-unknown-types>true</skip-unknown-types>
+        <!-- Использовать ли партиции источника для параллельного чтения. Работает для
+             БД, поддерживающих партиционирование. По умолчанию true. Можно переопределить в <table-ref>. -->
+        <use-source-partitions>true</use-source-partitions>
+        <!-- Регруппировать строки на стороне ридера в батчи по целевым партициям YDB,
+             чтобы каждый bulk-upsert попадал в одну партицию. По умолчанию true.
+             Можно переопределить в <table-ref>. -->
+        <use-partition-buffers>true</use-partition-buffers>
+        <!-- Начальное число партиций YDB-таблицы (PARTITION_AT_KEYS в DDL).
+             Работает только при целочисленной первой колонке ключа, иначе пропускается.
+             auto - число партиций по первой колонке ключа: равно split-count, если он
+                    задан, иначе числу партиций источника, если они есть.
+             N    - целое >= 2, разбить диапазон первой колонки ключа на N равных
+                    интервалов (по ydb-partition-from/to, иначе MIN/MAX источника).
+             none - не задавать, YDB управляет партициями сам.
+             По умолчанию auto. Можно переопределить в <table-ref>. -->
+        <ydb-partition-count>auto</ydb-partition-count>
     </table-options>
     <!-- Фильтр для отбора копируемых таблиц с источника -->
     <table-map options="default">
@@ -240,11 +280,42 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
         <!-- Для запроса желательно явно определить ключевые колонки.  -->
         <key-column>OWNER</key-column>
         <key-column>TABLE_NAME</key-column>
+        <!-- Делит таблицу на split-count интервалов по колонке split-by для
+             параллельного чтения. Допустимые типы split-by: целочисленные
+             (TINYINT/SMALLINT/INTEGER/BIGINT), DECIMAL/NUMERIC,
+             REAL/FLOAT/DOUBLE, DATE, TIMESTAMP. Границы пишутся как
+             ГГГГ-ММ-ДД для DATE или ГГГГ-ММ-ДД [ЧЧ:ММ:СС[.доли]] для
+             TIMESTAMP. Всё, что меньше split-from или равно NULL, уходит
+             в первый split. Всё, что больше split-to, идёт в последний.
+
+             split-by также принимает auto - это первая колонка первичного
+             ключа (если у таблицы нет
+             первичного ключа или его первая колонка неподдерживаемого типа,
+             split отключается).
+
+             split-count, split-from, split-to можно задать как auto: тогда split-count
+             берётся из ydb-partition-count, а split-from/to как MIN/MAX источника.
+         -->
+        <split-by>created_at</split-by>
+        <split-from>2020-01-01 00:00:00</split-from>
+        <split-to>2026-01-01 00:00:00</split-to>
+        <split-count>auto</split-count>
+        <!-- Переопределение настроек партиционирования из <table-options>
+             для конкретной таблицы. Значения те же, что
+             в <table-options>. -->
+        <use-source-partitions>true</use-source-partitions>
+        <use-partition-buffers>false</use-partition-buffers>
+        <ydb-partition-count>16</ydb-partition-count>
+        <!-- Явные границы первой колонки ключа для разбиения YDB-таблицы на равные
+             интервалы. Используются только с числовым ydb-partition-count. Если
+             не заданы, берётся MIN/MAX первой колонки ключа от источника. -->
+        <ydb-partition-from>1</ydb-partition-from>
+        <ydb-partition-to>1000000</ydb-partition-to>
     </table-ref>
 </ydb-importer>
 ```
 
-## 6. Сборка из исходных кодов
+## 7. Сборка из исходных кодов
 
 Требуется Java 8 или выше. Требуется Maven (сборка проверялась на версии 3.8.6).
 

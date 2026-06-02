@@ -23,11 +23,13 @@ public class WriterPool implements AutoCloseable {
     private final ExecutorService executor;
     private final BlockingQueue<UploadBatch> queue;
     private final int writerCount;
+    private final ProgressCounter progress;
     private final AtomicReference<Exception> firstError = new AtomicReference<>();
 
-    public WriterPool(int writerCount, int queueCapacity) {
+    public WriterPool(int writerCount, int queueCapacity, ProgressCounter progress) {
         this.writerCount = writerCount;
         this.queue = new ArrayBlockingQueue<>(queueCapacity);
+        this.progress = progress;
 
         final AtomicInteger threadId = new AtomicInteger();
         this.executor = Executors.newFixedThreadPool(writerCount, r -> {
@@ -88,7 +90,12 @@ public class WriterPool implements AutoCloseable {
                 if (batch == UploadBatch.SHUTDOWN_SIGNAL) {
                     return;
                 }
-                batch.getOp().upload(batch.getBatch());
+                long started = System.nanoTime();
+                try {
+                    batch.getOp().upload(batch.getBatch());
+                } finally {
+                    progress.countUploadBatch(System.nanoTime() - started);
+                }
             }
         } catch (InterruptedException e) {
             firstError.compareAndSet(null, e);

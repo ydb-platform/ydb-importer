@@ -50,4 +50,12 @@ public class PostgresYdbImporterTest {
             return new SourceDb(pgContainer, SourceType.POSTGRESQL, "public");
         }
     }
+
+    @Nested
+    class PartitioningTests extends AbstractPostgresPartitioningTests {
+        @Override
+        public SourceDb sourceDb() {
+            return new SourceDb(pgContainer, SourceType.POSTGRESQL, "public");
+        }
+    }
 }

@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,8 @@ import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.YdbImporter;
 import tech.ydb.importer.source.ColumnInfo;
 import tech.ydb.importer.source.SourceCP;
+import tech.ydb.importer.source.TaskInfo;
+import tech.ydb.importer.source.TaskQuery;
 import tech.ydb.table.values.ListType;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.StructValue;
@@ -36,15 +39,24 @@ public class LoadDataTask implements Callable<Boolean> {
 
     private final YdbUpsertOp ydbOp;
     private final TableDecision tab;
+    private final TaskInfo task;
     private final ProgressCounter progress;
 
     private final int maxBatchRows;
     private final int maxBlobRows;
     private final int fetchSize;
+    private final int retryCount;
+    private final int taskIdx;
+    private final int taskBits;
+    private final boolean partitionBuffers;
     private final WriterPool writerPool;
+    private long rowIndex;
+
+    private static final long INITIAL_BACKOFF_MS = 1000;
+    private static final long MAX_BACKOFF_MS = 30_000;
 
     public LoadDataTask(YdbImporter owner, ProgressCounter progress, TableDecision tab,
-            WriterPool writerPool) {
+            TaskInfo task, WriterPool writerPool) {
         this.source = owner.getSourceCP();
         this.target = owner.getTargetCP();
 
@@ -55,11 +67,20 @@ public class LoadDataTask implements Callable<Boolean> {
                 progress::countWrittenRows
         );
         this.tab = tab;
+        this.task = task;
         this.progress = progress;
         this.maxBatchRows = owner.getConfig().getTarget().getMaxBatchRows();
         this.maxBlobRows = owner.getConfig().getTarget().getMaxBlobRows();
         this.fetchSize = owner.getConfig().getSource().getFetchSize();
+        this.retryCount = (tab.getMetadata().getTasks().size() > 1
+                        && tab.getBlobTargets().isEmpty())
+                ? owner.getConfig().getSource().getRetryCount()
+                : 0;
+        this.taskIdx = task.getIndex();
+        this.taskBits = BlobReader.bitsRequired(tab.getMetadata().getTasks().size());
+        this.partitionBuffers = tab.partitionBuffers();
         this.writerPool = writerPool;
+        this.rowIndex = 0;
     }
 
     @Override
@@ -69,28 +90,88 @@ public class LoadDataTask implements Callable<Boolean> {
             return false;
         }
         if (tab.isFailure()) {
-            LOG.warn("Skipping failed source table {}.{}", tab.getSchema(), tab.getTable());
+            LOG.warn("Skipping {} because the table has already failed", task.getName());
             return false;
         }
-        LOG.info("Loading data from source table {}.{}", tab.getSchema(), tab.getTable());
-        try (Connection con = source.getConnection()) {
-            long copied;
-            try (PreparedStatement ps = con.prepareStatement(tab.getMetadata().getBasicSql())) {
-                ps.setFetchSize(fetchSize);
-                try (ResultSet rs = ps.executeQuery()) {
-                    copied = copyData(rs);
-                }
-            }
-            if (!con.getAutoCommit()) {
-                con.commit();
-            }
-            LOG.info("Copied {} rows from source table {}.{}", copied, tab.getSchema(), tab.getTable());
+        LOG.info("Loading data from {}", task.getName());
+        try {
+            long copied = executeTask();
+            LOG.info("Copied {} rows from {}", copied, task.getName());
             return true;
         } catch (Throwable e) {
-            LOG.error("Failed to load data from table {}.{}", tab.getSchema(), tab.getTable(), e);
-            tab.setFailure(true);
+            if (e instanceof InterruptedException) {
+                LOG.warn("Interrupted {}", task.getName());
+                return false;
+            }
+            if (tab.isFailure()) {
+                LOG.warn("Cancelled {} because the table has already failed", task.getName());
+            } else {
+                LOG.error("Failed to load data from {}", task.getName(), e);
+                tab.setFailure(true);
+            }
             return false;
         }
+    }
+
+    private void checkCancelled() {
+        if (tab.isFailure()) {
+            throw new RuntimeException("Cancelled: table " + tab.getSchema() + "."
+                    + tab.getTable() + " marked as failed by another task");
+        }
+    }
+
+    /**
+     * Reads all queries of a task, retrying each one on failure.
+     */
+    private long executeTask() throws Exception {
+        List<TaskQuery> queries = task.getQueries();
+        long copied = 0;
+        int nextQuery = 0;
+        int attempt = 0;
+        long backoffMs = INITIAL_BACKOFF_MS;
+        long savedRowIndex = rowIndex;
+
+        while (nextQuery < queries.size()) {
+            try (Connection con = source.getConnection()) {
+                while (nextQuery < queries.size()) {
+                    checkCancelled();
+                    savedRowIndex = rowIndex;
+                    TaskQuery query = queries.get(nextQuery);
+                    copied += executeQuery(con, query.getSql());
+                    nextQuery++;
+                    attempt = 0;
+                    backoffMs = INITIAL_BACKOFF_MS;
+                }
+            } catch (SQLException e) {
+                if (tab.isFailure()) {
+                    throw e;
+                }
+                rowIndex = savedRowIndex;
+                if (++attempt > retryCount) {
+                    throw e;
+                }
+                TaskQuery failed = queries.get(nextQuery);
+                LOG.warn("Query {} failed (attempt {}/{}), retrying in {} ms",
+                        failed.getName(), attempt, retryCount, backoffMs, e);
+                Thread.sleep(backoffMs);
+                backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+            }
+        }
+        return copied;
+    }
+
+    private long executeQuery(Connection con, String sql) throws Exception {
+        long copied;
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setFetchSize(fetchSize);
+            try (ResultSet rs = ps.executeQuery()) {
+                copied = copyData(rs);
+            }
+        }
+        if (!con.getAutoCommit()) {
+            con.commit();
+        }
+        return copied;
     }
 
     /**
@@ -104,29 +185,18 @@ public class LoadDataTask implements Callable<Boolean> {
         final ListType paramListType = ListType.of(paramType);
         final ResultSetMetaData rsmd = rs.getMetaData();
         final ColumnIndex[] columns = buildMainIndex(paramType, rsmd);
-
-        final List<Value<?>> batch = new ArrayList<>(maxBatchRows);
+        final List<BlobReader> blobReaders = collectBlobReaders(columns);
         final SynthKey synchKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
 
-        long copied = 0;
-
-        while (rs.next()) {
-            copied++;
-            progress.countReadRows(1);
-
-            batch.add(read(rs, paramType, columns, synchKey));
-            if (batch.size() >= maxBatchRows) {
-                writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
-                batch.clear();
-            }
+        PartitionBounds pb = partitionBuffers ? resolvePartitionBounds(rsmd) : null;
+        if (partitionBuffers && pb == null) {
+            LOG.debug("partition-buffers requested for {}.{} but no integer partition cuts, "
+                    + "plain batching", tab.getSchema(), tab.getTable());
         }
+        long copied = (pb != null)
+                ? copyDataGrouped(rs, paramType, paramListType, columns, blobReaders, synchKey, pb)
+                : copyDataPlain(rs, paramType, paramListType, columns, blobReaders, synchKey);
 
-        if (!batch.isEmpty()) {
-            writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
-            batch.clear();
-        }
-
-        // Flush all readers
         for (ColumnIndex ci : columns) {
             if (ci != null) {
                 ci.getReader().flush();
@@ -134,6 +204,156 @@ public class LoadDataTask implements Callable<Boolean> {
         }
 
         return copied;
+    }
+
+    /** Plain batching: fills one batch in read order, no regrouping.
+     *  A batch may span several YDB partitions. */
+    private long copyDataPlain(ResultSet rs, StructType paramType, ListType paramListType,
+            ColumnIndex[] columns, List<BlobReader> blobReaders, SynthKey synthKey)
+            throws Exception {
+        final List<Value<?>> batch = new ArrayList<>(maxBatchRows);
+        long copied = 0;
+        long readStart = System.nanoTime();
+        while (rs.next()) {
+            rowIndex++;
+            copied++;
+            progress.countReadRows(1);
+            setNextBlobIds(blobReaders);
+            batch.add(read(rs, paramType, columns, synthKey));
+            if (batch.size() >= maxBatchRows) {
+                progress.countReadBatch(System.nanoTime() - readStart);
+                checkCancelled();
+                writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
+                batch.clear();
+                readStart = System.nanoTime();
+            }
+        }
+        if (!batch.isEmpty()) {
+            progress.countReadBatch(System.nanoTime() - readStart);
+            checkCancelled();
+            writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(batch)));
+            batch.clear();
+        }
+        return copied;
+    }
+
+    /** Regroups rows into YDB partition buffers so each batch goes to a single YDB partition. */
+    private long copyDataGrouped(ResultSet rs, StructType paramType, ListType paramListType,
+            ColumnIndex[] columns, List<BlobReader> blobReaders, SynthKey synthKey,
+            PartitionBounds pb) throws Exception {
+        final int partCount = pb.cuts.length + 1;
+        final List<List<Value<?>>> buffers = new ArrayList<>(partCount);
+        for (int i = 0; i < partCount; i++) {
+            buffers.add(new ArrayList<>(maxBatchRows));
+        }
+        long copied = 0;
+        long readStart = System.nanoTime();
+        while (rs.next()) {
+            rowIndex++;
+            copied++;
+            progress.countReadRows(1);
+            setNextBlobIds(blobReaders);
+            long key = rs.getLong(pb.pkIndex);
+            List<Value<?>> buffer = buffers.get(partitionOf(key, pb.cuts));
+            buffer.add(read(rs, paramType, columns, synthKey));
+            if (buffer.size() >= maxBatchRows) {
+                progress.countReadBatch(System.nanoTime() - readStart);
+                checkCancelled();
+                writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(buffer)));
+                buffer.clear();
+                readStart = System.nanoTime();
+            }
+        }
+        boolean counted = false;
+        for (List<Value<?>> buffer : buffers) {
+            if (!buffer.isEmpty()) {
+                if (!counted) {
+                    progress.countReadBatch(System.nanoTime() - readStart);
+                    counted = true;
+                }
+                checkCancelled();
+                writerPool.submit(new UploadBatch(ydbOp, paramListType.newValue(buffer)));
+                buffer.clear();
+            }
+        }
+        return copied;
+    }
+
+    private void setNextBlobIds(List<BlobReader> blobReaders) {
+        if (!blobReaders.isEmpty()) {
+            long blobId = BlobReader.packBlobId(taskIdx, rowIndex, taskBits);
+            for (BlobReader br : blobReaders) {
+                br.setNextBlobId(blobId);
+            }
+        }
+    }
+
+    /** Which YDB partition a key falls into, by binary search over the cuts. */
+    private static int partitionOf(long key, long[] cuts) {
+        int lo = 0;
+        int hi = cuts.length;
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (key >= cuts[mid]) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return lo;
+    }
+
+    /** Resolves the leading-PK column index and integer partition cuts.
+     *  Returns null when regrouping is not possible. */
+    private PartitionBounds resolvePartitionBounds(ResultSetMetaData rsmd) throws SQLException {
+        List<ColumnInfo> key = tab.getMetadata().getKey();
+        List<String> cutStrings = tab.getMetadata().getYdbPartitioning().getCuts();
+        if (key.isEmpty() || cutStrings.isEmpty()) {
+            return null;
+        }
+        ColumnInfo pk = key.get(0);
+        if (!YdbTypeMapper.partitionableInteger(pk, tab.getOptions())) {
+            return null;
+        }
+        long[] cuts = new long[cutStrings.size()];
+        try {
+            for (int i = 0; i < cuts.length; i++) {
+                cuts[i] = Long.parseLong(cutStrings.get(i).trim());
+            }
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+        int pkIndex = -1;
+        for (int i = 1; i <= rsmd.getColumnCount(); i++) {
+            if (pk.getName().equalsIgnoreCase(rsmd.getColumnName(i))) {
+                pkIndex = i;
+                break;
+            }
+        }
+        if (pkIndex < 0) {
+            return null;
+        }
+        return new PartitionBounds(cuts, pkIndex);
+    }
+
+    private static final class PartitionBounds {
+        private final long[] cuts;
+        private final int pkIndex;
+
+        PartitionBounds(long[] cuts, int pkIndex) {
+            this.cuts = cuts;
+            this.pkIndex = pkIndex;
+        }
+    }
+
+    private static List<BlobReader> collectBlobReaders(ColumnIndex[] columns) {
+        List<BlobReader> readers = new ArrayList<>();
+        for (ColumnIndex ci : columns) {
+            if (ci != null && ci.getReader() instanceof BlobReader) {
+                readers.add((BlobReader) ci.getReader());
+            }
+        }
+        return readers;
     }
 
     private ColumnIndex[] buildMainIndex(StructType paramListType, ResultSetMetaData rsmd) throws Exception {

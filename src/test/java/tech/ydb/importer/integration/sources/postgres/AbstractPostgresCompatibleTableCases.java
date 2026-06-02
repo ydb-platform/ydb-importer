@@ -342,4 +342,87 @@ public abstract class AbstractPostgresCompatibleTableCases
                 .expectRowExists("seq", 3, "name", "same")
                 .run();
     }
+
+    @Test
+    public void rangeSplitsByColumnType() throws Exception {
+        String s = schemaName();
+        importTogether()
+                .add(tableTest(s, "split_int")
+                        .setupSql(
+                            "CREATE TABLE " + s + ".split_int ("
+                            + "  id  INTEGER PRIMARY KEY,"
+                            + "  val INTEGER NOT NULL"
+                            + ");"
+                            + "INSERT INTO " + s + ".split_int VALUES"
+                            + "  (1,5),(2,12),(3,28),(4,45),"
+                            + "  (5,60),(6,73),(7,88),(8,99)")
+                        .cleanupSql(
+                            "DROP TABLE IF EXISTS " + s + ".split_int CASCADE")
+                        .splitBy("val").splitFrom("0").splitTo("100").splitCount(4)
+                        .expectPrimaryKey("id")
+                        .expectRowCount(8))
+                .add(tableTest(s, "split_dec")
+                        .setupSql(
+                            "CREATE TABLE " + s + ".split_dec ("
+                            + "  id  INTEGER PRIMARY KEY,"
+                            + "  val DECIMAL(10,2) NOT NULL"
+                            + ");"
+                            + "INSERT INTO " + s + ".split_dec VALUES"
+                            + "  (1,1.50),(2,10.25),(3,33.75),"
+                            + "  (4,50.00),(5,75.50),(6,99.99)")
+                        .cleanupSql(
+                            "DROP TABLE IF EXISTS " + s + ".split_dec CASCADE")
+                        .splitBy("val").splitFrom("0").splitTo("100").splitCount(3)
+                        .expectPrimaryKey("id")
+                        .expectRowCount(6))
+                .add(tableTest(s, "split_dbl")
+                        .setupSql(
+                            "CREATE TABLE " + s + ".split_dbl ("
+                            + "  id  INTEGER PRIMARY KEY,"
+                            + "  val DOUBLE PRECISION NOT NULL"
+                            + ");"
+                            + "INSERT INTO " + s + ".split_dbl VALUES"
+                            + "  (1,0.1),(2,1.5),(3,3.7),(4,5.0),(5,7.2)")
+                        .cleanupSql(
+                            "DROP TABLE IF EXISTS " + s + ".split_dbl CASCADE")
+                        .splitBy("val").splitFrom("0").splitTo("10").splitCount(3)
+                        .expectPrimaryKey("id")
+                        .expectRowCount(5))
+                .add(tableTest(s, "split_date")
+                        .setupSql(
+                            "CREATE TABLE " + s + ".split_date ("
+                            + "  id  INTEGER PRIMARY KEY,"
+                            + "  val DATE NOT NULL"
+                            + ");"
+                            + "INSERT INTO " + s + ".split_date VALUES"
+                            + "  (1,'2024-01-15'),(2,'2024-03-10'),"
+                            + "  (3,'2024-06-01'),(4,'2024-09-20'),"
+                            + "  (5,'2024-12-25')")
+                        .cleanupSql(
+                            "DROP TABLE IF EXISTS " + s + ".split_date CASCADE")
+                        .splitBy("val")
+                            .splitFrom("2024-01-01").splitTo("2025-01-01")
+                            .splitCount(4)
+                        .expectPrimaryKey("id")
+                        .expectRowCount(5))
+                .add(tableTest(s, "split_ts")
+                        .setupSql(
+                            "CREATE TABLE " + s + ".split_ts ("
+                            + "  id  INTEGER PRIMARY KEY,"
+                            + "  val TIMESTAMP NOT NULL"
+                            + ");"
+                            + "INSERT INTO " + s + ".split_ts VALUES"
+                            + "  (1,'2024-01-15 10:00:00'),"
+                            + "  (2,'2024-06-01 14:30:00'),"
+                            + "  (3,'2024-12-25 23:59:59')")
+                        .cleanupSql(
+                            "DROP TABLE IF EXISTS " + s + ".split_ts CASCADE")
+                        .splitBy("val")
+                            .splitFrom("2024-01-01 00:00:00")
+                            .splitTo("2025-01-01 00:00:00")
+                            .splitCount(3)
+                        .expectPrimaryKey("id")
+                        .expectRowCount(3))
+                .run();
+    }
 }

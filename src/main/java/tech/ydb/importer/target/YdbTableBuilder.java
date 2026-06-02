@@ -9,7 +9,7 @@ import org.apache.commons.text.StringSubstitutor;
 import tech.ydb.importer.TableDecision;
 import tech.ydb.importer.config.TableOptions;
 import tech.ydb.importer.source.ColumnInfo;
-import tech.ydb.table.values.DecimalType;
+import tech.ydb.importer.source.YdbPartitioning;
 import tech.ydb.table.values.PrimitiveType;
 import tech.ydb.table.values.StructType;
 import tech.ydb.table.values.Type;
@@ -54,7 +54,7 @@ public class YdbTableBuilder {
         for (ColumnInfo ci : tab.getMetadata().getColumns()) {
             final Type type;
             try {
-                type = convertType(ci);
+                type = YdbTypeMapper.convertType(ci, tab.getOptions());
             } catch (Exception ex) {
                 throw new RuntimeException("Cannot convert type for column [" + ci.getName()
                         + "] of table [" + fullName + "]", ex);
@@ -86,17 +86,40 @@ public class YdbTableBuilder {
         } else {
             addPrimaryKey(sb);
         }
-        sb.append(") WITH (").append(EOL);
-        if (TableOptions.StoreType.COLUMN.equals(tab.getOptions().getStoreType())) {
+        sb.append(")").append(EOL);
+        appendPartitioning(sb);
+        return new TargetTable(tab, fullName, sb.toString(), StructType.of(types));
+    }
+
+    private void appendPartitioning(StringBuilder sb) {
+        final YdbPartitioning part = tab.getMetadata().getYdbPartitioning();
+        final boolean columnStore =
+                TableOptions.StoreType.COLUMN.equals(tab.getOptions().getStoreType());
+        if (columnStore && part.isHash()) {
+            sb.append("PARTITION BY HASH(`").append(part.getHashColumn()).append("`)").append(EOL);
+        }
+        sb.append("WITH (").append(EOL);
+        if (columnStore) {
             sb.append("  STORE = COLUMN").append(EOL);
+            if (part.isHash()) {
+                sb.append(", AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = ")
+                        .append(part.getHashPartitions()).append(EOL);
+            }
+        } else if (part.isKeyRange()) {
+            appendAutoPartitioning(sb, part.getCuts().size() + 1);
+            sb.append(", PARTITION_AT_KEYS = (")
+                    .append(String.join(", ", part.getCuts())).append(")").append(EOL);
         } else {
-            sb.append("  AUTO_PARTITIONING_BY_SIZE = ENABLED").append(EOL);
-            sb.append(", AUTO_PARTITIONING_BY_LOAD = ENABLED").append(EOL);
-            sb.append(", AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 9999").append(EOL);
-            sb.append(", AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9999").append(EOL);
+            appendAutoPartitioning(sb, 9999);
         }
         sb.append(");").append(EOL);
-        return new TargetTable(tab, fullName, sb.toString(), StructType.of(types));
+    }
+
+    private void appendAutoPartitioning(StringBuilder sb, int minPartitions) {
+        sb.append("  AUTO_PARTITIONING_BY_SIZE = ENABLED").append(EOL);
+        sb.append(", AUTO_PARTITIONING_BY_LOAD = ENABLED").append(EOL);
+        sb.append(", AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = ").append(minPartitions).append(EOL);
+        sb.append(", AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9999").append(EOL);
     }
 
     private TargetTable buildBlobTable(TargetTable main, ColumnInfo ci) {
@@ -155,123 +178,6 @@ public class YdbTableBuilder {
             }
         }
         return new StringSubstitutor(m).replace(tab.getOptions().getBlobTemplate());
-    }
-
-    private Type convertType(ColumnInfo ci) {
-        switch (ci.getSqlType()) {
-            case java.sql.Types.BOOLEAN:
-            case java.sql.Types.BIT:
-                return PrimitiveType.Bool;
-            case java.sql.Types.TINYINT:
-                return PrimitiveType.Int32;
-            case java.sql.Types.SMALLINT:
-                return PrimitiveType.Int32;
-            case java.sql.Types.INTEGER:
-                return PrimitiveType.Int32;
-            case java.sql.Types.BIGINT:
-                return PrimitiveType.Int64;
-            case java.sql.Types.DECIMAL:
-            case java.sql.Types.NUMERIC:
-                if (ci.getSqlScale() < 0) {
-                    return PrimitiveType.Double;
-                }
-                if (ci.getSqlScale() == 0) {
-                    if (ci.getSqlPrecision() == 0) {
-                        return PrimitiveType.Double;
-                    }
-                    if (ci.getSqlPrecision() < 10) {
-                        return PrimitiveType.Int32;
-                    }
-                    if (ci.getSqlPrecision() < 20) {
-                        return PrimitiveType.Int64;
-                    }
-                    if (tab.getOptions().isAllowCustomDecimal()) {
-                        return DecimalType.of(35, 0);
-                    }
-                    return PrimitiveType.Int64;
-                } else {
-                    if (tab.getOptions().isAllowCustomDecimal()) {
-                        int prec = ci.getSqlPrecision();
-                        if (prec > 35) {
-                            prec = 35;
-                        }
-                        int scale = ci.getSqlScale();
-                        if (scale > prec) {
-                            scale = prec;
-                        }
-                        return DecimalType.of(prec, scale);
-                    }
-                    return DecimalType.getDefault();
-                }
-            case java.sql.Types.DOUBLE:
-                return PrimitiveType.Double;
-            case java.sql.Types.FLOAT:
-            case java.sql.Types.REAL:
-                return PrimitiveType.Float;
-            case java.sql.Types.VARCHAR:
-            case java.sql.Types.CHAR:
-            case java.sql.Types.NVARCHAR:
-            case java.sql.Types.NCHAR:
-            case java.sql.Types.LONGNVARCHAR:
-            case java.sql.Types.LONGVARCHAR:
-            case java.sql.Types.CLOB: // MAYBE: store in a separate table, like BLOBS
-                return PrimitiveType.Text;
-            case java.sql.Types.BINARY:
-            case java.sql.Types.VARBINARY:
-                return PrimitiveType.Bytes;
-            case java.sql.Types.BLOB:
-            case java.sql.Types.LONGVARBINARY:
-            case java.sql.Types.SQLXML:
-                return PrimitiveType.Int64; // Id of record sequence in the separate table.
-            case java.sql.Types.DATE:
-                switch (tab.getOptions().getDateConv()) {
-                    case DATE_NEW:
-                        return PrimitiveType.Date32;
-                    case DATE:
-                        return PrimitiveType.Date;
-                    case INT:
-                        return PrimitiveType.Int32;
-                    case STR:
-                        return PrimitiveType.Text;
-                    default: {
-                        /* noop */
-                    }
-                }
-                return PrimitiveType.Date32;
-            case java.sql.Types.TIME:
-                return PrimitiveType.Int32;
-            case java.sql.Types.TIMESTAMP:
-                switch (tab.getOptions().getTimestampConv()) {
-                    case DATE_NEW:
-                        if (ci.getSqlScale() == 0) {
-                            return PrimitiveType.Datetime64;
-                        }
-                        return PrimitiveType.Timestamp64;
-                    case DATE:
-                        if (ci.getSqlScale() == 0) {
-                            return PrimitiveType.Datetime;
-                        }
-                        return PrimitiveType.Timestamp;
-                    case INT:
-                        return PrimitiveType.Uint64;
-                    case STR:
-                        return PrimitiveType.Text;
-                    default: {
-                        /* noop */
-                    }
-                }
-                if (ci.getSqlScale() == 0) {
-                    return PrimitiveType.Datetime64;
-                }
-                return PrimitiveType.Timestamp64;
-            default: {
-                /* noop */
-            }
-        }
-        if (tab.getOptions().isSkipUnknownTypes()) {
-            return null;
-        }
-        throw new IllegalArgumentException("Unsupported type code: " + ci.getSqlType());
     }
 
     private void addSyntheticKey(StringBuilder sb, Map<String, Type> types) {

@@ -91,10 +91,18 @@ public final class ScenarioRunner implements AutoCloseable {
     public void runImport(LocalYdbTestContainer ydb, int batchSize,
                           int poolSize, int fetchSize, String targetPrefix)
             throws Exception {
+        runImport(ydb, batchSize, poolSize, fetchSize, true, targetPrefix);
+    }
+
+    public void runImport(LocalYdbTestContainer ydb, int batchSize,
+                          int poolSize, int fetchSize, boolean usePartitions,
+                          String targetPrefix)
+            throws Exception {
         YdbImporterRunner.Builder builder = YdbImporterRunner.builder()
                 .source(profile.container, profile.sourceType)
                 .ydb(ydb)
-                .table(profile.schema, profile.tableName(scenarios.get(0)));
+                .table(profile.schema, profile.tableName(scenarios.get(0)))
+                .usePartitions(usePartitions);
         if (batchSize > 0) {
             builder.maxBatchRows(batchSize);
         }

@@ -6,7 +6,6 @@ import java.sql.Blob;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.protobuf.ByteString;
 
@@ -36,7 +35,7 @@ public class BlobReader extends ValueReader {
     public static final ListType BLOB_LIST = ListType.of(BLOB_ROW);
 
     private final YdbUpsertOp upsertOp;
-    private final AtomicLong nextIdGen = new AtomicLong(0);
+    private long nextBlobId = 0;
 
     // max number of records before flush
     private final int maxBlobRecords;
@@ -61,6 +60,37 @@ public class BlobReader extends ValueReader {
         this.isBlob = isBlob;
     }
 
+    public void setNextBlobId(long id) {
+        this.nextBlobId = id;
+    }
+
+    public static int bitsRequired(int count) {
+        if (count <= 1) {
+            return 1;
+        }
+        return Integer.SIZE - Integer.numberOfLeadingZeros(count - 1);
+    }
+
+    /**
+     * Packs (taskIdx, rowIndex) into a single Int64 blob id.
+     * The high taskBits hold taskIdx, the rest hold rowIndex.
+     */
+    public static long packBlobId(int taskIdx, long rowIndex, int taskBits) {
+        if (taskBits < 1 || taskBits > 62) {
+            throw new IllegalArgumentException("taskBits out of range: " + taskBits);
+        }
+        int rowBits = 63 - taskBits;
+        long maxTask = 1L << taskBits;
+        long maxRow = 1L << rowBits;
+        if (taskIdx < 0 || taskIdx >= maxTask) {
+            throw new IllegalArgumentException("taskIdx out of range: " + taskIdx);
+        }
+        if (rowIndex < 0 || rowIndex >= maxRow) {
+            throw new IllegalArgumentException("rowIndex out of range: " + rowIndex);
+        }
+        return ((long) taskIdx << rowBits) | rowIndex;
+    }
+
     @Override
     public Value<?> readValue(SynthKey synthKey, ResultSet rs, int index) throws Exception {
         try (InputStream is = openStream(rs, index)) {
@@ -71,7 +101,7 @@ public class BlobReader extends ValueReader {
                 return VoidValue.of();
             }
 
-            long id = nextIdGen.incrementAndGet();
+            long id = nextBlobId;
             PrimitiveValue ydbId = PrimitiveValue.newInt64(id);
             saveBlob(ydbId, is);
             if (synthKey != null) {
