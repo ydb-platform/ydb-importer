@@ -98,6 +98,20 @@ public class ColumnInfo {
         return isBlob(sqlType);
     }
 
+    public static boolean isClob(int sqlType) {
+        switch (sqlType) {
+            case java.sql.Types.CLOB:
+            case java.sql.Types.NCLOB:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public boolean isClob() {
+        return isClob(sqlType);
+    }
+
     public static String safeYdbColumnName(String name) {
         if (name == null || name.length() == 0) {
             return "";

@@ -26,6 +26,8 @@ public class TableDecision implements TableIdentity {
     private TargetTable target;
     // blob column name -> blob table definition
     private final Map<String, TargetTable> blobTargets = new HashMap<>();
+    // clob column name -> clob table definition
+    private final Map<String, TargetTable> clobTargets = new HashMap<>();
 
     public TableDecision(String schema, String table, TableOptions options) {
         this.schema = schema;
@@ -126,6 +128,10 @@ public class TableDecision implements TableIdentity {
 
     public Map<String, TargetTable> getBlobTargets() {
         return blobTargets;
+    }
+
+    public Map<String, TargetTable> getClobTargets() {
+        return clobTargets;
     }
 
 }

@@ -45,6 +45,7 @@ public final class YdbImporterRunner {
         private int poolSize = 2;
         private int fetchSize = 10_000;
         private boolean usePartitions = true;
+        private boolean useArrow = false;
         private String queryText;
 
         private static final class AdditionalTable {
@@ -124,6 +125,11 @@ public final class YdbImporterRunner {
             return this;
         }
 
+        public Builder useArrow(boolean value) {
+            this.useArrow = value;
+            return this;
+        }
+
         public Builder queryText(String sql) {
             this.queryText = sql;
             return this;
@@ -147,6 +153,7 @@ public final class YdbImporterRunner {
             workers.setReaderPoolSize(poolSize);
             workers.setWriterPoolSize(poolSize);
             workers.setBufferCount(poolSize);
+            workers.setUseArrow(useArrow);
             config.setWorkers(workers);
 
             SourceConfig src = new SourceConfig();

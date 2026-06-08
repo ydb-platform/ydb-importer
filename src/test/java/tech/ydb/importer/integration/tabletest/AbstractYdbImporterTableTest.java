@@ -25,6 +25,14 @@ public abstract class AbstractYdbImporterTableTest extends AbstractYdbImporterIn
         return arr;
     }
 
+    protected static String repeat(String s, int times) {
+        StringBuilder sb = new StringBuilder(s.length() * times);
+        for (int i = 0; i < times; i++) {
+            sb.append(s);
+        }
+        return sb.toString();
+    }
+
     protected static String hex(byte[] data) {
         StringBuilder sb = new StringBuilder(data.length * 2);
         for (byte b : data) {
@@ -61,7 +69,8 @@ public abstract class AbstractYdbImporterTableTest extends AbstractYdbImporterIn
                     .source(sourceContainer(), sourceType())
                     .ydb(ydbContainer())
                     .table(primary.schema, primary.table)
-                    .customizeTable(primary::applyConfigTo);
+                    .customizeTable(primary::applyConfigTo)
+                    .useArrow(useArrow());
             for (int i = 1; i < tables.size(); i++) {
                 TableTestBuilder extra = tables.get(i);
                 builder.addTable(extra.schema, extra.table, extra::applyConfigTo);

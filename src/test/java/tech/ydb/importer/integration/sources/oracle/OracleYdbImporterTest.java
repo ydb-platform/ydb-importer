@@ -228,7 +228,12 @@ public class OracleYdbImporterTest {
         }
     }
 
-    @Nested class TypeTests extends OracleTypeCases {
+    @Nested class TypeTestsRow extends OracleTypeCases {
+        @Override public boolean useArrow() { return false; }
+    }
+
+    @Nested class TypeTestsArrow extends OracleTypeCases {
+        @Override public boolean useArrow() { return true; }
     }
 
     abstract class OracleTableCases extends AbstractYdbImporterTableTest {
@@ -593,9 +598,44 @@ public class OracleYdbImporterTest {
                     .run();
         }
 
+        @Test
+        public void clobContentImport() throws Exception {
+            String s = sourceDb().schema;
+            String bigText = repeat("Y", 524288);
+
+            tableTest(s, "CLOB_DOCS")
+                    .setupSql(
+                        "CREATE TABLE " + s + ".CLOB_DOCS ("
+                        + "ID    NUMBER(10,0) NOT NULL PRIMARY KEY,"
+                        + "SHORT CLOB,"
+                        + "LARGE CLOB);"
+                        + "INSERT INTO " + s + ".CLOB_DOCS VALUES (3, EMPTY_CLOB(), EMPTY_CLOB())")
+                    .insertRow("INSERT INTO " + s + ".CLOB_DOCS VALUES (?, ?, ?)",
+                            1, "YDB", bigText)
+                    .insertRow("INSERT INTO " + s + ".CLOB_DOCS VALUES (?, ?, ?)",
+                            2, null, null)
+                    .cleanupSql("DROP TABLE " + s + ".CLOB_DOCS")
+                    .expectPrimaryKey("ID")
+                    .expectRowCount(3)
+                    .expectClobColumn("SHORT")
+                    .expectClobColumn("LARGE")
+                    .expectClobContent("SHORT", "ID", 1, "YDB")
+                    .expectClobContent("LARGE", "ID", 1, bigText)
+                    .expectClobContent("SHORT", "ID", 2, null)
+                    .expectClobContent("LARGE", "ID", 2, null)
+                    .expectClobContent("SHORT", "ID", 3, "")
+                    .expectClobContent("LARGE", "ID", 3, "")
+                    .run();
+        }
+
     }
 
-    @Nested class TableTests extends OracleTableCases {
+    @Nested class TableTestsRow extends OracleTableCases {
+        @Override public boolean useArrow() { return false; }
+    }
+
+    @Nested class TableTestsArrow extends OracleTableCases {
+        @Override public boolean useArrow() { return true; }
     }
 
     @Nested class PartitioningTests extends AbstractOraclePartitioningTests {

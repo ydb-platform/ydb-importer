@@ -70,7 +70,7 @@ When there is no primary key defined anywhere, the tool automatically adds the c
 
 If the input table contains several rows with completely identical values, the destination table will have only one row per each set of duplicate input rows. This also means that there the tool cannot import the table in which all columns are of BLOB type.
 
-## 4. BLOB data import
+## 4. BLOB and CLOB data import
 
 For each BLOB field in the source database the import tool creates an additional YDB target table (BLOB supplemental table), having the following structure:
 ```sql
@@ -82,14 +82,24 @@ CREATE TABLE `blob_table`(
 )
 ```
 
-The name of the BLOB supplemental table is generated based on the `table-options` / `blob-name-format` setting in the configuration file.
+A similar table is created for each CLOB field:
+```sql
+CREATE TABLE `clob_table`(
+    `id` Int64,
+    `pos` Int32,
+    `val` Text,
+    PRIMARY KEY(`id`, `pos`)
+)
+```
 
-Each BLOB field value is saved as a sequence if records in the BLOB supplemental table in YQB.
-Actual data is stored in the `val` field, storing no more than 64K bytes.
-The order of blocks stored is defined by the values of the `pos` column, containing the integer values `1..N`.
+A CLOB table is created for source columns of types CLOB or NCLOB, as well as for text columns explicitly marked with `<clob-column>` in the `<table-ref>` section.
 
-A unique value of type `Int64` is generated for each source BLOB value, and stored in the `id` field of the BLOB supplemental table.
-This identifier is also stored in the "main" target table in the field having the same name as the BLOB field in the source table.
+The name of the supplemental table is generated based on the `table-options` / `blob-name-format` setting in the configuration file.
+
+Each source field value is saved as a sequence of records in the supplemental table.
+A unique value of type `Int64` is generated for each source value, and stored in the `id` field.
+This identifier is also stored in the "main" target table in the field having the same name as the source field.
+Each BLOB record stores no more than 64K bytes in the `val` field, each CLOB record stores no more than 32768 characters. The order of blocks is defined by the values of the `pos` column.
 
 ## 5. YDB partitioning and parallel source reading
 
@@ -141,6 +151,10 @@ Below is the definition of the configuration file structure:
              If not set, reader-pool size is used.
          -->
         <buffer-count>4</buffer-count>
+        <!-- Use Apache Arrow columnar format for writes to YDB.
+             Increases load speed. Requires YDB version 26.1 or later.
+         -->
+        <use-arrow>false</use-arrow>
     </workers>
     <!-- Source database connection parameters.
          type - the required attribute defining the type of the data source
@@ -170,7 +184,7 @@ Below is the definition of the configuration file structure:
         <password>password</password>
         <!-- Number of retries per partition query on source read errors,
              with exponential backoff (1s, 2s, 4s, ..., capped at 30s).
-             Applies to partitioned tables without BLOB columns.
+             Applies to partitioned tables without BLOB or CLOB columns.
          -->
         <retry-count>10</retry-count>
     </source>
@@ -322,6 +336,11 @@ Below is the definition of the configuration file structure:
              If not set, MIN/MAX of the first key column is taken from the source. -->
         <ydb-partition-from>1</ydb-partition-from>
         <ydb-partition-to>1000000</ydb-partition-to>
+        <!-- Marks a text column for import as CLOB. The column must
+             have a text SQL type: CHAR, VARCHAR, NCHAR, NVARCHAR,
+             LONGVARCHAR, LONGNVARCHAR.
+         -->
+        <clob-column>note</clob-column>
     </table-ref>
 </ydb-importer>
 ```

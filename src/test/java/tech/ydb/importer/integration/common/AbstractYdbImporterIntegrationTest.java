@@ -47,6 +47,10 @@ public abstract class AbstractYdbImporterIntegrationTest {
         return ydb;
     }
 
+    public boolean useArrow() {
+        return false;
+    }
+
     public Connection openSourceConnection() throws Exception {
         JdbcDatabaseContainer<?> container = sourceContainer();
         Class.forName(container.getDriverClassName());

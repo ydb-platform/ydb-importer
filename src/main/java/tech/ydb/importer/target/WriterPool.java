@@ -92,7 +92,7 @@ public class WriterPool implements AutoCloseable {
                 }
                 long started = System.nanoTime();
                 try {
-                    batch.getOp().upload(batch.getBatch());
+                    batch.getOp().upload(batch.getData(), batch.getRowCount(), batch.getOnFailure());
                 } finally {
                     progress.countUploadBatch(System.nanoTime() - started);
                 }
