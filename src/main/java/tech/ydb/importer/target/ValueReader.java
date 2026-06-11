@@ -9,6 +9,10 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Calendar;
+import java.util.TimeZone;
 import java.util.UUID;
 
 import tech.ydb.table.values.PrimitiveType;
@@ -20,6 +24,13 @@ import tech.ydb.table.values.Type;
  * @author zinal
  */
 public abstract class ValueReader {
+
+    /** Read as UTC to keep the timestamp from shifting with the JVM zone. */
+    private static final ThreadLocal<Calendar> UTC_CALENDAR =
+            ThreadLocal.withInitial(() -> Calendar.getInstance(TimeZone.getTimeZone("UTC")));
+
+    private static final DateTimeFormatter UTC_TIMESTAMP_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneOffset.UTC);
 
     private static final ValueReader BOOL = new BoolReader(ValueWriter::writeBool);
     private static final ValueReader INT_BOOL = new IntReader((w, i, v) -> w.writeBool(i, v != 0));
@@ -49,9 +60,9 @@ public abstract class ValueReader {
     private static final ValueReader DATETIME = new TimestampReader((w, i, v) -> w.writeDatetime(i, v.toInstant()));
     private static final ValueReader TIMESTAMP = new TimestampReader((w, i, v) -> w.writeTimestamp(i, v.toInstant()));
     private static final ValueReader TS_DATE = new TimestampReader(
-            (w, i, v) -> w.writeDate(i, v.toLocalDateTime().toLocalDate()));
+            (w, i, v) -> w.writeDate(i, v.toInstant().atOffset(ZoneOffset.UTC).toLocalDate()));
     private static final ValueReader TS_DATE32 = new TimestampReader(
-            (w, i, v) -> w.writeDate32(i, v.toLocalDateTime().toLocalDate()));
+            (w, i, v) -> w.writeDate32(i, v.toInstant().atOffset(ZoneOffset.UTC).toLocalDate()));
     private static final ValueReader DATETIME64 = new TimestampReader(
             (w, i, v) -> w.writeDatetime64(i, v.toInstant()));
     private static final ValueReader TIMESTAMP64 = new TimestampReader(
@@ -59,7 +70,8 @@ public abstract class ValueReader {
 
     private static final ValueReader TS_INT64 = new TimestampReader((w, i, v) -> w.writeInt64(i, v.getTime()));
     private static final ValueReader TS_UINT64 = new TimestampReader((w, i, v) -> w.writeUint64(i, v.getTime()));
-    private static final ValueReader TS_STR = new TimestampReader((w, i, v) -> w.writeText(i, v.toString()));
+    private static final ValueReader TS_STR = new TimestampReader(
+            (w, i, v) -> w.writeText(i, UTC_TIMESTAMP_FORMAT.format(v.toInstant())));
 
     private static final ValueReader UUID_BINARY = new UuidReaderBinary();
     private static final ValueReader UUID_TEXT = new UuidReaderText();
@@ -500,7 +512,7 @@ public abstract class ValueReader {
         @Override
         public void read(ResultSet rs, int rsIdx, int targetIdx, ValueWriter writer, SynthKey synthKey)
                 throws Exception {
-            Timestamp value = rs.getTimestamp(rsIdx);
+            Timestamp value = rs.getTimestamp(rsIdx, UTC_CALENDAR.get());
             if (rs.wasNull()) {
                 if (synthKey != null) {
                     synthKey.hashNull();

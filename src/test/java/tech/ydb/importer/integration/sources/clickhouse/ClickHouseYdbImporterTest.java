@@ -30,7 +30,7 @@ public class ClickHouseYdbImporterTest {
     @BeforeAll
     static void startClickHouse() {
         originalTz = TimeZone.getDefault();
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        TimeZone.setDefault(TimeZone.getTimeZone("GMT+6"));
         chContainer = ClickHouseTestContainer.create();
         chContainer.start();
     }
