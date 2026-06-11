@@ -30,9 +30,29 @@ jobs:
       - name: Run checkstyle
         run: mvn $MAVEN_ARGS checkstyle:check
 
+  build:
+    name: Build
+    needs: checkstyle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Check benchmark compiles
+        run: mvn $MAVEN_ARGS -P benchmark test-compile
+
+      - name: Build distribution
+        run: mvn $MAVEN_ARGS package -Dmaven.test.skip=true -Dcheckstyle.skip=true
+
   unit-tests:
     name: Unit tests
-    needs: checkstyle
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -46,9 +66,6 @@ jobs:
 
       - name: Run unit tests
         run: mvn $MAVEN_ARGS test -Dtest='ImporterConfigTest' -Dcheckstyle.skip=true -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Check benchmark compiles
-        run: mvn $MAVEN_ARGS -P benchmark test-compile
 
   compatibility:
     name: Compatibility (JDK ${{ matrix.java }})
