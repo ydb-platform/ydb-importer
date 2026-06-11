@@ -1,0 +1,125 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  MAVEN_ARGS: --batch-mode -ntp -Dstyle.color=always
+  JDK_JAVA_OPTIONS: --add-opens=java.base/java.nio=ALL-UNNAMED
+
+permissions:
+  contents: read
+
+jobs:
+  checkstyle:
+    name: Checkstyle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run checkstyle
+        run: mvn $MAVEN_ARGS checkstyle:check
+
+  unit-tests:
+    name: Unit tests
+    needs: checkstyle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run unit tests
+        run: mvn $MAVEN_ARGS test -Dtest='ImporterConfigTest' -Dcheckstyle.skip=true -Dsurefire.failIfNoSpecifiedTests=false
+
+      - name: Check benchmark compiles
+        run: mvn $MAVEN_ARGS -P benchmark test-compile
+
+  compatibility:
+    name: Compatibility (JDK ${{ matrix.java }})
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['8', '11', '17', '21', '25']
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run integration tests (postgres)
+        run: mvn $MAVEN_ARGS test -Dtest='PostgresYdbImporterTest,AllDbVerificationTest' -Dverify.only=postgres -Dcheckstyle.skip=true -Dsurefire.failIfNoSpecifiedTests=false
+
+  integration-tests:
+    name: Integration (${{ matrix.db }})
+    needs: compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: MySQL
+            test: 'MySqlYdbImporterTest,AllDbVerificationTest'
+            verifyOnly: mysql
+            timeout: 10
+          - db: MariaDB
+            test: 'MariaDbYdbImporterTest,AllDbVerificationTest'
+            verifyOnly: mariadb
+            timeout: 10
+          - db: MariaDB ColumnStore
+            test: 'MariaDbColumnStoreYdbImporterTest'
+            timeout: 10
+          - db: ClickHouse
+            test: 'ClickHouseYdbImporterTest,AllDbVerificationTest'
+            verifyOnly: clickhouse
+            timeout: 10
+          - db: Greenplum
+            test: 'GreenplumYdbImporterTest,AllDbVerificationTest'
+            verifyOnly: greenplum
+            timeout: 10
+          - db: Oracle
+            test: 'OracleYdbImporterTest,AllDbVerificationTest'
+            verifyOnly: oracle
+            timeout: 20
+          - db: Db2
+            test: 'Db2YdbImporterTest,AllDbVerificationTest'
+            verifyOnly: db2
+            timeout: 20
+          - db: SAP HANA
+            test: 'HanaYdbImporterTest,AllDbVerificationTest'
+            verifyOnly: hana
+            timeout: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run integration tests (${{ matrix.db }})
+        run: mvn $MAVEN_ARGS test -Dtest='${{ matrix.test }}' ${{ matrix.verifyOnly && format('-Dverify.only={0}', matrix.verifyOnly) || '' }} -Dcheckstyle.skip=true -Dsurefire.failIfNoSpecifiedTests=false
