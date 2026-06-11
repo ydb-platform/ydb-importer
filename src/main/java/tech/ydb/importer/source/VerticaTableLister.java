@@ -208,7 +208,8 @@ public class VerticaTableLister extends AnyTableLister {
                     if (partKey == null) {
                         continue;
                     }
-                    String whereSql = baseSql + " WHERE " + partitionExpr + " = " + partKey;
+                    String escapedKey = partKey.replace("'", "''");
+                    String whereSql = baseSql + " WHERE " + partitionExpr + " = '" + escapedKey + "'";
                     String name = td.getSchema() + "." + td.getTable() + "#" + partKey;
                     partitions.add(new TaskInfo(name, whereSql));
                 }
