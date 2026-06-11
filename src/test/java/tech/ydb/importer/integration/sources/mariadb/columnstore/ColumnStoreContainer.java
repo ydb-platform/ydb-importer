@@ -77,7 +77,7 @@ public final class ColumnStoreContainer {
     }
 
     private MariaDBContainer buildJdbcView() {
-        final String jdbcUrl = "jdbc:mariadb://localhost:"
+        final String jdbcUrl = "jdbc:mariadb://" + container.getHost() + ":"
                 + container.getMappedPort(MYSQL_PORT) + "/" + dbName;
         DockerImageName image = DockerImageName.parse(imageName)
                 .asCompatibleSubstituteFor("mariadb");
