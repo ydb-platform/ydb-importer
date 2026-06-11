@@ -163,6 +163,8 @@ Below is the definition of the configuration file structure:
         <buffer-count>4</buffer-count>
         <!-- Use Apache Arrow columnar format for writes to YDB.
              Increases load speed. Requires YDB version 26.1 or later.
+             On Java 16 or newer, run with
+             JDK_JAVA_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED
          -->
         <use-arrow>false</use-arrow>
     </workers>

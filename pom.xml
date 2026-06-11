@@ -300,7 +300,7 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <version>3.5.4</version>
                         <configuration>
-                            <argLine>@{argLine} --add-opens=java.base/java.nio=ALL-UNNAMED</argLine>
+                            <argLine>@{argLine}</argLine>
                         </configuration>
                     </plugin>
                     <plugin>
@@ -433,7 +433,7 @@
                         <version>3.5.0</version>
                         <configuration>
                             <executable>java</executable>
-                            <commandlineArgs>--add-opens=java.base/java.nio=ALL-UNNAMED -classpath %classpath ${bench.mainClass} ${exec.args}</commandlineArgs>
+                            <commandlineArgs>-classpath %classpath ${bench.mainClass} ${exec.args}</commandlineArgs>
                         </configuration>
                     </plugin>
                     <plugin>

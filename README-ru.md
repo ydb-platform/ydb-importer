@@ -163,6 +163,8 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
         <buffer-count>4</buffer-count>
         <!-- Использовать ли колоночный формат Apache Arrow при записи в YDB.
              Увеличивает скорость загрузки. Требует YDB версии 26.1 или более поздней.
+             На Java 16 и новее запускать с
+             JDK_JAVA_OPTIONS=--add-opens=java.base/java.nio=ALL-UNNAMED
          -->
         <use-arrow>false</use-arrow>
     </workers>
