@@ -4,7 +4,6 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Collections;
 
 import org.testcontainers.containers.JdbcDatabaseContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -33,10 +32,6 @@ public final class HanaTestContainer
         withCommand(
                 "--agree-to-sap-license",
                 "--master-password", MASTER_PASSWORD);
-        // Mount /hana/mounts as tmpfs to speed up HANA startup.
-        withCreateContainerCmdModifier(cmd -> cmd.getHostConfig()
-                .withTmpFs(Collections.singletonMap("/hana/mounts",
-                        "rw,exec,mode=0770,uid=12000,gid=79,size=32g")));
     }
 
     @Override

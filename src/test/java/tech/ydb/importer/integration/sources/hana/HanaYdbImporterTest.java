@@ -60,6 +60,11 @@ public class HanaYdbImporterTest {
             return super.typeTest().withIdentifierQuote("\"");
         }
 
+        @Override
+        protected String dropTableSql(String qualifiedTable) {
+            return "DROP TABLE " + qualifiedTable + " CASCADE";
+        }
+
         @Test
         public void tinyintMapsToInt32() throws Exception {
             typeTest()

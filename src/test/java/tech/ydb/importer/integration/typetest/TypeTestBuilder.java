@@ -235,8 +235,8 @@ public final class TypeTestBuilder {
     private void cleanupSource(String tableName) {
         try (Connection con = test.openSourceConnection();
              Statement st = con.createStatement()) {
-            st.execute("DROP TABLE IF EXISTS "
-                    + quoteId(test.schemaName()) + "." + quoteId(tableName));
+            st.execute(test.dropTableSql(
+                    quoteId(test.schemaName()) + "." + quoteId(tableName)));
         } catch (Exception ex) {
             LOG.warn("Failed to drop source table {}.{}",
                     test.schemaName(), tableName, ex);
