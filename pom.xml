@@ -148,7 +148,7 @@
         <dependency>
             <groupId>com.clickhouse</groupId>
             <artifactId>clickhouse-jdbc</artifactId>
-            <version>0.9.8</version>
+            <version>0.9.6</version>
             <classifier>all</classifier>
             <scope>runtime</scope>
         </dependency>
@@ -227,7 +227,7 @@
         <dependency>
             <groupId>com.clickhouse</groupId>
             <artifactId>clickhouse-jdbc</artifactId>
-            <version>0.9.8</version>
+            <version>0.9.6</version>
             <classifier>all</classifier>
             <scope>test</scope>
         </dependency>
@@ -515,7 +515,7 @@
                 <dependency>
                     <groupId>com.clickhouse</groupId>
                     <artifactId>clickhouse-jdbc</artifactId>
-                    <version>0.9.8</version>
+                    <version>0.9.6</version>
                     <classifier>all</classifier>
                 </dependency>
                 <dependency>

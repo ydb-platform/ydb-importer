@@ -126,6 +126,46 @@ public class ClickHouseTableLister extends AnyTableLister {
         tm.clearKey();
     }
 
+    /*
+     * ClickHouse reports UInt64 as OTHER. Read the column type from the catalog and
+     * remap a plain UInt64 to NUMERIC(20,0).
+     */
+    @Override
+    protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        super.grabColumnTypes(con, td, tm);
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT name, type FROM system.columns "
+                + "WHERE database = ? AND table = ?")) {
+            ps.setString(1, td.getSchema());
+            ps.setString(2, td.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    ColumnInfo ci = tm.findColumn(rs.getString(1));
+                    if (ci == null || ci.getSqlType() != java.sql.Types.OTHER) {
+                        continue;
+                    }
+                    if (isUInt64Type(rs.getString(2))) {
+                        ci.setSqlType(java.sql.Types.NUMERIC);
+                        ci.setSqlPrecision(20);
+                        ci.setSqlScale(0);
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean isUInt64Type(String type) {
+        if (type == null) {
+            return false;
+        }
+        String inner = type.trim();
+        while (inner.startsWith("LowCardinality(") || inner.startsWith("Nullable(")) {
+            inner = inner.substring(inner.indexOf('(') + 1, inner.length() - 1).trim();
+        }
+        return inner.equals("UInt64");
+    }
+
     @Override
     public List<TaskInfo> listPartitions(Connection con, TableDecision td, TableMetadata tm)
             throws SQLException {
