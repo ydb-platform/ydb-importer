@@ -110,6 +110,24 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
+            <groupId>org.mariadb.jdbc</groupId>
+            <artifactId>mariadb-java-client</artifactId>
+            <version>3.5.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.vertica.jdbc</groupId>
+            <artifactId>vertica-jdbc</artifactId>
+            <version>24.1.0-0</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.sap.cloud.db.jdbc</groupId>
+            <artifactId>ngdbc</artifactId>
+            <version>2.28.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
             <groupId>com.microsoft.sqlserver</groupId>
             <artifactId>mssql-jdbc</artifactId>
             <version>12.6.0.jre8</version>
@@ -118,13 +136,20 @@
         <dependency>
             <groupId>com.ibm.db2</groupId>
             <artifactId>jcc</artifactId>
-            <version>11.5.9.0</version>
+            <version>12.1.4.0</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>com.ibm.informix</groupId>
             <artifactId>jdbc</artifactId>
             <version>4.50.10.1</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.clickhouse</groupId>
+            <artifactId>clickhouse-jdbc</artifactId>
+            <version>0.9.6</version>
+            <classifier>all</classifier>
             <scope>runtime</scope>
         </dependency>
         -->
@@ -170,6 +195,18 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-clickhouse</artifactId>
+            <version>2.0.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-mariadb</artifactId>
+            <version>2.0.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>42.7.7</version>
@@ -185,6 +222,43 @@
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ojdbc8</artifactId>
             <version>23.7.0.25.01</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.clickhouse</groupId>
+            <artifactId>clickhouse-jdbc</artifactId>
+            <version>0.9.6</version>
+            <classifier>all</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mariadb.jdbc</groupId>
+            <artifactId>mariadb-java-client</artifactId>
+            <version>3.5.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.vertica.jdbc</groupId>
+            <artifactId>vertica-jdbc</artifactId>
+            <version>24.1.0-0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.sap.cloud.db.jdbc</groupId>
+            <artifactId>ngdbc</artifactId>
+            <version>2.28.6</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-db2</artifactId>
+            <version>2.0.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.ibm.db2</groupId>
+            <artifactId>jcc</artifactId>
+            <version>12.1.4.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -226,7 +300,7 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <version>3.5.4</version>
                         <configuration>
-                            <argLine>@{argLine} --add-opens=java.base/java.nio=ALL-UNNAMED</argLine>
+                            <argLine>@{argLine}</argLine>
                         </configuration>
                     </plugin>
                     <plugin>
@@ -331,35 +405,12 @@
                         </executions>
                     </plugin>
                     <plugin>
-                        <groupId>io.github.git-commit-id</groupId>
-                        <artifactId>git-commit-id-maven-plugin</artifactId>
-                        <version>9.0.1</version>
-                        <executions>
-                            <execution>
-                                <id>get-git-info</id>
-                                <phase>initialize</phase>
-                                <goals>
-                                    <goal>revision</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                        <configuration>
-                            <generateGitPropertiesFile>true</generateGitPropertiesFile>
-                            <generateGitPropertiesFilename>${project.build.outputDirectory}/git.properties</generateGitPropertiesFilename>
-                            <includeOnlyProperties>
-                                <includeOnlyProperty>git.commit.id.abbrev</includeOnlyProperty>
-                                <includeOnlyProperty>git.commit.id.full</includeOnlyProperty>
-                                <includeOnlyProperty>git.dirty</includeOnlyProperty>
-                            </includeOnlyProperties>
-                        </configuration>
-                    </plugin>
-                    <plugin>
                         <groupId>org.codehaus.mojo</groupId>
                         <artifactId>exec-maven-plugin</artifactId>
                         <version>3.5.0</version>
                         <configuration>
                             <executable>java</executable>
-                            <commandlineArgs>--add-opens=java.base/java.nio=ALL-UNNAMED -classpath %classpath ${bench.mainClass} ${exec.args}</commandlineArgs>
+                            <commandlineArgs>-classpath %classpath ${bench.mainClass} ${exec.args}</commandlineArgs>
                         </configuration>
                     </plugin>
                     <plugin>
@@ -422,6 +473,47 @@
                     <groupId>com.oracle.database.jdbc</groupId>
                     <artifactId>ojdbc8</artifactId>
                     <version>23.7.0.25.01</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.testcontainers</groupId>
+                    <artifactId>testcontainers-clickhouse</artifactId>
+                    <version>2.0.3</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.testcontainers</groupId>
+                    <artifactId>testcontainers-mariadb</artifactId>
+                    <version>2.0.3</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.testcontainers</groupId>
+                    <artifactId>testcontainers-db2</artifactId>
+                    <version>2.0.3</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.clickhouse</groupId>
+                    <artifactId>clickhouse-jdbc</artifactId>
+                    <version>0.9.6</version>
+                    <classifier>all</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.mariadb.jdbc</groupId>
+                    <artifactId>mariadb-java-client</artifactId>
+                    <version>3.5.3</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.vertica.jdbc</groupId>
+                    <artifactId>vertica-jdbc</artifactId>
+                    <version>24.1.0-0</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.sap.cloud.db.jdbc</groupId>
+                    <artifactId>ngdbc</artifactId>
+                    <version>2.28.6</version>
+                </dependency>
+                <dependency>
+                    <groupId>com.ibm.db2</groupId>
+                    <artifactId>jcc</artifactId>
+                    <version>12.1.4.0</version>
                 </dependency>
             </dependencies>
         </profile>

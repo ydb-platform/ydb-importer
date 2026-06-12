@@ -54,6 +54,7 @@ public class LoadDataTask implements Callable<Boolean> {
     private final int taskBits;
     private final boolean partitionBuffers;
     private final boolean useArrow;
+    private final boolean useStringForClob;
     private final WriterPool writerPool;
     private long rowIndex;
 
@@ -86,6 +87,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.taskBits = BlobReader.bitsRequired(tab.getMetadata().getTasks().size());
         this.partitionBuffers = tab.partitionBuffers();
         this.useArrow = owner.getConfig().getWorkers().isUseArrow();
+        this.useStringForClob = owner.getTableLister().useStringForClobRead();
         this.writerPool = writerPool;
         this.rowIndex = 0;
     }
@@ -144,6 +146,9 @@ public class LoadDataTask implements Callable<Boolean> {
                     checkCancelled();
                     savedRowIndex = rowIndex;
                     TaskQuery query = queries.get(nextQuery);
+                    if (queries.size() > 1) {
+                        LOG.info("Reading range {}", query.getName());
+                    }
                     copied += executeQuery(con, query.getSql());
                     nextQuery++;
                     attempt = 0;
@@ -470,7 +475,8 @@ public class LoadDataTask implements Callable<Boolean> {
             } else if (tab.getClobTargets().containsKey(columnName)) {
                 TargetTable tt = tab.getClobTargets().get(columnName);
                 String clobPath = target.getDatabase() + "/" + tt.getFullName();
-                ValueReader reader = new ClobReader(clobPath, target.getRetryCtx(), progress, maxBlobRows);
+                ValueReader reader = new ClobReader(clobPath, target.getRetryCtx(),
+                        progress, maxBlobRows, useStringForClob);
                 index[i] = new ColumnIndex(ixTarget, reader);
             } else {
                 ValueReader reader = ValueReader.getReader(paramListType.getMemberType(ixTarget), ci.getSqlType());

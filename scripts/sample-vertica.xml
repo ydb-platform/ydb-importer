@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- IBM Db2 to YDB importer job configuration example -->
+<!-- Vertica to YDB importer job configuration example -->
 <ydb-importer>
     <workers>
         <reader-pool size="4"/>
     </workers>
-    <source type="db2">
-        <jdbc-class>com.ibm.db2.jcc.DB2Driver</jdbc-class>
-        <jdbc-url>jdbc:db2://hostname:50000/SAMPLE</jdbc-url>
-        <username>db2inst1</username>
+    <source type="vertica">
+        <jdbc-class>com.vertica.jdbc.Driver</jdbc-class>
+        <jdbc-url>jdbc:vertica://hostname:5433/VMart</jdbc-url>
+        <username>dbadmin</username>
         <password>password</password>
     </source>
     <target type="ydb">
-        <script-file>sample-db2.yql.tmp</script-file>
+        <script-file>sample-vertica.yql.tmp</script-file>
         <connection-string>grpcs://ydb.serverless.yandexcloud.net:2135?database=/ru-central1/b1gfvslmokutuvt2g019/etn63999hrinbapmef6g</connection-string>
         <!--
         <connection-string>grpcs://hostname.demo.com:2135?database=/local</connection-string>
@@ -37,9 +37,9 @@
         <!--  ASIS, LOWER, UPPER -->
         <case-mode>ASIS</case-mode>
         <!-- Substitution values: ${schema}, ${table} -->
-        <table-name-format>db2_1/${schema}/${table}</table-name-format>
+        <table-name-format>vert1/${schema}/${table}</table-name-format>
         <!-- Substitution values: ${schema}, ${table}, ${field} -->
-        <blob-name-format>db2_1/${schema}/${table}_${field}</blob-name-format>
+        <blob-name-format>vert1/${schema}/${table}_${field}</blob-name-format>
         <!-- DATE_NEW, DATE, INT, STR -->
         <conv-date>DATE_NEW</conv-date>
         <conv-timestamp>DATE_NEW</conv-timestamp>
@@ -51,17 +51,17 @@
         <!-- Possible extra tags: include-tables, exclude-tables, exclude-schemas -->
     </table-map>
     <table-ref options="default">
-        <schema-name>SYSCAT</schema-name>
-        <table-name>TABLES</table-name>
-        <key-column>TABSCHEMA</key-column>
-        <key-column>TABNAME</key-column>
+        <schema-name>v_catalog</schema-name>
+        <table-name>tables</table-name>
+        <key-column>table_schema</key-column>
+        <key-column>table_name</key-column>
     </table-ref>
     <table-ref options="default">
-        <schema-name>SYSCAT</schema-name>
-        <table-name>COLUMNS</table-name>
-        <query-text>SELECT * FROM SYSCAT.COLUMNS</query-text>
-        <key-column>TABSCHEMA</key-column>
-        <key-column>TABNAME</key-column>
-        <key-column>COLNAME</key-column>
+        <schema-name>v_catalog</schema-name>
+        <table-name>columns</table-name>
+        <query-text>SELECT * FROM v_catalog.columns</query-text>
+        <key-column>table_schema</key-column>
+        <key-column>table_name</key-column>
+        <key-column>column_name</key-column>
     </table-ref>
 </ydb-importer>

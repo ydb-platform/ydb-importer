@@ -51,6 +51,16 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         return cached;
     }
 
+    public void beforeTableRead(Connection con, TableDecision td) throws SQLException {
+    }
+
+    public void afterTableRead(Connection con, TableDecision td) throws SQLException {
+    }
+
+    public boolean useStringForClobRead() {
+        return false;
+    }
+
     // Safely quote the identifier
     protected abstract String safeId(String id);
 
@@ -316,8 +326,19 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                 return new PostgresTableLister(tableMaps);
             case MYSQL:
                 return new MySqlTableLister(tableMaps);
-            case INFORMIX:
+            case MARIADB:
+                return new MariaDbTableLister(tableMaps);
+            case VERTICA:
+                return new VerticaTableLister(tableMaps);
+            case HANA:
+                return new HanaTableLister(tableMaps);
+            case GREENPLUM:
+                return new GreenplumTableLister(tableMaps);
+            case CLICKHOUSE:
+                return new ClickHouseTableLister(tableMaps);
             case DB2:
+                return new DB2TableLister(tableMaps);
+            case INFORMIX:
             case MSSQL:
                 return new GenericJdbcTableLister(tableMaps, con);
             default:

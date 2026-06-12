@@ -39,7 +39,12 @@ public final class Scenario {
         }
 
         public Builder col(String name, LogicalType type, LongFunction<Object> fn) {
-            defs.add(new ColumnDef(name, type, fn));
+            defs.add(new ColumnDef(name, type, fn, false));
+            return this;
+        }
+
+        public Builder colNullable(String name, LogicalType type, LongFunction<Object> fn) {
+            defs.add(new ColumnDef(name, type, fn, true));
             return this;
         }
 
@@ -58,7 +63,7 @@ public final class Scenario {
         public TableScenario build() {
             List<ColumnSpec> columns = new ArrayList<>(defs.size());
             for (ColumnDef d : defs) {
-                columns.add(new ColumnSpec(d.name, d.type));
+                columns.add(new ColumnSpec(d.name, d.type, d.nullable));
             }
             RowOracle oracle = new RowOracle() {
                 @Override
@@ -89,11 +94,14 @@ public final class Scenario {
         final String name;
         final LogicalType type;
         final LongFunction<Object> fn;
+        final boolean nullable;
 
-        ColumnDef(String name, LogicalType type, LongFunction<Object> fn) {
+        ColumnDef(String name, LogicalType type, LongFunction<Object> fn,
+                  boolean nullable) {
             this.name = name;
             this.type = type;
             this.fn = fn;
+            this.nullable = nullable;
         }
     }
 }

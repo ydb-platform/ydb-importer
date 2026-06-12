@@ -9,6 +9,10 @@ public abstract class AbstractYdbImporterTypeTest extends AbstractYdbImporterInt
         return "";
     }
 
+    protected String dropTableSql(String qualifiedTable) {
+        return "DROP TABLE IF EXISTS " + qualifiedTable;
+    }
+
     protected TypeTestBuilder typeTest() {
         return new TypeTestBuilder(this);
     }

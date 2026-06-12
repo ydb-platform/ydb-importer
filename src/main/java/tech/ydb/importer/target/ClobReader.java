@@ -1,7 +1,9 @@
 package tech.ydb.importer.target;
 
 import java.io.Reader;
+import java.io.StringReader;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,10 +39,12 @@ public class ClobReader extends ValueReader {
     private final int posId;
     private final int posPos;
     private final int posVal;
+    private final boolean useStringFallback;
 
     private final List<Value<?>> currentBulk = new ArrayList<>();
 
-    public ClobReader(String tablePath, SessionRetryContext ctx, ProgressCounter progress, int maxClobRecords) {
+    public ClobReader(String tablePath, SessionRetryContext ctx, ProgressCounter progress,
+            int maxClobRecords, boolean useStringFallback) {
         this.upsertOp = new YdbUpsertOp(
                 ctx, tablePath, "clob rows upsert issue for " + tablePath, progress::countBlobRows
         );
@@ -48,6 +52,7 @@ public class ClobReader extends ValueReader {
         this.posId = CLOB_ROW.getMemberIndex("id");
         this.posPos = CLOB_ROW.getMemberIndex("pos");
         this.posVal = CLOB_ROW.getMemberIndex("val");
+        this.useStringFallback = useStringFallback;
     }
 
     public void setNextClobId(long id) {
@@ -56,7 +61,7 @@ public class ClobReader extends ValueReader {
 
     @Override
     public void read(ResultSet rs, int rsIdx, int targetIdx, ValueWriter writer, SynthKey synthKey) throws Exception {
-        try (Reader r = rs.getCharacterStream(rsIdx)) {
+        try (Reader r = openReader(rs, rsIdx)) {
             if (rs.wasNull()) {
                 if (synthKey != null) {
                     synthKey.hashNull();
@@ -72,6 +77,14 @@ public class ClobReader extends ValueReader {
             }
             writer.writeInt64(targetIdx, id);
         }
+    }
+
+    private Reader openReader(ResultSet rs, int rsIdx) throws SQLException {
+        if (useStringFallback) {
+            String s = rs.getString(rsIdx);
+            return s == null ? null : new StringReader(s);
+        }
+        return rs.getCharacterStream(rsIdx);
     }
 
     public void saveClob(PrimitiveValue id, Reader r) throws Exception {

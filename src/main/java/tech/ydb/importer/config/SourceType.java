@@ -13,4 +13,9 @@ public enum SourceType {
     MSSQL,
     DB2,
     INFORMIX,
+    CLICKHOUSE,
+    MARIADB,
+    VERTICA,
+    HANA,
+    GREENPLUM,
 }
