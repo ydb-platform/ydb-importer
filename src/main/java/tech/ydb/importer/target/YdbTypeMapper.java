@@ -43,7 +43,7 @@ public final class YdbTypeMapper {
                     if (ci.getSqlPrecision() < 10) {
                         return PrimitiveType.Int32;
                     }
-                    if (ci.getSqlPrecision() < 20) {
+                    if (ci.getSqlPrecision() < 19) {
                         return PrimitiveType.Int64;
                     }
                     if (options.isAllowCustomDecimal()) {

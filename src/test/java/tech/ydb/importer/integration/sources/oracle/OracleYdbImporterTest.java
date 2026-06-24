@@ -82,11 +82,11 @@ public class OracleYdbImporterTest {
         }
 
         @Test
-        public void numberLargeToInt64() throws Exception {
+        public void numberLargeToDecimal() throws Exception {
             typeTest()
-                    .column("NUMBER(19,0) NOT NULL", PrimitiveType.Int64)
+                    .column("NUMBER(19,0) NOT NULL", DecimalType.of(35, 0))
                         .value("1234567890123456789",
-                                1234567890123456789L)
+                                new BigDecimal("1234567890123456789"))
                     .execute();
         }
 
@@ -280,7 +280,7 @@ public class OracleYdbImporterTest {
                     .add(tableTest(s, "PK_OVER_UNIQUE")
                             .setupSql(
                                 "CREATE TABLE " + s + ".PK_OVER_UNIQUE ("
-                                + "ID   NUMBER(19,0) NOT NULL PRIMARY KEY,"
+                                + "ID   NUMBER(18,0) NOT NULL PRIMARY KEY,"
                                 + "CODE VARCHAR2(20) NOT NULL,"
                                 + "VAL  NUMBER(10,0),"
                                 + "CONSTRAINT UQ_ORA_CODE UNIQUE (CODE));"
