@@ -305,15 +305,19 @@ public class YdbImporter {
                     LOG.info("No valid tables to be loaded, nothing to do.");
                     return;
                 }
-                int successCount = 0;
                 for (Future<Boolean> rf : results) {
-                    if (rf.get() != null && rf.get()) {
-                        ++successCount;
-                    }
+                    rf.get();
                 }
 
                 writerPool.shutdownAndWait();
-                LOG.info("Table data load completed {} of {} tasks.", successCount, results.size());
+                int failed = 0;
+                for (TableDecision td : tables) {
+                    if (td.isFailure()) {
+                        ++failed;
+                    }
+                }
+                LOG.info("Table data load completed {} of {} tables.",
+                        tables.size() - failed, tables.size());
             } finally {
                 writerPool.close();
             }

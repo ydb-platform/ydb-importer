@@ -6,7 +6,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +23,6 @@ public class WriterPool implements AutoCloseable {
     private final BlockingQueue<UploadBatch> queue;
     private final int writerCount;
     private final ProgressCounter progress;
-    private final AtomicReference<Exception> firstError = new AtomicReference<>();
 
     public WriterPool(int writerCount, int queueCapacity, ProgressCounter progress) {
         this.writerCount = writerCount;
@@ -44,17 +42,8 @@ public class WriterPool implements AutoCloseable {
         }
     }
 
-    public void submit(UploadBatch batch) throws Exception {
-        checkError();
+    public void submit(UploadBatch batch) throws InterruptedException {
         queue.put(batch);
-        checkError();
-    }
-
-    private void checkError() throws Exception {
-        Exception err = firstError.get();
-        if (err != null) {
-            throw err;
-        }
     }
 
     public void shutdownAndWait() throws Exception {
@@ -71,11 +60,6 @@ public class WriterPool implements AutoCloseable {
                         + (SHUTDOWN_TIMEOUT_MS + FORCE_SHUTDOWN_TIMEOUT_MS) + " ms)");
             }
         }
-
-        Exception err = firstError.get();
-        if (err != null) {
-            throw err;
-        }
     }
 
     @Override
@@ -84,27 +68,26 @@ public class WriterPool implements AutoCloseable {
     }
 
     private void writerLoop() {
-        try {
-            while (true) {
-                UploadBatch batch = queue.take();
-                if (batch == UploadBatch.SHUTDOWN_SIGNAL) {
-                    return;
-                }
-                long started = System.nanoTime();
-                try {
-                    batch.getOp().upload(batch.getData(), batch.getRowCount(), batch.getOnFailure());
-                } finally {
-                    progress.countUploadBatch(System.nanoTime() - started);
-                }
+        while (true) {
+            UploadBatch batch;
+            try {
+                batch = queue.take();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
             }
-        } catch (InterruptedException e) {
-            firstError.compareAndSet(null, e);
-            queue.clear();
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            LOG.error("Writer thread {} failed", Thread.currentThread().getName(), e);
-            firstError.compareAndSet(null, e);
-            queue.clear();
+            if (batch == UploadBatch.SHUTDOWN_SIGNAL) {
+                return;
+            }
+            long started = System.nanoTime();
+            try {
+                batch.getOp().upload(batch.getData(), batch.getRowCount(), batch.getOnFailure());
+            } catch (Exception e) {
+                LOG.error("Upload failed for table {}", batch.label(), e);
+                batch.markFailed();
+            } finally {
+                progress.countUploadBatch(System.nanoTime() - started);
+            }
         }
     }
 }

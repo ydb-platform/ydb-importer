@@ -346,13 +346,13 @@ public class LoadDataTask implements Callable<Boolean> {
     private void submitRowBatch(ListType paramListType, List<Value<?>> batch) throws Exception {
         final ListValue lv = paramListType.newValue(batch);
         writerPool.submit(new UploadBatch(ydbOp, new BulkUpsertData(lv), batch.size(),
-                () -> RowValueWriter.logValues(lv)));
+                () -> RowValueWriter.logValues(lv), tab));
     }
 
     private void submitArrowBatch(ApacheArrowWriter.Batch arrowBatch, int rowCount) throws Exception {
         final ApacheArrowData data = arrowBatch.buildBatch();
         writerPool.submit(new UploadBatch(ydbOp, data, rowCount,
-                () -> ArrowValueWriter.logValues(data)));
+                () -> ArrowValueWriter.logValues(data), tab));
     }
 
     /** Which YDB partition a key falls into, by binary search over the cuts. */
