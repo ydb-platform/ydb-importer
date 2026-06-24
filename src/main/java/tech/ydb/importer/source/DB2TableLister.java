@@ -48,7 +48,6 @@ public class DB2TableLister extends AnyTableLister {
                     if (value == null) {
                         continue;
                     }
-                    value = value.trim();
                     if (value.startsWith("SYS") || value.startsWith("IBM")) {
                         continue;
                     }
@@ -72,7 +71,7 @@ public class DB2TableLister extends AnyTableLister {
             try (ResultSet rs = ps.executeQuery()) {
                 final List<String> retval = new ArrayList<>();
                 while (rs.next()) {
-                    retval.add(rs.getString(1).trim());
+                    retval.add(rs.getString(1));
                 }
                 return retval;
             }
@@ -109,7 +108,7 @@ public class DB2TableLister extends AnyTableLister {
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    cols.add(new ColumnInfo(rs.getString(1).trim()));
+                    cols.add(new ColumnInfo(rs.getString(1)));
                 }
             }
         }
@@ -143,7 +142,7 @@ public class DB2TableLister extends AnyTableLister {
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    tm.addKey(rs.getString(1).trim());
+                    tm.addKey(rs.getString(1));
                 }
             }
         }
@@ -179,8 +178,8 @@ public class DB2TableLister extends AnyTableLister {
             ps.setString(2, ti.getTable());
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    bestIndSchema = rs.getString(1).trim();
-                    bestIndName = rs.getString(2).trim();
+                    bestIndSchema = rs.getString(1);
+                    bestIndName = rs.getString(2);
                 }
             }
         }
@@ -196,7 +195,7 @@ public class DB2TableLister extends AnyTableLister {
             ps.setString(2, bestIndName);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    tm.addKey(rs.getString(1).trim());
+                    tm.addKey(rs.getString(1));
                 }
             }
         }
