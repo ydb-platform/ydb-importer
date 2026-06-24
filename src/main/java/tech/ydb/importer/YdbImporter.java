@@ -381,9 +381,11 @@ public class YdbImporter {
     }
 
     public static String getVersion() {
-        try {
-            Properties prop = new Properties();
-            InputStream in = YdbImporter.class.getResourceAsStream("/importer_version.properties");
+        final Properties prop = new Properties();
+        try (InputStream in = YdbImporter.class.getResourceAsStream("/importer_version.properties")) {
+            if (in == null) {
+                return "unknown";
+            }
             prop.load(in);
             return prop.getProperty("version");
         } catch (IOException ex) {
