@@ -21,6 +21,7 @@ import tech.ydb.importer.source.ColumnInfo;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.importer.source.TaskInfo;
 import tech.ydb.importer.source.TaskQuery;
+import tech.ydb.importer.source.YdbPartitioning;
 import tech.ydb.table.query.BulkUpsertData;
 import tech.ydb.table.query.arrow.ApacheArrowData;
 import tech.ydb.table.query.arrow.ApacheArrowWriter;
@@ -200,8 +201,9 @@ public class LoadDataTask implements Callable<Boolean> {
         final List<ClobReader> clobReaders = collectClobReaders(columns);
         final SynthKey synthKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
 
-        PartitionBounds pb = partitionBuffers ? resolvePartitionBounds(rsmd) : null;
-        if (partitionBuffers && pb == null) {
+        boolean needsBuffering = needsPartitionBuffering();
+        PartitionBounds pb = (partitionBuffers && needsBuffering) ? resolvePartitionBounds(rsmd) : null;
+        if (partitionBuffers && needsBuffering && pb == null) {
             LOG.debug("partition-buffers requested for {}.{} but no integer partition cuts, "
                     + "plain batching", tab.getSchema(), tab.getTable());
         }
@@ -353,6 +355,12 @@ public class LoadDataTask implements Callable<Boolean> {
         final ApacheArrowData data = arrowBatch.buildBatch();
         writerPool.submit(new UploadBatch(ydbOp, data, rowCount,
                 () -> ArrowValueWriter.logValues(data), tab));
+    }
+
+    private boolean needsPartitionBuffering() {
+        final YdbPartitioning part = tab.getMetadata().getYdbPartitioning();
+        return !(part.isKeyRange() && part.isOnePartitionPerTask()
+                && tab.getMetadata().getTasks().size() == part.getCuts().size() + 1);
     }
 
     /** Which YDB partition a key falls into, by binary search over the cuts. */
