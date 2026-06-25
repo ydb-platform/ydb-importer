@@ -29,9 +29,6 @@ public abstract class ValueReader {
     private static final ThreadLocal<Calendar> UTC_CALENDAR =
             ThreadLocal.withInitial(() -> Calendar.getInstance(TimeZone.getTimeZone("UTC")));
 
-    private static final DateTimeFormatter UTC_TIMESTAMP_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneOffset.UTC);
-
     private static final ValueReader BOOL = new BoolReader(ValueWriter::writeBool);
     private static final ValueReader INT_BOOL = new IntReader((w, i, v) -> w.writeBool(i, v != 0));
     private static final ValueReader STR_BOOL = new StringReader((w, i, v) -> w.writeBool(i, str2bool(v)));
@@ -71,7 +68,7 @@ public abstract class ValueReader {
     private static final ValueReader TS_INT64 = new TimestampReader((w, i, v) -> w.writeInt64(i, v.getTime()));
     private static final ValueReader TS_UINT64 = new TimestampReader((w, i, v) -> w.writeUint64(i, v.getTime()));
     private static final ValueReader TS_STR = new TimestampReader(
-            (w, i, v) -> w.writeText(i, UTC_TIMESTAMP_FORMAT.format(v.toInstant())));
+            (w, i, v) -> w.writeText(i, DateTimeFormatter.ISO_INSTANT.format(v.toInstant())));
 
     private static final ValueReader UUID_BINARY = new UuidReaderBinary();
     private static final ValueReader UUID_TEXT = new UuidReaderText();
@@ -598,6 +595,6 @@ public abstract class ValueReader {
 
     private static String date2str(Date date) {
         final LocalDate ld = date.toLocalDate();
-        return String.format("%d/%02d/%02d", ld.getYear(), ld.getMonthValue(), ld.getDayOfMonth());
+        return String.format("%d-%02d-%02d", ld.getYear(), ld.getMonthValue(), ld.getDayOfMonth());
     }
 }

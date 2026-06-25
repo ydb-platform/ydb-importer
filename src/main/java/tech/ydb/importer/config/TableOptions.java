@@ -210,8 +210,8 @@ public class TableOptions extends JdomHelper {
          */
         DATE,
         /**
-         * Date or time as string, using formats "YYYY-MM-DD",
-         * "YYYY-MM-DDTHH:MM:SSZ" and "YYYY-MM-DDTHH:MM:SS.SSSZ".
+         * Date or time as string, using formats "YYYY-MM-DD" and
+         * "YYYY-MM-DDTHH:MM:SS[.SSSSSSSSS]Z".
          */
         STR,
         /**

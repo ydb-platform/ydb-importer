@@ -280,7 +280,7 @@ Below is the definition of the configuration file structure:
              INT saves date as 32-bit integer YYYYMMDD for dates,
                  and as a 64-bit milliseconds since epoch for timestamps.
              STR saves dates as character strings (Utf8) in format "YYYY-MM-DD",
-                 and in "YYYY-MM-DD hh:mm:ss.xxx" for timestamps.
+                 and in "YYYY-MM-DDTHH:MM:SS[.SSSSSSSSS]Z" for timestamps.
          -->
         <conv-date>DATE_NEW</conv-date>
         <conv-timestamp>DATE_NEW</conv-timestamp>

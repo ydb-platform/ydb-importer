@@ -229,8 +229,8 @@ public abstract class AbstractPostgresCompatibleTypeCases
         typeTest()
                 .withOptions(opts -> opts.setDateConv(DateConv.STR))
                 .column("DATE NOT NULL", PrimitiveType.Text)
-                    .value("DATE '1970-01-01'", "1970/01/01")
-                    .value("DATE '2024-01-15'", "2024/01/15")
+                    .value("DATE '1970-01-01'", "1970-01-01")
+                    .value("DATE '2024-01-15'", "2024-01-15")
                 .execute();
     }
 
@@ -271,6 +271,18 @@ public abstract class AbstractPostgresCompatibleTypeCases
                             Instant.parse("2024-01-15T10:30:45Z"))
                     .value("TIMESTAMPTZ '2024-06-20 15:00:00+03'",
                             Instant.parse("2024-06-20T12:00:00Z"))
+                .execute();
+    }
+
+    @Test
+    public void timestampAsTextUsesIso() throws Exception {
+        typeTest()
+                .withOptions(opts -> opts.setTimestampConv(DateConv.STR))
+                .column("TIMESTAMP NOT NULL", PrimitiveType.Text)
+                    .value("TIMESTAMP '2024-01-15 10:30:45'",
+                            "2024-01-15T10:30:45Z")
+                    .value("TIMESTAMP '2024-01-15 10:30:45.123456'",
+                            "2024-01-15T10:30:45.123456Z")
                 .execute();
     }
 

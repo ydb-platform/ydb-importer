@@ -255,8 +255,8 @@ public abstract class AbstractMySqlCompatibleTypeCases
         typeTest()
                 .withOptions(opts -> opts.setDateConv(DateConv.STR))
                 .column("DATE NOT NULL", PrimitiveType.Text)
-                    .value("'1970-01-01'", "1970/01/01")
-                    .value("'2024-01-15'", "2024/01/15")
+                    .value("'1970-01-01'", "1970-01-01")
+                    .value("'2024-01-15'", "2024-01-15")
                 .execute();
     }
 
@@ -267,6 +267,18 @@ public abstract class AbstractMySqlCompatibleTypeCases
                 .column("DATETIME NOT NULL", PrimitiveType.Datetime64)
                     .value("'2024-01-15 10:30:45'",
                             LocalDateTime.of(2024, 1, 15, 10, 30, 45))
+                .execute();
+    }
+
+    @Test
+    public void timestampAsTextUsesIso() throws Exception {
+        typeTest()
+                .withOptions(opts -> opts.setTimestampConv(DateConv.STR))
+                .column("TIMESTAMP(6) NOT NULL", PrimitiveType.Text)
+                    .value("'2024-01-15 10:30:45'",
+                            "2024-01-15T10:30:45Z")
+                    .value("'2024-01-15 10:30:45.123456'",
+                            "2024-01-15T10:30:45.123456Z")
                 .execute();
     }
 

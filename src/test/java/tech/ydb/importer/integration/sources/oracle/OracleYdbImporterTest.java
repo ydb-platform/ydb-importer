@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.oracle.OracleContainer;
 
 import tech.ydb.importer.config.SourceType;
+import tech.ydb.importer.config.TableOptions.DateConv;
 import tech.ydb.importer.integration.tabletest.AbstractYdbImporterTableTest;
 import tech.ydb.importer.integration.typetest.AbstractYdbImporterTypeTest;
 import tech.ydb.importer.integration.typetest.TypeTestBuilder;
@@ -224,6 +225,20 @@ public class OracleYdbImporterTest {
                                 + "'YYYY-MM-DD HH24:MI:SS')",
                                 LocalDateTime.of(2024, 1, 15,
                                         10, 30, 45))
+                    .execute();
+        }
+
+        @Test
+        public void timestampAsTextUsesIso() throws Exception {
+            typeTest()
+                    .withOptions(opts -> opts.setTimestampConv(DateConv.STR))
+                    .column("TIMESTAMP(9) NOT NULL", PrimitiveType.Text)
+                        .value("TO_TIMESTAMP('2024-01-15 10:30:45',"
+                                + "'YYYY-MM-DD HH24:MI:SS')",
+                                "2024-01-15T10:30:45Z")
+                        .value("TO_TIMESTAMP('2024-01-15 10:30:45.123456789',"
+                                + "'YYYY-MM-DD HH24:MI:SS.FF9')",
+                                "2024-01-15T10:30:45.123456789Z")
                     .execute();
         }
     }

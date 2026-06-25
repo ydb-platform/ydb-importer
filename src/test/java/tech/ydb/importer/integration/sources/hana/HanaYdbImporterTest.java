@@ -268,8 +268,8 @@ public class HanaYdbImporterTest {
                     .withOptions(
                             opts -> opts.setDateConv(DateConv.STR))
                     .column("DATE NOT NULL", PrimitiveType.Text)
-                        .value("'1970-01-01'", "1970/01/01")
-                        .value("'2024-01-15'", "2024/01/15")
+                        .value("'1970-01-01'", "1970-01-01")
+                        .value("'2024-01-15'", "2024-01-15")
                     .execute();
         }
 
