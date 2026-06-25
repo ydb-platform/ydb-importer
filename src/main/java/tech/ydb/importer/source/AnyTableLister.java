@@ -341,13 +341,21 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             case CLICKHOUSE:
                 return new ClickHouseTableLister(tableMaps);
             case DB2:
-                return new DB2TableLister(tableMaps);
+                if (isDb2Luw(con)) {
+                    return new DB2TableLister(tableMaps);
+                }
+                return new GenericJdbcTableLister(tableMaps, con);
             case INFORMIX:
             case MSSQL:
                 return new GenericJdbcTableLister(tableMaps, con);
             default:
                 throw new RuntimeException("Unsupported source type: " + st);
         }
+    }
+
+    private static boolean isDb2Luw(Connection con) throws SQLException {
+        String version = con.getMetaData().getDatabaseProductVersion();
+        return version != null && version.startsWith("SQL");
     }
 
 }
