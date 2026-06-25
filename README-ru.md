@@ -293,8 +293,8 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
                     задан, иначе числу партиций источника, если они есть.
              N    - целое >= 2, разбить диапазон первой колонки ключа на N равных
                     интервалов (по ydb-partition-from/to, иначе MIN/MAX источника).
-             none - не задавать, YDB управляет партициями сам.
-             По умолчанию none. Можно переопределить в <table-ref>. -->
+             ydb-managed - YDB управляет партициями сам.
+             По умолчанию ydb-managed. Можно переопределить в <table-ref>. -->
         <ydb-partition-count>auto</ydb-partition-count>
     </table-options>
     <!-- Фильтр для отбора копируемых таблиц с источника -->
