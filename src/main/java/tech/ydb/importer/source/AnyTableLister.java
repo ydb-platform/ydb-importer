@@ -61,6 +61,10 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         return false;
     }
 
+    public boolean defaultAutoCommit() {
+        return false;
+    }
+
     // Safely quote the identifier
     protected abstract String safeId(String id);
 

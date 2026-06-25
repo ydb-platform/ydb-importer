@@ -56,6 +56,7 @@ public class LoadDataTask implements Callable<Boolean> {
     private final boolean partitionBuffers;
     private final boolean useArrow;
     private final boolean useStringForClob;
+    private final boolean defaultAutoCommit;
     private final WriterPool writerPool;
     private long rowIndex;
 
@@ -89,6 +90,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.partitionBuffers = tab.partitionBuffers();
         this.useArrow = owner.getConfig().getWorkers().isUseArrow();
         this.useStringForClob = owner.getTableLister().useStringForClobRead();
+        this.defaultAutoCommit = owner.getTableLister().defaultAutoCommit();
         this.writerPool = writerPool;
         this.rowIndex = 0;
     }
@@ -143,6 +145,7 @@ public class LoadDataTask implements Callable<Boolean> {
 
         while (nextQuery < queries.size()) {
             try (Connection con = source.getConnection()) {
+                con.setAutoCommit(defaultAutoCommit);
                 while (nextQuery < queries.size()) {
                     checkCancelled();
                     savedRowIndex = rowIndex;

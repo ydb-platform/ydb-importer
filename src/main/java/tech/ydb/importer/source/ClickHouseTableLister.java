@@ -253,6 +253,11 @@ public class ClickHouseTableLister extends AnyTableLister {
     }
 
     @Override
+    public boolean defaultAutoCommit() {
+        return true;
+    }
+
+    @Override
     protected String safeId(String id) {
         if (id.contains("`")) {
             throw new IllegalArgumentException("Backtick within the identifier: " + id);
