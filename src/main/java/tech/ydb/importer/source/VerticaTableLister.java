@@ -206,7 +206,8 @@ public class VerticaTableLister extends AnyTableLister {
                 while (rs.next()) {
                     String partKey = rs.getString(1);
                     if (partKey == null) {
-                        continue;
+                        throw new IllegalStateException("Unexpected NULL partition_key for "
+                                + td.getSchema() + "." + td.getTable());
                     }
                     String escapedKey = partKey.replace("'", "''");
                     String whereSql = baseSql + " WHERE " + partitionExpr + " = '" + escapedKey + "'";
