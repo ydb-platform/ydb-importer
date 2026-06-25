@@ -207,6 +207,9 @@ ALTER DATABASE dbname SET lo_compat_privileges TO on;
              Применяется к партиционированным таблицам без колонок BLOB и CLOB.
          -->
         <retry-count>10</retry-count>
+        <!-- Размер выборки JDBC при чтении источника (по умолчанию 10000). У ClickHouse
+             нет курсора JDBC, поэтому для него этот параметр задаёт число строк в чанке чтения партиции. -->
+        <fetch-size>10000</fetch-size>
     </source>
     <!-- Параметры подключения к БД-получателю. -->
     <target type="ydb">

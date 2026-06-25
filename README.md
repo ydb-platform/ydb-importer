@@ -207,6 +207,9 @@ Below is the definition of the configuration file structure:
              Applies to partitioned tables without BLOB or CLOB columns.
          -->
         <retry-count>10</retry-count>
+        <!-- JDBC fetch size for source reads (default 10000). For ClickHouse
+             (no JDBC cursor) it sets the rows per partition read chunk instead. -->
+        <fetch-size>10000</fetch-size>
     </source>
     <!-- Target YDB database connection parameters. -->
     <target type="ydb">
