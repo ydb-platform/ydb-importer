@@ -216,6 +216,19 @@ public class OracleYdbImporterTest {
         }
 
         @Test
+        public void timestampNotShiftedByJvmZone() throws Exception {
+            typeTest()
+                    .withJvmTimeZone("GMT+6")
+                    .column("TIMESTAMP NOT NULL",
+                            PrimitiveType.Timestamp64)
+                        .value("TO_TIMESTAMP('2024-01-15 10:30:45',"
+                                + "'YYYY-MM-DD HH24:MI:SS')",
+                                java.time.Instant.parse(
+                                        "2024-01-15T10:30:45Z"))
+                    .execute();
+        }
+
+        @Test
         public void timestampZeroMaps() throws Exception {
             // TIMESTAMP(0) -> scale=0 -> Datetime64.
             typeTest()

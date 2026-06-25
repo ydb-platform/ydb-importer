@@ -275,6 +275,16 @@ public abstract class AbstractPostgresCompatibleTypeCases
     }
 
     @Test
+    public void timestampNotShiftedByJvmZone() throws Exception {
+        typeTest()
+                .withJvmTimeZone("GMT+6")
+                .column("TIMESTAMP NOT NULL", PrimitiveType.Timestamp64)
+                    .value("TIMESTAMP '2024-01-15 10:30:45'",
+                            Instant.parse("2024-01-15T10:30:45Z"))
+                .execute();
+    }
+
+    @Test
     public void timestampAsTextUsesIso() throws Exception {
         typeTest()
                 .withOptions(opts -> opts.setTimestampConv(DateConv.STR))

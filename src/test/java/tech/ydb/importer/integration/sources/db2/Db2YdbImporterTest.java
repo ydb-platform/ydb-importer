@@ -254,6 +254,17 @@ public class Db2YdbImporterTest {
         }
 
         @Test
+        public void timestampNotShiftedByJvmZone() throws Exception {
+            typeTest()
+                    .withJvmTimeZone("GMT+6")
+                    .column("TIMESTAMP NOT NULL", PrimitiveType.Timestamp64)
+                        .value("'2024-01-15 10:30:45'",
+                                java.time.Instant.parse(
+                                        "2024-01-15T10:30:45Z"))
+                    .execute();
+        }
+
+        @Test
         public void timestampZeroMaps() throws Exception {
             typeTest()
                     .column("TIMESTAMP(0) NOT NULL",

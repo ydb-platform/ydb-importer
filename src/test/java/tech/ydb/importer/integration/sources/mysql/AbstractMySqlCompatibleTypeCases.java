@@ -271,6 +271,16 @@ public abstract class AbstractMySqlCompatibleTypeCases
     }
 
     @Test
+    public void timestampNotShiftedByJvmZone() throws Exception {
+        typeTest()
+                .withJvmTimeZone("GMT+6")
+                .column("TIMESTAMP NOT NULL", PrimitiveType.Datetime64)
+                    .value("'2024-01-15 10:30:45'",
+                            LocalDateTime.of(2024, 1, 15, 10, 30, 45))
+                .execute();
+    }
+
+    @Test
     public void timestampAsTextUsesIso() throws Exception {
         typeTest()
                 .withOptions(opts -> opts.setTimestampConv(DateConv.STR))
