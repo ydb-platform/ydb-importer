@@ -127,8 +127,9 @@ public class ClickHouseTableLister extends AnyTableLister {
     }
 
     /*
-     * ClickHouse reports UInt64 as OTHER. Read the column type from the catalog and
-     * remap a plain UInt64 to NUMERIC(20,0).
+     * ClickHouse JDBC reports UInt8/16/32 as larger signed types and UInt64 as OTHER.
+     * Read the type from system.columns and set those columns unsigned, so the mapper
+     * picks Uint8/Uint16/Uint32/Uint64.
      */
     @Override
     protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm)
@@ -142,28 +143,47 @@ public class ClickHouseTableLister extends AnyTableLister {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     ColumnInfo ci = tm.findColumn(rs.getString(1));
-                    if (ci == null || ci.getSqlType() != java.sql.Types.OTHER) {
+                    if (ci == null) {
                         continue;
                     }
-                    if (isUInt64Type(rs.getString(2))) {
-                        ci.setSqlType(java.sql.Types.NUMERIC);
-                        ci.setSqlPrecision(20);
-                        ci.setSqlScale(0);
-                    }
+                    markUnsignedInteger(ci, unwrap(rs.getString(2)));
                 }
             }
         }
     }
 
-    private static boolean isUInt64Type(String type) {
+    private static void markUnsignedInteger(ColumnInfo ci, String inner) {
+        switch (inner) {
+            case "UInt8":
+                ci.setSqlType(java.sql.Types.TINYINT);
+                ci.setUnsigned(true);
+                break;
+            case "UInt16":
+                ci.setSqlType(java.sql.Types.SMALLINT);
+                ci.setUnsigned(true);
+                break;
+            case "UInt32":
+                ci.setSqlType(java.sql.Types.INTEGER);
+                ci.setUnsigned(true);
+                break;
+            case "UInt64":
+                ci.setSqlType(java.sql.Types.BIGINT);
+                ci.setUnsigned(true);
+                break;
+            default:
+                break;
+        }
+    }
+
+    private static String unwrap(String type) {
         if (type == null) {
-            return false;
+            return "";
         }
         String inner = type.trim();
         while (inner.startsWith("LowCardinality(") || inner.startsWith("Nullable(")) {
             inner = inner.substring(inner.indexOf('(') + 1, inner.length() - 1).trim();
         }
-        return inner.equals("UInt64");
+        return inner;
     }
 
     @Override

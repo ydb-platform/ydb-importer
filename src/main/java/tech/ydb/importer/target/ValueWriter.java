@@ -18,6 +18,10 @@ public interface ValueWriter {
 
     void writeBool(int idx, boolean v);
 
+    void writeUint8(int idx, int v);
+
+    void writeUint16(int idx, int v);
+
     void writeInt32(int idx, int v);
 
     void writeUint32(int idx, long v);

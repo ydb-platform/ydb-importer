@@ -222,6 +222,7 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                     ci.setSqlPrecision(rsmd.getPrecision(i));
                     ci.setSqlScale(rsmd.getScale(i));
                     ci.setNullable(rsmd.isNullable(i) != 0);
+                    ci.setUnsigned(!rsmd.isSigned(i));
                 }
             }
         } catch (Exception ex) {

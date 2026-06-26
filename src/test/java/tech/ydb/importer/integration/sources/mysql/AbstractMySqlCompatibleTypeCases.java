@@ -313,4 +313,44 @@ public abstract class AbstractMySqlCompatibleTypeCases
                             Instant.parse("2024-12-31T23:59:59.999999Z"))
                 .execute();
     }
+
+    @Test
+    public void tinyintUnsignedMapsToUint8() throws Exception {
+        typeTest()
+                .column("TINYINT UNSIGNED NOT NULL", PrimitiveType.Uint8)
+                    .value("0", 0)
+                    .value("255", 255)
+                .execute();
+    }
+
+    @Test
+    public void smallintUnsignedMapsToUint16() throws Exception {
+        typeTest()
+                .column("SMALLINT UNSIGNED NOT NULL", PrimitiveType.Uint16)
+                    .value("0", 0)
+                    .value("65535", 65535)
+                .execute();
+    }
+
+    @Test
+    public void intUnsignedMapsToUint32() throws Exception {
+        typeTest()
+                .column("INT UNSIGNED NOT NULL", PrimitiveType.Uint32)
+                    .value("0", 0L)
+                    .value("2147483648", 2147483648L)
+                    .value("4294967295", 4294967295L)
+                .execute();
+    }
+
+    @Test
+    public void bigintUnsignedMapsToUint64() throws Exception {
+        typeTest()
+                .column("BIGINT UNSIGNED NOT NULL", PrimitiveType.Uint64)
+                    .value("0", 0L)
+                    .value("9223372036854775808",
+                            Long.parseUnsignedLong("9223372036854775808"))
+                    .value("18446744073709551615",
+                            Long.parseUnsignedLong("18446744073709551615"))
+                .execute();
+    }
 }

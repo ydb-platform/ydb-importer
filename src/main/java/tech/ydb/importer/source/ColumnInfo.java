@@ -15,6 +15,7 @@ public class ColumnInfo {
     private int sqlScale;
     private boolean nullable;
     private boolean blobAsObject;
+    private boolean unsigned;
 
     public ColumnInfo(String name) {
         this.name = (name == null) ? "" : name;
@@ -25,6 +26,7 @@ public class ColumnInfo {
         this.sqlScale = 0;
         this.nullable = true;
         this.blobAsObject = false;
+        this.unsigned = false;
     }
 
     public String getName() {
@@ -81,6 +83,14 @@ public class ColumnInfo {
 
     public void setBlobAsObject(boolean blobAsObject) {
         this.blobAsObject = blobAsObject;
+    }
+
+    public boolean isUnsigned() {
+        return unsigned;
+    }
+
+    public void setUnsigned(boolean unsigned) {
+        this.unsigned = unsigned;
     }
 
     public static boolean isBlob(int sqlType) {

@@ -41,6 +41,16 @@ public class RowValueWriter implements ValueWriter {
     }
 
     @Override
+    public void writeUint8(int idx, int v) {
+        values[idx] = PrimitiveValue.newUint8(v);
+    }
+
+    @Override
+    public void writeUint16(int idx, int v) {
+        values[idx] = PrimitiveValue.newUint16(v);
+    }
+
+    @Override
     public void writeInt32(int idx, int v) {
         values[idx] = PrimitiveValue.newInt32(v);
     }

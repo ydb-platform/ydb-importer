@@ -66,12 +66,12 @@ public class HanaYdbImporterTest {
         }
 
         @Test
-        public void tinyintMapsToInt32() throws Exception {
+        public void tinyintMapsToUint8() throws Exception {
             typeTest()
-                    .column("TINYINT NOT NULL", PrimitiveType.Int32)
+                    .column("TINYINT NOT NULL", PrimitiveType.Uint8)
                         .value("0", 0)
                         .value("255", 255)
-                    .column("TINYINT", PrimitiveType.Int32.makeOptional())
+                    .column("TINYINT", PrimitiveType.Uint8.makeOptional())
                         .value("42", 42)
                         .value("NULL", null)
                     .execute();

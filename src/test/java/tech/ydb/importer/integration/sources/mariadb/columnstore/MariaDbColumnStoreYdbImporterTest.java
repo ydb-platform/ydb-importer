@@ -125,6 +125,47 @@ public class MariaDbColumnStoreYdbImporterTest {
 
         @Test
         @Override
+        public void tinyintUnsignedMapsToUint8() throws Exception {
+            typeTest()
+                    .column("TINYINT UNSIGNED NOT NULL", PrimitiveType.Uint8)
+                        .value("0", 0)
+                        .value("200", 200)
+                    .execute();
+        }
+
+        @Test
+        @Override
+        public void smallintUnsignedMapsToUint16() throws Exception {
+            typeTest()
+                    .column("SMALLINT UNSIGNED NOT NULL", PrimitiveType.Uint16)
+                        .value("0", 0)
+                        .value("50000", 50000)
+                    .execute();
+        }
+
+        @Test
+        @Override
+        public void intUnsignedMapsToUint32() throws Exception {
+            typeTest()
+                    .column("INT UNSIGNED NOT NULL", PrimitiveType.Uint32)
+                        .value("0", 0L)
+                        .value("3000000000", 3000000000L)
+                    .execute();
+        }
+
+        @Test
+        @Override
+        public void bigintUnsignedMapsToUint64() throws Exception {
+            typeTest()
+                    .column("BIGINT UNSIGNED NOT NULL", PrimitiveType.Uint64)
+                        .value("0", 0L)
+                        .value("10000000000000000000",
+                                Long.parseUnsignedLong("10000000000000000000"))
+                    .execute();
+        }
+
+        @Test
+        @Override
         @Disabled("ColumnStore does not support JSON/ENUM")
         public void jsonAndEnumMapToText() throws Exception {
         }

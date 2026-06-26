@@ -24,12 +24,24 @@ public final class YdbTypeMapper {
             case java.sql.Types.BIT:
                 return PrimitiveType.Bool;
             case java.sql.Types.TINYINT:
+                if (ci.isUnsigned()) {
+                    return PrimitiveType.Uint8;
+                }
                 return PrimitiveType.Int32;
             case java.sql.Types.SMALLINT:
+                if (ci.isUnsigned()) {
+                    return PrimitiveType.Uint16;
+                }
                 return PrimitiveType.Int32;
             case java.sql.Types.INTEGER:
+                if (ci.isUnsigned()) {
+                    return PrimitiveType.Uint32;
+                }
                 return PrimitiveType.Int32;
             case java.sql.Types.BIGINT:
+                if (ci.isUnsigned()) {
+                    return PrimitiveType.Uint64;
+                }
                 return PrimitiveType.Int64;
             case java.sql.Types.DECIMAL:
             case java.sql.Types.NUMERIC:
@@ -153,7 +165,6 @@ public final class YdbTypeMapper {
             case Uint8:
             case Uint16:
             case Uint32:
-            case Uint64:
                 return true;
             default:
                 return false;
