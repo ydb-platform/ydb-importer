@@ -21,6 +21,7 @@ import tech.ydb.importer.source.ColumnInfo;
 import tech.ydb.importer.source.SourceCP;
 import tech.ydb.importer.source.TaskInfo;
 import tech.ydb.importer.source.TaskQuery;
+import tech.ydb.importer.source.YdbPartitioning;
 import tech.ydb.table.query.BulkUpsertData;
 import tech.ydb.table.query.arrow.ApacheArrowData;
 import tech.ydb.table.query.arrow.ApacheArrowWriter;
@@ -55,6 +56,7 @@ public class LoadDataTask implements Callable<Boolean> {
     private final boolean partitionBuffers;
     private final boolean useArrow;
     private final boolean useStringForClob;
+    private final boolean defaultAutoCommit;
     private final WriterPool writerPool;
     private long rowIndex;
 
@@ -88,6 +90,7 @@ public class LoadDataTask implements Callable<Boolean> {
         this.partitionBuffers = tab.partitionBuffers();
         this.useArrow = owner.getConfig().getWorkers().isUseArrow();
         this.useStringForClob = owner.getTableLister().useStringForClobRead();
+        this.defaultAutoCommit = owner.getTableLister().defaultAutoCommit();
         this.writerPool = writerPool;
         this.rowIndex = 0;
     }
@@ -142,12 +145,13 @@ public class LoadDataTask implements Callable<Boolean> {
 
         while (nextQuery < queries.size()) {
             try (Connection con = source.getConnection()) {
+                con.setAutoCommit(defaultAutoCommit);
                 while (nextQuery < queries.size()) {
                     checkCancelled();
                     savedRowIndex = rowIndex;
                     TaskQuery query = queries.get(nextQuery);
                     if (queries.size() > 1) {
-                        LOG.info("Reading range {}", query.getName());
+                        LOG.debug("Reading range {}", query.getName());
                     }
                     copied += executeQuery(con, query.getSql());
                     nextQuery++;
@@ -200,8 +204,9 @@ public class LoadDataTask implements Callable<Boolean> {
         final List<ClobReader> clobReaders = collectClobReaders(columns);
         final SynthKey synthKey = tab.getTarget().hasSynthKey() ? new SynthKey() : null;
 
-        PartitionBounds pb = partitionBuffers ? resolvePartitionBounds(rsmd) : null;
-        if (partitionBuffers && pb == null) {
+        boolean needsBuffering = needsPartitionBuffering();
+        PartitionBounds pb = (partitionBuffers && needsBuffering) ? resolvePartitionBounds(rsmd) : null;
+        if (partitionBuffers && needsBuffering && pb == null) {
             LOG.debug("partition-buffers requested for {}.{} but no integer partition cuts, "
                     + "plain batching", tab.getSchema(), tab.getTable());
         }
@@ -346,13 +351,19 @@ public class LoadDataTask implements Callable<Boolean> {
     private void submitRowBatch(ListType paramListType, List<Value<?>> batch) throws Exception {
         final ListValue lv = paramListType.newValue(batch);
         writerPool.submit(new UploadBatch(ydbOp, new BulkUpsertData(lv), batch.size(),
-                () -> RowValueWriter.logValues(lv)));
+                () -> RowValueWriter.logValues(lv), tab));
     }
 
     private void submitArrowBatch(ApacheArrowWriter.Batch arrowBatch, int rowCount) throws Exception {
         final ApacheArrowData data = arrowBatch.buildBatch();
         writerPool.submit(new UploadBatch(ydbOp, data, rowCount,
-                () -> ArrowValueWriter.logValues(data)));
+                () -> ArrowValueWriter.logValues(data), tab));
+    }
+
+    private boolean needsPartitionBuffering() {
+        final YdbPartitioning part = tab.getMetadata().getYdbPartitioning();
+        return !(part.isKeyRange() && part.isOnePartitionPerTask()
+                && tab.getMetadata().getTasks().size() == part.getCuts().size() + 1);
     }
 
     /** Which YDB partition a key falls into, by binary search over the cuts. */

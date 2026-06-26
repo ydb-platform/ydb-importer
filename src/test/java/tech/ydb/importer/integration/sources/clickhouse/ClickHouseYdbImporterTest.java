@@ -97,39 +97,39 @@ public class ClickHouseYdbImporterTest {
         }
 
         @Test
-        public void uint8MapsToInt32() throws Exception {
+        public void uint8MapsToUint8() throws Exception {
             typeTest()
-                    .column("UInt8", PrimitiveType.Int32)
+                    .column("UInt8", PrimitiveType.Uint8)
                         .value("0", 0)
                         .value("255", 255)
                     .execute();
         }
 
         @Test
-        public void uint16MapsToInt32() throws Exception {
+        public void uint16MapsToUint16() throws Exception {
             typeTest()
-                    .column("UInt16", PrimitiveType.Int32)
+                    .column("UInt16", PrimitiveType.Uint16)
                         .value("0", 0)
                         .value("65535", 65535)
                     .execute();
         }
 
         @Test
-        public void uint32MapsToInt64() throws Exception {
+        public void uint32MapsToUint32() throws Exception {
             typeTest()
-                    .column("UInt32", PrimitiveType.Int64)
+                    .column("UInt32", PrimitiveType.Uint32)
                         .value("0", 0L)
                         .value("4294967295", 4294967295L)
                     .execute();
         }
 
         @Test
-        public void uint64MapsToDecimal() throws Exception {
+        public void uint64MapsToUint64() throws Exception {
             typeTest()
-                    .column("UInt64", DecimalType.of(35, 0))
-                        .value("0", new BigDecimal("0"))
+                    .column("UInt64", PrimitiveType.Uint64)
+                        .value("0", 0L)
                         .value("18446744073709551615",
-                               new BigDecimal("18446744073709551615"))
+                               Long.parseUnsignedLong("18446744073709551615"))
                     .execute();
         }
 
@@ -298,8 +298,8 @@ public class ClickHouseYdbImporterTest {
             typeTest()
                     .withOptions(opts -> opts.setDateConv(DateConv.STR))
                     .column("Date", PrimitiveType.Text)
-                        .value("'1970-01-01'", "1970/01/01")
-                        .value("'2024-01-15'", "2024/01/15")
+                        .value("'1970-01-01'", "1970-01-01")
+                        .value("'2024-01-15'", "2024-01-15")
                     .execute();
         }
 

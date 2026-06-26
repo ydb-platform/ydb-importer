@@ -102,7 +102,7 @@ public class TableRef extends JdomHelper implements TableIdentity {
         if (text == null || "auto".equalsIgnoreCase(text.trim())) {
             return AUTO;
         }
-        if (allowNone && "none".equalsIgnoreCase(text.trim())) {
+        if (allowNone && "ydb-managed".equalsIgnoreCase(text.trim())) {
             return NONE;
         }
         int n;
@@ -112,7 +112,7 @@ public class TableRef extends JdomHelper implements TableIdentity {
             throw raiseIllegal(c, name, text);
         }
         if (n < 2) {
-            String allowed = allowNone ? "'auto', 'none' or an integer >= 2"
+            String allowed = allowNone ? "'auto', 'ydb-managed' or an integer >= 2"
                     : "'auto' or an integer >= 2";
             throw raise(c, name + " must be " + allowed);
         }

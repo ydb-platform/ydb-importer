@@ -18,7 +18,7 @@ public final class OracleLoader extends DialectLoader {
     protected String toDdl(LogicalType type) {
         switch (type) {
             case INT32:           return "NUMBER(10)";
-            case INT64:           return "NUMBER(19)";
+            case INT64:           return "NUMBER(18)";
             case DECIMAL_18_4:    return "NUMBER(18, 4)";
             case STRING:          return "VARCHAR2(255)";
             case BOOL:            return "BOOLEAN";

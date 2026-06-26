@@ -167,8 +167,8 @@ public class ProgressCounter implements AutoCloseable {
 
             long readed = numRowsRRead.get();
             long writed = numRowsWritten.get();
-            double readedRate = 1000d * (readed - lastRead) / diff;
-            double writedRate = 1000d * (writed - lastWritten) / diff;
+            double readedRate = 1000d * readed / diff;
+            double writedRate = 1000d * writed / diff;
             String avgRead = avgMs(numReadNanos.get(), numReadBatches.get());
             String avgUpload = avgMs(numUploadNanos.get(), numUploadBatches.get());
 

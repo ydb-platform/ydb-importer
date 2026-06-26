@@ -116,6 +116,8 @@ public class HanaTableLister extends AnyTableLister {
     /**
      * HANA JDBC reports TIMESTAMP with scale=0, which maps to Datetime64
      * and loses fractional seconds. Tag scale=7 so the mapper picks Timestamp64.
+     * SMALLDECIMAL is reported as DECIMAL scale=0, which maps to Int64 and loses
+     * the fraction. Tag scale=-1 so the mapper picks Double.
      */
     @Override
     protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm)
@@ -128,12 +130,18 @@ public class HanaTableLister extends AnyTableLister {
             ps.setString(2, td.getTable());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    if (!"TIMESTAMP".equals(rs.getString(2))) {
+                    String dataType = rs.getString(2);
+                    ColumnInfo ci = tm.findColumn(rs.getString(1));
+                    if (ci == null) {
                         continue;
                     }
-                    ColumnInfo ci = tm.findColumn(rs.getString(1));
-                    if (ci != null && ci.getSqlType() == java.sql.Types.TIMESTAMP) {
+                    if ("TIMESTAMP".equals(dataType)
+                            && ci.getSqlType() == java.sql.Types.TIMESTAMP) {
                         ci.setSqlScale(7);
+                    } else if ("SMALLDECIMAL".equals(dataType)
+                            && (ci.getSqlType() == java.sql.Types.DECIMAL
+                                || ci.getSqlType() == java.sql.Types.NUMERIC)) {
+                        ci.setSqlScale(-1);
                     }
                 }
             }

@@ -1,6 +1,7 @@
 package tech.ydb.importer.integration.sources.mysql;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -255,8 +256,8 @@ public abstract class AbstractMySqlCompatibleTypeCases
         typeTest()
                 .withOptions(opts -> opts.setDateConv(DateConv.STR))
                 .column("DATE NOT NULL", PrimitiveType.Text)
-                    .value("'1970-01-01'", "1970/01/01")
-                    .value("'2024-01-15'", "2024/01/15")
+                    .value("'1970-01-01'", "1970-01-01")
+                    .value("'2024-01-15'", "2024-01-15")
                 .execute();
     }
 
@@ -271,12 +272,85 @@ public abstract class AbstractMySqlCompatibleTypeCases
     }
 
     @Test
+    public void timestampNotShiftedByJvmZone() throws Exception {
+        typeTest()
+                .withJvmTimeZone("GMT+6")
+                .column("TIMESTAMP NOT NULL", PrimitiveType.Datetime64)
+                    .value("'2024-01-15 10:30:45'",
+                            LocalDateTime.of(2024, 1, 15, 10, 30, 45))
+                .execute();
+    }
+
+    @Test
+    public void timestampAsTextUsesIso() throws Exception {
+        typeTest()
+                .withOptions(opts -> opts.setTimestampConv(DateConv.STR))
+                .column("TIMESTAMP(6) NOT NULL", PrimitiveType.Text)
+                    .value("'2024-01-15 10:30:45'",
+                            "2024-01-15T10:30:45Z")
+                    .value("'2024-01-15 10:30:45.123456'",
+                            "2024-01-15T10:30:45.123456Z")
+                .execute();
+    }
+
+    @Test
     public void timeMapsToInt32() throws Exception {
         typeTest()
                 .column("TIME NOT NULL", PrimitiveType.Int32)
                     .value("'00:00:00'", 0)
                     .value("'10:30:45'", 37845)
                     .value("'23:59:59'", 86399)
+                .execute();
+    }
+
+    @Test
+    public void datetime6PreservesMicroseconds() throws Exception {
+        typeTest()
+                .column("DATETIME(6) NOT NULL", PrimitiveType.Timestamp64)
+                    .value("'2024-01-15 10:30:45.123456'",
+                            Instant.parse("2024-01-15T10:30:45.123456Z"))
+                    .value("'2024-12-31 23:59:59.999999'",
+                            Instant.parse("2024-12-31T23:59:59.999999Z"))
+                .execute();
+    }
+
+    @Test
+    public void tinyintUnsignedMapsToUint8() throws Exception {
+        typeTest()
+                .column("TINYINT UNSIGNED NOT NULL", PrimitiveType.Uint8)
+                    .value("0", 0)
+                    .value("255", 255)
+                .execute();
+    }
+
+    @Test
+    public void smallintUnsignedMapsToUint16() throws Exception {
+        typeTest()
+                .column("SMALLINT UNSIGNED NOT NULL", PrimitiveType.Uint16)
+                    .value("0", 0)
+                    .value("65535", 65535)
+                .execute();
+    }
+
+    @Test
+    public void intUnsignedMapsToUint32() throws Exception {
+        typeTest()
+                .column("INT UNSIGNED NOT NULL", PrimitiveType.Uint32)
+                    .value("0", 0L)
+                    .value("2147483648", 2147483648L)
+                    .value("4294967295", 4294967295L)
+                .execute();
+    }
+
+    @Test
+    public void bigintUnsignedMapsToUint64() throws Exception {
+        typeTest()
+                .column("BIGINT UNSIGNED NOT NULL", PrimitiveType.Uint64)
+                    .value("0", 0L)
+                    .value("9223372036854775808",
+                            Long.parseUnsignedLong("9223372036854775808"))
+                    .value("18446744073709551615",
+                            Long.parseUnsignedLong("18446744073709551615"))
                 .execute();
     }
 }

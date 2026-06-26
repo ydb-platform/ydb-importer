@@ -151,7 +151,7 @@ final class AutoBoundsResolver {
                 upper = r.upper;
                 strategy = "by source key range";
             }
-            applyEqualSplit(td, tm, type, lower, upper, requestedN, strategy);
+            applyEqualSplit(td, tm, type, new Range(lower, upper), requestedN, strategy, false);
             return;
         }
 
@@ -167,8 +167,10 @@ final class AutoBoundsResolver {
             if (r == null) {
                 return;
             }
-            applyEqualSplit(td, tm, type, r.lower, r.upper, ref.getSplitCount(),
-                    "by source key range");
+            boolean onePartitionPerTask = leading.getName().equals(ref.getSplitBy())
+                    && ref.getSplitFrom() == null && ref.getSplitTo() == null;
+            applyEqualSplit(td, tm, type, r, ref.getSplitCount(),
+                    "by source key range", onePartitionPerTask);
             return;
         }
         // mirror source partitions with disjoint key ranges.
@@ -217,7 +219,7 @@ final class AutoBoundsResolver {
         if (cuts == null) {
             return false;
         }
-        applyCuts(td, tm, cuts, ranges.size(), "by source partitions");
+        applyCuts(td, tm, cuts, ranges.size(), "by source partitions", true);
         return true;
     }
 
@@ -248,8 +250,8 @@ final class AutoBoundsResolver {
     }
 
     private void applyCuts(TableDecision td, TableMetadata tm,
-            List<String> cuts, int n, String strategy) {
-        tm.setYdbPartitioning(YdbPartitioning.keyRange(cuts, strategy));
+            List<String> cuts, int n, String strategy, boolean onePartitionPerTask) {
+        tm.setYdbPartitioning(YdbPartitioning.keyRange(cuts, strategy, onePartitionPerTask));
         TableRef ref = td.getTableRef();
         if (ref != null) {
             ref.setYdbPartitionCount(n);
@@ -257,10 +259,10 @@ final class AutoBoundsResolver {
     }
 
     private void applyEqualSplit(TableDecision td, TableMetadata tm,
-            SplitColumnType type, String from, String to, int n, String strategy) {
+            SplitColumnType type, Range range, int n, String strategy, boolean onePartitionPerTask) {
         try {
-            List<String> cuts = RangeSplitter.computeCuts(from, to, n, type);
-            applyCuts(td, tm, cuts, n, strategy);
+            List<String> cuts = RangeSplitter.computeCuts(range.lower, range.upper, n, type);
+            applyCuts(td, tm, cuts, n, strategy, onePartitionPerTask);
         } catch (IllegalArgumentException ex) {
             LOG.warn("Cannot compute YDB partitioning cuts for {}.{}: {}",
                     td.getSchema(), td.getTable(), ex.getMessage());

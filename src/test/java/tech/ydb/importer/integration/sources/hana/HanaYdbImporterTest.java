@@ -66,12 +66,12 @@ public class HanaYdbImporterTest {
         }
 
         @Test
-        public void tinyintMapsToInt32() throws Exception {
+        public void tinyintMapsToUint8() throws Exception {
             typeTest()
-                    .column("TINYINT NOT NULL", PrimitiveType.Int32)
+                    .column("TINYINT NOT NULL", PrimitiveType.Uint8)
                         .value("0", 0)
                         .value("255", 255)
-                    .column("TINYINT", PrimitiveType.Int32.makeOptional())
+                    .column("TINYINT", PrimitiveType.Uint8.makeOptional())
                         .value("42", 42)
                         .value("NULL", null)
                     .execute();
@@ -107,6 +107,17 @@ public class HanaYdbImporterTest {
                         .value("0", 0L)
                         .value("9223372036854775807", Long.MAX_VALUE)
                         .value("-9223372036854775808", Long.MIN_VALUE)
+                    .execute();
+        }
+
+        @Test
+        public void smalldecimalMapsToDouble() throws Exception {
+            typeTest()
+                    .column("SMALLDECIMAL NOT NULL", PrimitiveType.Double)
+                        .value("0", 0.0d)
+                        .value("1.5", 1.5d)
+                        .value("3.14", 3.14d)
+                        .value("-2.5", -2.5d)
                     .execute();
         }
 
@@ -166,17 +177,6 @@ public class HanaYdbImporterTest {
                         .value("1234567890123456789012345",
                                 new BigDecimal(
                                         "1234567890123456789012345"))
-                    .execute();
-        }
-
-        @Test
-        public void smallDecimalMaps() throws Exception {
-            // HANA SMALLDECIMAL reports as DECIMAL(16,0). Importer rule
-            // scale=0 + precision in 10-19 picks Int64.
-            typeTest()
-                    .column("SMALLDECIMAL NOT NULL", PrimitiveType.Int64)
-                        .value("12345", 12345L)
-                        .value("-67890", -67890L)
                     .execute();
         }
 
@@ -268,8 +268,8 @@ public class HanaYdbImporterTest {
                     .withOptions(
                             opts -> opts.setDateConv(DateConv.STR))
                     .column("DATE NOT NULL", PrimitiveType.Text)
-                        .value("'1970-01-01'", "1970/01/01")
-                        .value("'2024-01-15'", "2024/01/15")
+                        .value("'1970-01-01'", "1970-01-01")
+                        .value("'2024-01-15'", "2024-01-15")
                     .execute();
         }
 

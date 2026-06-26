@@ -59,6 +59,16 @@ public class ArrowValueWriter implements ValueWriter {
     }
 
     @Override
+    public void writeUint8(int idx, int v) {
+        row.writeUint8(columnNames[idx], v);
+    }
+
+    @Override
+    public void writeUint16(int idx, int v) {
+        row.writeUint16(columnNames[idx], v);
+    }
+
+    @Override
     public void writeInt32(int idx, int v) {
         row.writeInt32(columnNames[idx], v);
     }

@@ -7,6 +7,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 
@@ -29,6 +30,7 @@ public final class TypeTestBuilder {
     private final List<TypeCase> completed = new ArrayList<>();
     private Consumer<TableOptions> optionsCustomizer = opts -> { };
     private String identifierQuote = "";
+    private String jvmTimeZone;
 
     private String currentSourceType;
     private Type currentExpectedYdbType;
@@ -47,6 +49,12 @@ public final class TypeTestBuilder {
     /** Customizes importer TableOptions for the test */
     public TypeTestBuilder withOptions(Consumer<TableOptions> customizer) {
         this.optionsCustomizer = customizer == null ? opts -> { } : customizer;
+        return this;
+    }
+
+    /** Sets the JVM default zone for the import */
+    public TypeTestBuilder withJvmTimeZone(String zoneId) {
+        this.jvmTimeZone = zoneId;
         return this;
     }
 
@@ -81,6 +89,11 @@ public final class TypeTestBuilder {
         String setupDdl = buildCreateTable(tableName);
         List<String> insertStatements = buildInserts(tableName);
 
+        TimeZone previousZone = null;
+        if (jvmTimeZone != null) {
+            previousZone = TimeZone.getDefault();
+            TimeZone.setDefault(TimeZone.getTimeZone(jvmTimeZone));
+        }
         try (YdbSchemaReader ydb = new YdbSchemaReader(
                 test.ydbContainer().getConnectionString())) {
             try {
@@ -90,6 +103,10 @@ public final class TypeTestBuilder {
             } finally {
                 cleanupSource(tableName);
                 ydb.dropTable(targetPath);
+            }
+        } finally {
+            if (previousZone != null) {
+                TimeZone.setDefault(previousZone);
             }
         }
     }

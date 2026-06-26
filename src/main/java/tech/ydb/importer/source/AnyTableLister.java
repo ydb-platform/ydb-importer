@@ -61,6 +61,10 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
         return false;
     }
 
+    public boolean defaultAutoCommit() {
+        return false;
+    }
+
     // Safely quote the identifier
     protected abstract String safeId(String id);
 
@@ -218,6 +222,7 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
                     ci.setSqlPrecision(rsmd.getPrecision(i));
                     ci.setSqlScale(rsmd.getScale(i));
                     ci.setNullable(rsmd.isNullable(i) != 0);
+                    ci.setUnsigned(!rsmd.isSigned(i));
                 }
             }
         } catch (Exception ex) {
@@ -337,13 +342,21 @@ public abstract class AnyTableLister extends tech.ydb.importer.config.JdomHelper
             case CLICKHOUSE:
                 return new ClickHouseTableLister(tableMaps);
             case DB2:
-                return new DB2TableLister(tableMaps);
+                if (isDb2Luw(con)) {
+                    return new DB2TableLister(tableMaps);
+                }
+                return new GenericJdbcTableLister(tableMaps, con);
             case INFORMIX:
             case MSSQL:
                 return new GenericJdbcTableLister(tableMaps, con);
             default:
                 throw new RuntimeException("Unsupported source type: " + st);
         }
+    }
+
+    private static boolean isDb2Luw(Connection con) throws SQLException {
+        String version = con.getMetaData().getDatabaseProductVersion();
+        return version != null && version.startsWith("SQL");
     }
 
 }

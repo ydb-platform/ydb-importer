@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.oracle.OracleContainer;
 
 import tech.ydb.importer.config.SourceType;
+import tech.ydb.importer.config.TableOptions.DateConv;
 import tech.ydb.importer.integration.tabletest.AbstractYdbImporterTableTest;
 import tech.ydb.importer.integration.typetest.AbstractYdbImporterTypeTest;
 import tech.ydb.importer.integration.typetest.TypeTestBuilder;
@@ -82,11 +83,11 @@ public class OracleYdbImporterTest {
         }
 
         @Test
-        public void numberLargeToInt64() throws Exception {
+        public void numberLargeToDecimal() throws Exception {
             typeTest()
-                    .column("NUMBER(19,0) NOT NULL", PrimitiveType.Int64)
+                    .column("NUMBER(19,0) NOT NULL", DecimalType.of(35, 0))
                         .value("1234567890123456789",
-                                1234567890123456789L)
+                                new BigDecimal("1234567890123456789"))
                     .execute();
         }
 
@@ -215,6 +216,19 @@ public class OracleYdbImporterTest {
         }
 
         @Test
+        public void timestampNotShiftedByJvmZone() throws Exception {
+            typeTest()
+                    .withJvmTimeZone("GMT+6")
+                    .column("TIMESTAMP NOT NULL",
+                            PrimitiveType.Timestamp64)
+                        .value("TO_TIMESTAMP('2024-01-15 10:30:45',"
+                                + "'YYYY-MM-DD HH24:MI:SS')",
+                                java.time.Instant.parse(
+                                        "2024-01-15T10:30:45Z"))
+                    .execute();
+        }
+
+        @Test
         public void timestampZeroMaps() throws Exception {
             // TIMESTAMP(0) -> scale=0 -> Datetime64.
             typeTest()
@@ -224,6 +238,20 @@ public class OracleYdbImporterTest {
                                 + "'YYYY-MM-DD HH24:MI:SS')",
                                 LocalDateTime.of(2024, 1, 15,
                                         10, 30, 45))
+                    .execute();
+        }
+
+        @Test
+        public void timestampAsTextUsesIso() throws Exception {
+            typeTest()
+                    .withOptions(opts -> opts.setTimestampConv(DateConv.STR))
+                    .column("TIMESTAMP(9) NOT NULL", PrimitiveType.Text)
+                        .value("TO_TIMESTAMP('2024-01-15 10:30:45',"
+                                + "'YYYY-MM-DD HH24:MI:SS')",
+                                "2024-01-15T10:30:45Z")
+                        .value("TO_TIMESTAMP('2024-01-15 10:30:45.123456789',"
+                                + "'YYYY-MM-DD HH24:MI:SS.FF9')",
+                                "2024-01-15T10:30:45.123456789Z")
                     .execute();
         }
     }
@@ -280,7 +308,7 @@ public class OracleYdbImporterTest {
                     .add(tableTest(s, "PK_OVER_UNIQUE")
                             .setupSql(
                                 "CREATE TABLE " + s + ".PK_OVER_UNIQUE ("
-                                + "ID   NUMBER(19,0) NOT NULL PRIMARY KEY,"
+                                + "ID   NUMBER(18,0) NOT NULL PRIMARY KEY,"
                                 + "CODE VARCHAR2(20) NOT NULL,"
                                 + "VAL  NUMBER(10,0),"
                                 + "CONSTRAINT UQ_ORA_CODE UNIQUE (CODE));"

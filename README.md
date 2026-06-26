@@ -207,6 +207,9 @@ Below is the definition of the configuration file structure:
              Applies to partitioned tables without BLOB or CLOB columns.
          -->
         <retry-count>10</retry-count>
+        <!-- JDBC fetch size for source reads (default 10000). For ClickHouse
+             (no JDBC cursor) it sets the rows per partition read chunk instead. -->
+        <fetch-size>10000</fetch-size>
     </source>
     <!-- Target YDB database connection parameters. -->
     <target type="ydb">
@@ -277,7 +280,7 @@ Below is the definition of the configuration file structure:
              INT saves date as 32-bit integer YYYYMMDD for dates,
                  and as a 64-bit milliseconds since epoch for timestamps.
              STR saves dates as character strings (Utf8) in format "YYYY-MM-DD",
-                 and in "YYYY-MM-DD hh:mm:ss.xxx" for timestamps.
+                 and in "YYYY-MM-DDTHH:MM:SS[.SSSSSSSSS]Z" for timestamps.
          -->
         <conv-date>DATE_NEW</conv-date>
         <conv-timestamp>DATE_NEW</conv-timestamp>
@@ -300,8 +303,8 @@ Below is the definition of the configuration file structure:
                     otherwise the number of source partitions if any (see section 5).
              N    - integer >= 2, split the first key column range into N equal
                     intervals (from ydb-partition-from/to, otherwise source MIN/MAX).
-             none - do not set it, YDB manages partitions on its own.
-             Default is none. Can be overridden in <table-ref>. -->
+             ydb-managed - YDB manages partitions on its own.
+             Default is ydb-managed. Can be overridden in <table-ref>. -->
         <ydb-partition-count>auto</ydb-partition-count>
     </table-options>
     <!-- Table map filters the source tables and defines the conversion modes for them. -->
