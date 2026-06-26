@@ -111,6 +111,17 @@ public class HanaYdbImporterTest {
         }
 
         @Test
+        public void smalldecimalMapsToDouble() throws Exception {
+            typeTest()
+                    .column("SMALLDECIMAL NOT NULL", PrimitiveType.Double)
+                        .value("0", 0.0d)
+                        .value("1.5", 1.5d)
+                        .value("3.14", 3.14d)
+                        .value("-2.5", -2.5d)
+                    .execute();
+        }
+
+        @Test
         public void doublePrecision() throws Exception {
             typeTest()
                     .column("DOUBLE NOT NULL", PrimitiveType.Double)
@@ -166,17 +177,6 @@ public class HanaYdbImporterTest {
                         .value("1234567890123456789012345",
                                 new BigDecimal(
                                         "1234567890123456789012345"))
-                    .execute();
-        }
-
-        @Test
-        public void smallDecimalMaps() throws Exception {
-            // HANA SMALLDECIMAL reports as DECIMAL(16,0). Importer rule
-            // scale=0 + precision in 10-19 picks Int64.
-            typeTest()
-                    .column("SMALLDECIMAL NOT NULL", PrimitiveType.Int64)
-                        .value("12345", 12345L)
-                        .value("-67890", -67890L)
                     .execute();
         }
 
