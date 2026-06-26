@@ -1,6 +1,7 @@
 package tech.ydb.importer.integration.sources.mysql;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -299,6 +300,17 @@ public abstract class AbstractMySqlCompatibleTypeCases
                     .value("'00:00:00'", 0)
                     .value("'10:30:45'", 37845)
                     .value("'23:59:59'", 86399)
+                .execute();
+    }
+
+    @Test
+    public void datetime6PreservesMicroseconds() throws Exception {
+        typeTest()
+                .column("DATETIME(6) NOT NULL", PrimitiveType.Timestamp64)
+                    .value("'2024-01-15 10:30:45.123456'",
+                            Instant.parse("2024-01-15T10:30:45.123456Z"))
+                    .value("'2024-12-31 23:59:59.999999'",
+                            Instant.parse("2024-12-31T23:59:59.999999Z"))
                 .execute();
     }
 }

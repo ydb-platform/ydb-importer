@@ -105,6 +105,35 @@ public class MySqlTableLister extends AnyTableLister {
         return cols;
     }
 
+    /**
+     * MySQL JDBC reports DATETIME(N)/TIMESTAMP(N) with scale=0, which maps to Datetime64
+     * and loses fractional seconds. Read the scale from the catalog so the mapper
+     * picks Timestamp64.
+     */
+    @Override
+    protected void grabColumnTypes(Connection con, TableDecision td, TableMetadata tm)
+            throws SQLException {
+        super.grabColumnTypes(con, td, tm);
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT column_name, datetime_precision FROM information_schema.columns "
+                + "WHERE table_schema=? AND table_name=?")) {
+            ps.setString(1, td.getSchema());
+            ps.setString(2, td.getTable());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int frac = rs.getInt(2);
+                    if (rs.wasNull() || frac <= 0) {
+                        continue;
+                    }
+                    ColumnInfo ci = tm.findColumn(rs.getString(1));
+                    if (ci != null && ci.getSqlType() == java.sql.Types.TIMESTAMP) {
+                        ci.setSqlScale(frac);
+                    }
+                }
+            }
+        }
+    }
+
     @Override
     protected void grabPrimaryKey(Connection con, TableIdentity ti, TableMetadata tm)
             throws SQLException {
